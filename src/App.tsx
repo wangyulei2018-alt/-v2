@@ -1,0 +1,11461 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  ChevronDown, 
+  Search, 
+  Plus, 
+  Save, 
+  Trash2, 
+  User, 
+  Users, 
+  LayoutGrid, 
+  Settings, 
+  Bell, 
+  Info,
+  Shield,
+  HelpCircle,
+  Menu,
+  ChevronRight,
+  Monitor,
+  FileText,
+  Database,
+  PieChart,
+  Activity,
+  ClipboardList,
+  Share2,
+  CheckCircle2,
+  Folder,
+  RefreshCw,
+  Download,
+  Upload,
+  Filter,
+  MoreHorizontal,
+  Edit,
+  Edit2,
+  Edit3,
+  ExternalLink,
+  X,
+  Calendar,
+  Play,
+  GitMerge,
+  GripVertical,
+  ArrowLeft,
+  Clock,
+  ChevronLeft,
+  Check,
+  CheckCircle,
+  Lock,
+  AlertCircle,
+  Eye,
+  FileEdit,
+  History,
+  FileDown,
+  FileUp,
+  RotateCw,
+  FileSpreadsheet,
+  FileCheck,
+  MessageSquare,
+  MessageCircle,
+  Mail,
+  Image as ImageIcon
+} from 'lucide-react';
+
+// --- Types ---
+
+interface GradeRange {
+  id: string;
+  grade: string;
+  min: string;
+  max: string;
+}
+
+interface Indicator {
+  id: string;
+  code: string;
+  name: string;
+  library: string;
+  type: '定量' | '定性';
+  formula: string;
+  definition: string;
+  remarks: string;
+  target0: string;
+  target3: string;
+  target5: string;
+  dept: string;
+  category: string;
+}
+
+// --- Components ---
+
+const SidebarItem = ({ 
+  icon: Icon, 
+  label, 
+  active = false, 
+  hasSubmenu = false, 
+  isOpen = false,
+  onClick 
+}: { 
+  icon: any, 
+  label: string, 
+  active?: boolean, 
+  hasSubmenu?: boolean,
+  isOpen?: boolean,
+  onClick?: () => void
+}) => (
+  <div 
+    className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${
+      active ? 'bg-blue-50 text-[#2f54eb] border-r-2 border-[#2f54eb]' : 'text-gray-600 hover:bg-gray-50'
+    }`}
+    onClick={onClick}
+  >
+    <div className="flex items-center gap-3">
+      <Icon size={18} className={active ? 'text-[#2f54eb]' : 'text-gray-400'} />
+      <span className="text-[13px] font-medium">{label}</span>
+    </div>
+    {hasSubmenu && (
+      <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+    )}
+  </div>
+);
+
+const SubmenuItem = ({ label, active = false, onClick }: { label: string, active?: boolean, onClick?: () => void }) => (
+  <div 
+    onClick={onClick}
+    className={`pl-12 py-2 cursor-pointer text-[13px] transition-colors ${
+      active ? 'text-[#2f54eb] bg-blue-50' : 'text-gray-500 hover:text-gray-800'
+    }`}
+  >
+    {label}
+  </div>
+);
+
+const IndicatorLibraryPage = () => {
+  const [selectedCategory, setSelectedCategory] = useState('全部指标库');
+  const [activeTab, setActiveTab] = useState('所有指标');
+  const [indicatorSearchTerm, setIndicatorSearchTerm] = useState('');
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [categoryModalMode, setCategoryModalMode] = useState<'create' | 'edit'>('create');
+  const [isIndicatorModalOpen, setIsIndicatorModalOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [selectedIndicator, setSelectedIndicator] = useState<Indicator | null>(null);
+  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
+  const [categories, setCategories] = useState([
+    { name: '技术序列/T3', count: 9 },
+    { name: '技术序列/T4', count: 9 },
+    { name: '通用指标', count: 9 },
+    { name: '销售序列/S2', count: 9 },
+    { name: '职能序列/P3', count: 9 }
+  ]);
+  const [isCategoryDeleteConfirmOpen, setIsCategoryDeleteConfirmOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [selectedIndicatorIds, setSelectedIndicatorIds] = useState<string[]>([]);
+  const [deleteMode, setDeleteMode] = useState<'single' | 'batch'>('single');
+  
+  // -- Multi-language state for category modal --
+  const [categoryLanguages, setCategoryLanguages] = useState<{ zh: string; en: string }>({ zh: '', en: '' });
+  const [showEnInput, setShowEnInput] = useState(false);
+  const [isLangDetailsOpen, setIsLangDetailsOpen] = useState(false);
+
+  // -- Multi-language state for indicator drawer --
+  const [indicatorTypeInDrawer, setIndicatorTypeInDrawer] = useState<'定量' | '定性'>('定性');
+  const [drawerLangField, setDrawerLangField] = useState<string | null>(null);
+  const [drawerLanguages, setDrawerLanguages] = useState<Record<string, { zh: string; en: string }>>({
+    name: { zh: '', en: '' },
+    formula: { zh: '', en: '' },
+    definition: { zh: '', en: '' },
+    guidance: { zh: '', en: '' },
+    target0: { zh: '', en: '' },
+    target3: { zh: '', en: '' },
+    target5: { zh: '', en: '' }
+  });
+  
+  const [indicators, setIndicators] = useState<Indicator[]>([
+    {
+      id: '1',
+      code: 'MET20251000',
+      name: '代码质量缺陷率-0',
+      library: '通用指标',
+      type: '定量',
+      formula: '(Bug数 / 代码行数) * 1000',
+      definition: '衡量交付代码质量',
+      remarks: '考核公司整体营收增长情况',
+      target0: '< 5%',
+      target3: '10%',
+      target5: '> 15%',
+      dept: '财务部',
+      category: '通用指标'
+    },
+    {
+      id: '2',
+      code: 'MET20251001',
+      name: '团队协作评分-1',
+      library: '技术序列/T3',
+      type: '定性',
+      formula: '--',
+      definition: '衡量协作价值',
+      remarks: '年度客户满意度调研',
+      target0: '< 70',
+      target3: '85',
+      target5: '> 95',
+      dept: '技术部',
+      category: '技术序列/T3'
+    },
+    {
+      id: '3',
+      code: 'MET20251002',
+      name: '重大安全事故-2',
+      library: '技术序列/T4',
+      type: '定性',
+      formula: '--',
+      definition: '衡量负向违规',
+      remarks: '考核公司盈利增长情况',
+      target0: '< 3%',
+      target3: '8%',
+      target5: '> 12%',
+      dept: '技术部',
+      category: '技术序列/T4'
+    },
+    {
+      id: '4',
+      code: 'MET20251003',
+      name: '代码质量缺陷率-3',
+      library: '销售序列/S2',
+      type: '定量',
+      formula: '(Bug数 / 代码行数) * 1000',
+      definition: '衡量交付代码质量',
+      remarks: '考核团队交付质量',
+      target0: '< 5%',
+      target3: '10%',
+      target5: '> 15%',
+      dept: '财务部',
+      category: '销售序列/S2'
+    },
+    {
+      id: '5',
+      code: 'MET20251004',
+      name: '团队协作评分-4',
+      library: '职能序列/P3',
+      type: '定性',
+      formula: '--',
+      definition: '衡量协作价值',
+      remarks: '衡量协作价值',
+      target0: '< 70',
+      target3: '85',
+      target5: '> 95',
+      dept: '财务部',
+      category: '职能序列/P3'
+    }
+  ]);
+
+  const filteredIndicators = indicators.filter(i => {
+    const categoryMatch = selectedCategory === '全部指标库' || i.category === selectedCategory;
+    const typeMatch = activeTab === '所有指标' || i.type === activeTab;
+    const searchMatch = !indicatorSearchTerm || 
+      i.name.toLowerCase().includes(indicatorSearchTerm.toLowerCase()) || 
+      i.code.toLowerCase().includes(indicatorSearchTerm.toLowerCase());
+    return categoryMatch && typeMatch && searchMatch;
+  });
+
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIndicatorIds(filteredIndicators.map(i => i.id));
+    } else {
+      setSelectedIndicatorIds([]);
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIndicatorIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedIndicatorIds.length > 0) {
+      setDeleteMode('batch');
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  const getCategoryCount = (catName: string) => {
+    if (catName === '全部指标库') return 45;
+    return 9;
+  };
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-[#f8fafc] overflow-hidden">
+      {/* Page Header */}
+      <div className="px-6 py-4">
+        <h1 className="text-[18px] font-bold text-gray-900">组织绩效指标库</h1>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden px-6 pb-6 gap-6">
+        {/* Left Category Sidebar */}
+        <div className="w-52 bg-white rounded-lg border border-gray-200 flex flex-col shadow-sm shrink-0">
+          <div className="p-5 flex items-center justify-between text-gray-900">
+            <span className="font-bold text-[16px]">指标库</span>
+            <button 
+              className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-[#2f54eb] transition-all"
+              onClick={() => {
+                setCategoryModalMode('create');
+                setIsCategoryModalOpen(true);
+              }}
+            >
+              <Plus size={18} />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto px-2">
+            <div 
+              onClick={() => setSelectedCategory('全部指标库')}
+              className={`flex items-center justify-between px-4 py-2.5 rounded-md cursor-pointer text-[14px] mb-1 transition-all ${selectedCategory === '全部指标库' ? 'bg-[#e6f4ff] text-[#1677ff]' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+              <span>全部指标库</span>
+              <span className={`text-[12px] ${selectedCategory === '全部指标库' ? 'text-blue-400' : 'text-gray-400'}`}>
+                45
+              </span>
+            </div>
+            
+            {categories.map(cat => (
+              <div 
+                key={cat.name}
+                onClick={() => setSelectedCategory(cat.name)}
+                onMouseEnter={() => setHoveredCategory(cat.name)}
+                onMouseLeave={() => setHoveredCategory(null)}
+                className={`flex items-center justify-between px-4 py-2.5 rounded-md cursor-pointer text-[14px] mb-1 group transition-all ${selectedCategory === cat.name ? 'bg-[#e6f4ff] text-[#1677ff]' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                <span className="truncate pr-2">{cat.name}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {hoveredCategory === cat.name && (
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        className="p-0.5 hover:text-[#1677ff] transition-colors" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCategoryLanguages({ zh: cat.name, en: '' });
+                          setSelectedCategory(cat.name);
+                          setCategoryModalMode('edit');
+                          setIsCategoryModalOpen(true);
+                        }}
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                      <button 
+                        className="p-0.5 hover:text-red-500 transition-colors" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCategoryToDelete(cat.name);
+                          setIsCategoryDeleteConfirmOpen(true);
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <span className={`text-[12px] ${selectedCategory === cat.name ? 'text-blue-400' : 'text-gray-400'}`}>
+                    {cat.count}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right Content Area */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm">
+          {/* Header Actions */}
+          <div className="px-5 py-4 flex items-center justify-between gap-4">
+            <div className="relative w-[320px] shrink-0 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                <input 
+                  type="text" 
+                  placeholder="搜索指标编码/指标名称" 
+                  value={indicatorSearchTerm}
+                  onChange={(e) => setIndicatorSearchTerm(e.target.value)}
+                  className="w-full h-8 border border-gray-200 rounded px-9 text-[12px] outline-none focus:border-[#1677ff] transition-all placeholder:text-gray-300 bg-white"
+                />
+                {indicatorSearchTerm && (
+                  <button 
+                    onClick={() => setIndicatorSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <button 
+                onClick={() => setIndicatorSearchTerm('')}
+                className="px-3 h-8 border border-gray-200 rounded text-[12px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                重置
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-2 overflow-hidden">
+              <button 
+                onClick={() => {
+                  setSelectedIndicator(null);
+                  setIndicatorTypeInDrawer('定性');
+                  setDrawerLanguages({
+                    name: { zh: '', en: '' },
+                    formula: { zh: '', en: '' },
+                    definition: { zh: '', en: '' },
+                    guidance: { zh: '', en: '' },
+                    target0: { zh: '', en: '' },
+                    target3: { zh: '', en: '' },
+                    target5: { zh: '', en: '' }
+                  });
+                  setIsIndicatorModalOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 bg-[#2f54eb] text-white h-8 px-3 rounded text-[12px] hover:bg-[#1d39c4] transition-all shadow-sm whitespace-nowrap"
+              >
+                <Plus size={14} />
+                <span>新建指标</span>
+              </button>
+              <button className="flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-600 h-8 px-3 rounded text-[12px] hover:bg-gray-50 hover:border-gray-400 transition-all font-medium whitespace-nowrap">
+                <Upload size={14} className="text-gray-400" />
+                <span>导入</span>
+              </button>
+              <button className="flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-600 h-8 px-3 rounded text-[12px] hover:bg-gray-50 hover:border-gray-400 transition-all font-medium whitespace-nowrap">
+                <Download size={14} className="text-gray-400" />
+                <span>导出</span>
+              </button>
+              <button 
+                onClick={handleBatchDelete}
+                disabled={selectedIndicatorIds.length === 0}
+                className={`flex items-center justify-center gap-1.5 h-8 px-3 rounded text-[12px] transition-all whitespace-nowrap ${
+                  selectedIndicatorIds.length > 0 
+                  ? 'bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300' 
+                  : 'bg-white border border-gray-200 text-gray-300 cursor-not-allowed opacity-80'
+                }`}
+              >
+                <Trash2 size={14} />
+                <span>删除</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Table Area */}
+          <div className="flex-1 overflow-auto border-t border-gray-100">
+            <table className="w-full border-collapse">
+              <thead className="sticky top-0 z-10">
+                <tr className="text-left text-[14px] text-gray-900 border-b border-gray-100 bg-white">
+                  <th className="w-12 py-3 px-4 text-center border-r border-gray-100">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 rounded border-gray-300 text-[#1677ff] focus:ring-[#1677ff] cursor-pointer" 
+                      checked={filteredIndicators.length > 0 && selectedIndicatorIds.length === filteredIndicators.length}
+                      onChange={(e) => toggleSelectAll(e.target.checked)}
+                    />
+                  </th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[140px]">指标编码</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[120px]">指标库</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[180px]">指标名称</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[100px]">指标类型</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[180px]">计算公式</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[180px]">指标定义</th>
+                  <th className="w-[140px] py-3 px-5 font-normal sticky right-0 bg-white z-20 border-l border-gray-100 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.05)] text-left">操作</th>
+                </tr>
+              </thead>
+              <tbody className="text-[13px] text-gray-600">
+                {filteredIndicators.map((item) => (
+                  <tr key={item.id} className={`border-b border-gray-50 hover:bg-gray-50/50 transition-colors group ${selectedIndicatorIds.includes(item.id) ? 'bg-blue-50/30' : ''}`}>
+                    <td className="py-3.5 px-4 text-center border-r border-gray-50">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded border-gray-300 text-[#1677ff] focus:ring-[#1677ff] cursor-pointer" 
+                        checked={selectedIndicatorIds.includes(item.id)}
+                        onChange={() => toggleSelectRow(item.id)}
+                      />
+                    </td>
+                    <td className="py-3.5 px-4 font-mono border-r border-gray-50">{item.code}</td>
+                    <td className="py-3.5 px-4 border-r border-gray-50">{item.library}</td>
+                    <td className="py-3.5 px-4 text-gray-900 border-r border-gray-50">{item.name}</td>
+                    <td className="py-3.5 px-4 border-r border-gray-50">
+                      <span className="font-medium">{item.type}</span>
+                    </td>
+                    <td className="py-3.5 px-4 border-r border-gray-50 max-w-[200px] truncate" title={item.formula}>
+                      {item.formula}
+                    </td>
+                    <td className="py-3.5 px-4 border-r border-gray-50 max-w-[200px] truncate" title={item.definition}>
+                      {item.definition}
+                    </td>
+                    <td className="py-3.5 px-5 sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-50 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.05)] transition-colors">
+                      <div className="flex items-center gap-4 whitespace-nowrap">
+                        <button 
+                          onClick={() => {
+                            setSelectedIndicator(item);
+                            setIndicatorTypeInDrawer(item.type);
+                            setDrawerLanguages({
+                              name: { zh: item.name, en: '' },
+                              formula: { zh: item.formula, en: '' },
+                              definition: { zh: item.definition, en: '' },
+                              guidance: { zh: item.remarks, en: '' },
+                              target0: { zh: item.target0, en: '' },
+                              target3: { zh: item.target3, en: '' },
+                              target5: { zh: item.target5, en: '' }
+                            });
+                            setIsIndicatorModalOpen(true);
+                          }}
+                          className="text-[#1677ff] hover:text-[#4096ff] transition-colors"
+                        >
+                          编辑
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setSelectedIndicator(item);
+                            setDeleteMode('single');
+                            setIsDeleteConfirmOpen(true);
+                          }}
+                          className="text-[#ff4d4f] hover:text-[#ff7875] transition-colors"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-5 text-[13px] text-gray-500 bg-white">
+            <div className="flex items-center gap-1 font-medium">
+              <span>共 5 条</span>
+              <span className="ml-2">第 1 / 1 页</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="px-4 py-1.5 border border-gray-300 rounded text-gray-400 bg-white hover:bg-gray-50 transition-all">上一页</button>
+              <button className="px-4 py-1.5 border border-gray-300 rounded text-gray-400 bg-white hover:bg-gray-50 transition-all">下一页</button>
+            </div>
+            <div className="relative">
+              <select className="border border-gray-300 rounded px-2 py-1.5 outline-none appearance-none bg-white cursor-pointer hover:border-gray-400 pr-8">
+                <option>10条/页</option>
+                <option>20条/页</option>
+                <option>50条/页</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Indicator Library Category Modal */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] w-[580px] overflow-hidden"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 transition-all">
+              <h2 className="text-[26px] font-bold text-gray-900 tracking-tight">
+                {categoryModalMode === 'create' ? '新建指标库' : '编辑指标库'}
+              </h2>
+              <button 
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-10 py-12 space-y-1 relative">
+              <div className="space-y-4">
+                <label className="block text-[16px] font-medium text-gray-700">
+                  <span className="text-[#ff4d4f] mr-1 font-bold">*</span>
+                  <span className="opacity-80">指标库分类</span>
+                </label>
+                <div className="relative group">
+                  <input 
+                    type="text" 
+                    placeholder="请输入"
+                    value={categoryLanguages.zh}
+                    onChange={(e) => setCategoryLanguages({ ...categoryLanguages, zh: e.target.value })}
+                    className="w-full h-12 border border-gray-200 rounded-xl pl-5 pr-20 text-[16px] focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 outline-none transition-all placeholder:text-gray-300 hover:border-gray-400 shadow-sm"
+                  />
+                  <div 
+                    onClick={() => setIsLangDetailsOpen(!isLangDetailsOpen)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                  >
+                    中文
+                  </div>
+
+                  {/* Secondary Lang Details Popup */}
+                  <AnimatePresence>
+                    {isLangDetailsOpen && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 top-[110%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                      >
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">中文名称</label>
+                          <input 
+                            type="text" 
+                            value={categoryLanguages.zh}
+                            onChange={(e) => setCategoryLanguages({ ...categoryLanguages, zh: e.target.value })}
+                            className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
+                            placeholder="请输入中文"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">英文名称</label>
+                          <input 
+                            type="text" 
+                            value={categoryLanguages.en}
+                            onChange={(e) => setCategoryLanguages({ ...categoryLanguages, en: e.target.value })}
+                            className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
+                            placeholder="请输入英文"
+                          />
+                        </div>
+                        <div className="pt-2 flex justify-end">
+                          <button 
+                            onClick={() => setIsLangDetailsOpen(false)}
+                            className="text-[13px] font-bold text-[#2f54eb] hover:underline"
+                          >
+                            完成
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-4 px-10 py-6 bg-white border-t border-gray-50">
+              <button 
+                onClick={() => {
+                  setIsCategoryModalOpen(false);
+                  setCategoryLanguages({ zh: '', en: '' });
+                  setShowEnInput(false);
+                  setIsLangDetailsOpen(false);
+                }}
+                className="px-8 py-3 border border-gray-200 rounded-xl text-[16px] font-bold text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all select-none"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  if (categoryLanguages.zh) {
+                    if (categoryModalMode === 'create') {
+                      setCategories([...categories, { name: categoryLanguages.zh, count: 0 }]);
+                    } else {
+                      // Handle edit logic if needed, for now just simple addition
+                      setCategories(categories.map(c => c.name === selectedCategory ? { ...c, name: categoryLanguages.zh } : c));
+                    }
+                    setIsCategoryModalOpen(false);
+                    setCategoryLanguages({ zh: '', en: '' });
+                    setShowEnInput(false);
+                    setIsLangDetailsOpen(false);
+                  }
+                }}
+                className="px-10 py-3 bg-[#2f54eb] text-white rounded-xl text-[16px] font-bold hover:bg-[#1d39c4] transition-all shadow-xl shadow-blue-500/20 active:scale-[0.98] select-none"
+              >
+                确定
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Indicator Form Drawer */}
+      <AnimatePresence>
+        {isIndicatorModalOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsIndicatorModalOpen(false)}
+              className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[1px]"
+            />
+            
+            {/* Drawer */}
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 h-full w-[720px] bg-white shadow-2xl z-[101] flex flex-col"
+            >
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
+                <h2 className="text-[18px] font-bold text-gray-900">
+                  {selectedIndicator ? '编辑指标' : '新建指标'}
+                </h2>
+                <button 
+                  onClick={() => setIsIndicatorModalOpen(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Drawer Body */}
+              <div className="flex-1 overflow-y-auto px-10 py-8 space-y-8 custom-scrollbar">
+                {/* Part 1: Basic Info */}
+                <section>
+                  <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-6 bg-[#2f54eb] rounded-full" />
+                      <h3 className="text-[18px] font-bold text-gray-900">基础信息</h3>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-x-10 gap-y-6">
+                    <div className="space-y-2">
+                    <label className="text-[14px] text-gray-900 font-medium">指标编码</label>
+                      <input 
+                        type="text" 
+                        value={selectedIndicator?.code || 'MET4074'}
+                        readOnly
+                        className="w-full h-11 border border-gray-200 bg-gray-50/50 rounded-lg px-4 text-[14px] text-gray-900 outline-none transition-all placeholder:text-gray-300"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[14px] text-gray-900 font-medium">
+                        <span className="text-red-500 mr-1">*</span>指标名称
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type="text" 
+                          value={drawerLanguages.name.zh}
+                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, name: { ...drawerLanguages.name, zh: e.target.value } })}
+                          placeholder="请输入指标名称"
+                          className="w-full h-11 border border-gray-200 rounded-lg px-4 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none transition-all placeholder:text-gray-300"
+                        />
+                        <div 
+                          onClick={() => setDrawerLangField(drawerLangField === 'name' ? null : 'name')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          中文
+                        </div>
+
+                        {/* popup */}
+                        <AnimatePresence>
+                          {drawerLangField === 'name' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute right-0 top-[110%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                            >
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">中文名称</label>
+                                <input 
+                                  type="text" 
+                                  value={drawerLanguages.name.zh}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, name: { ...drawerLanguages.name, zh: e.target.value } })}
+                                  className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
+                                  placeholder="请输入中文"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">英文名称</label>
+                                <input 
+                                  type="text" 
+                                  value={drawerLanguages.name.en}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, name: { ...drawerLanguages.name, en: e.target.value } })}
+                                  className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
+                                  placeholder="请输入英文"
+                                />
+                              </div>
+                              <div className="pt-2 flex justify-end">
+                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                    <label className="text-[14px] text-gray-900 font-medium">
+                        <span className="text-red-500 mr-1">*</span>指标库
+                      </label>
+                      <div className="relative">
+                        <select 
+                          defaultValue={selectedIndicator?.category || '通用指标'}
+                          className="w-full h-11 border border-gray-200 rounded-lg px-4 pr-10 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
+                        >
+                          <option>通用指标</option>
+                          <option>技术序列/T3</option>
+                          <option>销售序列/S2</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[14px] text-gray-900 font-medium">指标类型</label>
+                      <div className="relative">
+                        <select 
+                          value={indicatorTypeInDrawer}
+                          onChange={(e) => setIndicatorTypeInDrawer(e.target.value as '定量' | '定性')}
+                          className="w-full h-11 border border-gray-200 rounded-lg px-4 pr-10 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
+                        >
+                          <option value="定性">定性</option>
+                          <option value="定量">定量</option>
+                        </select>
+                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    {indicatorTypeInDrawer === '定量' && (
+                      <div className="col-span-2 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <label className="text-[14px] text-gray-900 font-medium">
+                          <span className="text-red-500 mr-1">*</span>计算公式
+                        </label>
+                        <div className="relative">
+                          <textarea 
+                            value={drawerLanguages.formula.zh}
+                            onChange={(e) => setDrawerLanguages({ ...drawerLanguages, formula: { ...drawerLanguages.formula, zh: e.target.value } })}
+                            placeholder="请输入计算公式"
+                            rows={4}
+                            className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
+                          />
+                          <div className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium select-none shadow-sm">
+                            中文
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="col-span-2 space-y-2">
+                    <label className="text-[14px] text-gray-900 font-medium">指标定义</label>
+                      <div className="relative">
+                        <textarea 
+                          value={drawerLanguages.definition.zh}
+                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, definition: { ...drawerLanguages.definition, zh: e.target.value } })}
+                          placeholder="请输入指标定义"
+                          rows={4}
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
+                        />
+                        <div 
+                          onClick={() => setDrawerLangField(drawerLangField === 'definition' ? null : 'definition')}
+                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          中文
+                        </div>
+                        {/* popup */}
+                        <AnimatePresence>
+                          {drawerLangField === 'definition' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                            >
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">指标定义 (中)</label>
+                                <textarea 
+                                  value={drawerLanguages.definition.zh}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, definition: { ...drawerLanguages.definition, zh: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">指标定义 (EN)</label>
+                                <textarea 
+                                  value={drawerLanguages.definition.en}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, definition: { ...drawerLanguages.definition, en: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="pt-2 flex justify-end">
+                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <label className="text-[14px] text-gray-900 font-medium">指标操作指引</label>
+                      <div className="relative">
+                        <textarea 
+                          placeholder="请输入指标操作指引"
+                          rows={4}
+                          value={drawerLanguages.guidance.zh}
+                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, guidance: { ...drawerLanguages.guidance, zh: e.target.value } })}
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
+                        />
+                        <div 
+                          onClick={() => setDrawerLangField(drawerLangField === 'guidance' ? null : 'guidance')}
+                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          中文
+                        </div>
+                        {/* popup */}
+                        <AnimatePresence>
+                          {drawerLangField === 'guidance' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                            >
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">指引 (中)</label>
+                                <textarea 
+                                  value={drawerLanguages.guidance.zh}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, guidance: { ...drawerLanguages.guidance, zh: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Guidance (EN)</label>
+                                <textarea 
+                                  value={drawerLanguages.guidance.en}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, guidance: { ...drawerLanguages.guidance, en: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="pt-2 flex justify-end">
+                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Part 2: Performance Standards */}
+                <section>
+                  <div className="flex items-center gap-2 mb-8">
+                    <div className="w-1.5 h-6 bg-[#2f54eb] rounded-full" />
+                    <h3 className="text-[18px] font-bold text-gray-900">绩效标准</h3>
+                  </div>
+                  
+                  <div className="space-y-8">
+                    <div className="space-y-2">
+                      <label className="text-[14px] text-gray-900 font-medium whitespace-nowrap">零分目标</label>
+                      <div className="relative">
+                        <textarea 
+                          value={drawerLanguages.target0.zh}
+                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target0: { ...drawerLanguages.target0, zh: e.target.value } })}
+                          placeholder="请输入零分目标"
+                          rows={4}
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
+                        />
+                        <div 
+                          onClick={() => setDrawerLangField(drawerLangField === 'target0' ? null : 'target0')}
+                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          中文
+                        </div>
+                        {/* popup */}
+                        <AnimatePresence>
+                          {drawerLangField === 'target0' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                            >
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">零分目标 (中)</label>
+                                <textarea 
+                                  value={drawerLanguages.target0.zh}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target0: { ...drawerLanguages.target0, zh: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Target 0 (EN)</label>
+                                <textarea 
+                                  value={drawerLanguages.target0.en}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target0: { ...drawerLanguages.target0, en: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="pt-2 flex justify-end">
+                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[14px] text-gray-900 font-medium whitespace-nowrap">三分目标</label>
+                      <div className="relative">
+                        <textarea 
+                          value={drawerLanguages.target3.zh}
+                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target3: { ...drawerLanguages.target3, zh: e.target.value } })}
+                          placeholder="请输入三分目标"
+                          rows={4}
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
+                        />
+                        <div 
+                          onClick={() => setDrawerLangField(drawerLangField === 'target3' ? null : 'target3')}
+                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          中文
+                        </div>
+                        {/* popup */}
+                        <AnimatePresence>
+                          {drawerLangField === 'target3' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                            >
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">三分目标 (中)</label>
+                                <textarea 
+                                  value={drawerLanguages.target3.zh}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target3: { ...drawerLanguages.target3, zh: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Target 3 (EN)</label>
+                                <textarea 
+                                  value={drawerLanguages.target3.en}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target3: { ...drawerLanguages.target3, en: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="pt-2 flex justify-end">
+                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[14px] text-gray-900 font-medium whitespace-nowrap">五分目标</label>
+                      <div className="relative">
+                        <textarea 
+                          value={drawerLanguages.target5.zh}
+                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target5: { ...drawerLanguages.target5, zh: e.target.value } })}
+                          placeholder="请输入五分目标"
+                          rows={4}
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
+                        />
+                        <div 
+                          onClick={() => setDrawerLangField(drawerLangField === 'target5' ? null : 'target5')}
+                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                          中文
+                        </div>
+                        {/* popup */}
+                        <AnimatePresence>
+                          {drawerLangField === 'target5' && (
+                            <motion.div 
+                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                            >
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">五分目标 (中)</label>
+                                <textarea 
+                                  value={drawerLanguages.target5.zh}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target5: { ...drawerLanguages.target5, zh: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Target 5 (EN)</label>
+                                <textarea 
+                                  value={drawerLanguages.target5.en}
+                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target5: { ...drawerLanguages.target5, en: e.target.value } })}
+                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="pt-2 flex justify-end">
+                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Part 3: Management Config */}
+                <section>
+                  <div className="flex items-center gap-2 mb-8">
+                    <div className="w-1.5 h-6 bg-[#2f54eb] rounded-full" />
+                    <h3 className="text-[18px] font-bold text-gray-900">管理配置</h3>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-[14px] text-gray-900 font-medium">数据提供部门</label>
+                    <div className="relative">
+                      <div className="w-full h-11 border border-gray-200 rounded-lg px-4 flex items-center justify-between bg-white cursor-pointer hover:border-gray-300 transition-all">
+                        <span className="text-[14px] text-gray-300">请选择部门（可多选）</span>
+                        <ChevronDown size={16} className="text-gray-400" />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="flex items-center gap-3 px-10 py-6 bg-white border-t border-gray-50">
+                <button 
+                  onClick={() => setIsIndicatorModalOpen(false)}
+                  className="px-8 py-2.5 bg-[#2f54eb] text-white rounded text-[14px] font-medium hover:bg-[#1d39c4] transition-all shadow-md shadow-blue-500/10 active:scale-95"
+                >
+                  确定
+                </button>
+                <button 
+                  onClick={() => setIsIndicatorModalOpen(false)}
+                  className="px-8 py-2.5 border border-gray-300 bg-white text-gray-700 rounded text-[14px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all active:scale-95"
+                >
+                  取消
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isCategoryDeleteConfirmOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-xl shadow-2xl w-[420px] overflow-hidden"
+            >
+              <div className="p-8 pb-6">
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-500 shrink-0">
+                    <AlertCircle size={28} />
+                  </div>
+                  <h3 className="text-[18px] font-bold text-gray-900 tracking-tight">确认删除分类</h3>
+                </div>
+                <p className="text-gray-600 text-[15px] leading-relaxed pl-1">
+                  确认删除分类【{categoryToDelete}】吗？删除后数据不可恢复。
+                </p>
+              </div>
+              <div className="px-8 py-5 bg-gray-50/50 flex items-center justify-end gap-3 border-t border-gray-100">
+                <button 
+                  onClick={() => {
+                    setIsCategoryDeleteConfirmOpen(false);
+                    setCategoryToDelete(null);
+                  }}
+                  className="px-6 py-2 border border-gray-200 rounded-lg text-[14px] font-bold text-gray-600 bg-white hover:bg-gray-100 transition-all select-none"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => {
+                    setCategories(prev => prev.filter(c => c.name !== categoryToDelete));
+                    if (selectedCategory === categoryToDelete) {
+                      setSelectedCategory('全部指标');
+                    }
+                    setIsCategoryDeleteConfirmOpen(false);
+                    setCategoryToDelete(null);
+                  }}
+                  className="px-8 py-2 bg-red-500 text-white rounded-lg text-[14px] font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20 active:scale-[0.98] select-none"
+                >
+                  确认删除
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isDeleteConfirmOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-xl shadow-2xl w-[420px] overflow-hidden"
+            >
+              <div className="p-8 pb-6">
+                <div className="flex items-center gap-4 mb-5">
+                  <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center text-red-500 shrink-0">
+                    <AlertCircle size={28} />
+                  </div>
+                  <h3 className="text-[18px] font-bold text-gray-900 tracking-tight">
+                    {deleteMode === 'single' ? '确认删除指标' : '确认批量删除'}
+                  </h3>
+                </div>
+                <p className="text-gray-600 text-[15px] leading-relaxed pl-1">
+                  {deleteMode === 'single' 
+                    ? `确认删除指标【${selectedIndicator?.name}】吗？删除后不可恢复`
+                    : '确认删除选中的指标吗？删除后不可恢复'}
+                </p>
+              </div>
+              <div className="px-8 py-5 bg-gray-50/50 flex items-center justify-end gap-3 border-t border-gray-100">
+                <button 
+                  onClick={() => setIsDeleteConfirmOpen(false)}
+                  className="px-6 py-2 border border-gray-200 rounded-lg text-[14px] font-bold text-gray-600 bg-white hover:bg-gray-100 transition-all select-none"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => {
+                    if (deleteMode === 'single' && selectedIndicator) {
+                      setIndicators(prev => prev.filter(i => i.id !== selectedIndicator.id));
+                      setSelectedIndicatorIds(prev => prev.filter(id => id !== selectedIndicator.id));
+                    } else {
+                      setIndicators(prev => prev.filter(i => !selectedIndicatorIds.includes(i.id)));
+                      setSelectedIndicatorIds([]);
+                    }
+                    setIsDeleteConfirmOpen(false);
+                  }}
+                  className="px-8 py-2 bg-red-500 text-white rounded-lg text-[14px] font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20 active:scale-[0.98] select-none"
+                >
+                  确认删除
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+    </div>
+  );
+};
+
+const GradeSettingsPage = ({ 
+  gradeRanges, 
+  addRow, 
+  deleteRow, 
+  updateRow, 
+  roundingRule, 
+  setRoundingRule 
+}: {
+  gradeRanges: GradeRange[],
+  addRow: () => void,
+  deleteRow: (id: string) => void,
+  updateRow: (id: string, field: keyof GradeRange, value: string) => void,
+  roundingRule: string,
+  setRoundingRule: (rule: string) => void
+}) => (
+  <div className="flex-1 overflow-y-auto p-6 bg-white">
+    {/* Page Title & Actions */}
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex gap-2 ml-auto">
+        <button 
+          onClick={addRow}
+          className="flex items-center gap-1.5 bg-[#2f54eb] text-white px-4 py-1.5 rounded text-[13px] hover:bg-[#1d39c4] transition-colors"
+        >
+          <Plus size={16} />
+          <span>新增</span>
+        </button>
+        <button className="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded text-[13px] hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+          <Trash2 size={14} className="text-gray-400" />
+          <span>删除</span>
+        </button>
+      </div>
+    </div>
+
+    {/* Table */}
+    <div className="w-full overflow-x-auto">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="text-left text-[13px] text-gray-600 border-b border-gray-100">
+            <th className="w-12 py-3 px-2">
+              <input type="checkbox" className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]" />
+            </th>
+            <th className="py-3 px-4 font-medium text-center">组织绩效等级</th>
+            <th className="py-3 px-4 font-medium text-center">最小值 (X≥最小值)</th>
+            <th className="py-3 px-4 font-medium text-center">最大值</th>
+            <th className="w-20 py-3 px-4 font-medium text-center">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gradeRanges.map((row) => (
+            <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-3 px-2">
+                <input type="checkbox" className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]" />
+              </td>
+              <td className="py-3 px-4">
+                <div className="relative">
+                  <select 
+                    value={row.grade}
+                    onChange={(e) => updateRow(row.id, 'grade', e.target.value)}
+                    className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] appearance-none focus:border-[#2f54eb] focus:ring-1 focus:ring-[#2f54eb] outline-none bg-white"
+                  >
+                    <option value="">请选择</option>
+                    <option value="S">S</option>
+                    <option value="A">A</option>
+                    <option value="B+">B+</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+                </div>
+              </td>
+              <td className="py-3 px-4">
+                <input 
+                  type="text" 
+                  value={row.min}
+                  onChange={(e) => updateRow(row.id, 'min', e.target.value)}
+                  className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] focus:border-[#2f54eb] focus:ring-1 focus:ring-[#2f54eb] outline-none"
+                />
+              </td>
+              <td className="py-3 px-4">
+                <input 
+                  type="text" 
+                  value={row.max}
+                  onChange={(e) => updateRow(row.id, 'max', e.target.value)}
+                  className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] focus:border-[#2f54eb] focus:ring-1 focus:ring-[#2f54eb] outline-none"
+                />
+              </td>
+              <td className="py-3 px-4 text-center">
+                <button 
+                  onClick={() => deleteRow(row.id)}
+                  className="text-[#2f54eb] text-[13px] hover:text-blue-800 transition-colors"
+                >
+                  删除
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    {/* Rounding Rules Section */}
+    <div className="mt-12">
+      <h3 className="text-[13px] font-bold text-gray-800 mb-4">绩效分数取整规则</h3>
+      <div className="flex flex-row gap-8">
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div className="relative flex items-center justify-center">
+            <input 
+              type="radio" 
+              name="rounding" 
+              checked={roundingRule === 'round'}
+              onChange={() => setRoundingRule('round')}
+              className="appearance-none w-4 h-4 border border-gray-300 rounded-full checked:border-[#2f54eb] transition-all"
+            />
+            {roundingRule === 'round' && <div className="absolute w-2 h-2 bg-[#2f54eb] rounded-full" />}
+          </div>
+          <span className="text-[13px] text-gray-700">
+            四舍五入保留2位小数 <span className="text-gray-400 ml-1">(例: 3.745 ≈ 3.75)</span>
+          </span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div className="relative flex items-center justify-center">
+            <input 
+              type="radio" 
+              name="rounding" 
+              checked={roundingRule === 'up'}
+              onChange={() => setRoundingRule('up')}
+              className="appearance-none w-4 h-4 border border-gray-300 rounded-full checked:border-[#2f54eb] transition-all"
+            />
+            {roundingRule === 'up' && <div className="absolute w-2 h-2 bg-[#2f54eb] rounded-full" />}
+          </div>
+          <span className="text-[13px] text-gray-700">
+            向上取整保留2位小数 <span className="text-gray-400 ml-1">(例: 3.741 ≈ 3.75)</span>
+          </span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer group">
+          <div className="relative flex items-center justify-center">
+            <input 
+              type="radio" 
+              name="rounding" 
+              checked={roundingRule === 'down'}
+              onChange={() => setRoundingRule('down')}
+              className="appearance-none w-4 h-4 border border-gray-300 rounded-full checked:border-[#2f54eb] transition-all"
+            />
+            {roundingRule === 'down' && <div className="absolute w-2 h-2 bg-[#2f54eb] rounded-full" />}
+          </div>
+          <span className="text-[13px] text-gray-700">
+            向下取整保留2位小数 <span className="text-gray-400 ml-1">(例: 3.749 ≈ 3.74)</span>
+          </span>
+        </label>
+      </div>
+    </div>
+  </div>
+);
+
+function pickStageDateOrDefault(value: unknown, fallback: string): string {
+  const s = value != null && String(value).trim() !== '' ? String(value).trim() : '';
+  return s || fallback;
+}
+
+function parseActivityUpdateTime(t: unknown): number {
+  if (t == null || String(t).trim() === '') return 0;
+  const s = String(t).trim().replace(' ', 'T');
+  const n = new Date(s).getTime();
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatActivityDateTime(d = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function isoDateToSlash(iso: string): string {
+  return iso.trim().replace(/-/g, '/');
+}
+
+type ActivityDrawerSubmitPayload = {
+  name: string;
+  year: string;
+  cycleStart: string;
+  cycleEnd: string;
+  planStageStart: string;
+  planStageEnd: string;
+  midStageStart: string;
+  midStageEnd: string;
+  appraisalStageStart: string;
+  appraisalStageEnd: string;
+};
+
+const ActivityDrawer = ({ 
+  isOpen, 
+  onClose, 
+  activity, 
+  mode = 'add',
+  deptConfigs = [],
+  levelConfigs = [],
+  notifyConfigs = [],
+  processConfigs = [],
+  onSubmit
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  activity?: any; 
+  mode?: 'add' | 'edit' | 'copy';
+  deptConfigs?: any[];
+  levelConfigs?: any[];
+  notifyConfigs?: any[];
+  processConfigs?: any[];
+  onSubmit?: (payload: ActivityDrawerSubmitPayload) => void;
+}) => {
+  const [isEnabled, setIsEnabled] = useState(true);
+  const [searchTerms, setSearchTerms] = useState({
+    dept: '',
+    level: '',
+    notify: '',
+    process: ''
+  });
+
+  const isEdit = mode === 'edit';
+  const isCopy = mode === 'copy';
+  const title = isEdit ? '编辑绩效活动' : isCopy ? '复制绩效活动' : '新建绩效活动';
+
+  const calendarYear = new Date().getFullYear();
+  const [assessmentYear, setAssessmentYear] = useState(String(calendarYear));
+  const [cycleStart, setCycleStart] = useState(`${calendarYear}-01-01`);
+  const [cycleEnd, setCycleEnd] = useState(`${calendarYear}-12-31`);
+  const [planStageStart, setPlanStageStart] = useState('');
+  const [planStageEnd, setPlanStageEnd] = useState('');
+  const [midStageStart, setMidStageStart] = useState('');
+  const [midStageEnd, setMidStageEnd] = useState('');
+  const [appraisalStageStart, setAppraisalStageStart] = useState('');
+  const [appraisalStageEnd, setAppraisalStageEnd] = useState('');
+  const [drawerSubmitError, setDrawerSubmitError] = useState<string | null>(null);
+  const [activityName, setActivityName] = useState('');
+
+  const applyDefaultStageWindows = (ys: string) => {
+    setPlanStageStart(`${ys}-01-01`);
+    setPlanStageEnd(`${ys}-01-31`);
+    setMidStageStart(`${ys}-07-01`);
+    setMidStageEnd(`${ys}-07-31`);
+    setAppraisalStageStart(`${ys}-12-01`);
+    setAppraisalStageEnd(`${ys}-12-31`);
+  };
+
+  const yearSelectOptions = useMemo(() => {
+    const nums = Array.from({ length: 11 }, (_, i) => calendarYear - 5 + i);
+    const y = parseInt(assessmentYear, 10);
+    if (Number.isFinite(y) && !nums.includes(y)) nums.push(y);
+    return [...new Set(nums)].sort((a, b) => a - b).map(String);
+  }, [calendarYear, assessmentYear]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let y = calendarYear;
+    if ((isEdit || isCopy) && activity?.year != null && String(activity.year).trim() !== '') {
+      const s = String(activity.year).replace(/年/g, '').trim();
+      const n = parseInt(s, 10);
+      if (Number.isFinite(n)) y = n;
+    }
+    const ys = String(y);
+    setAssessmentYear(ys);
+    setCycleStart(`${ys}-01-01`);
+    setCycleEnd(`${ys}-12-31`);
+    if ((isEdit || isCopy) && activity) {
+      setPlanStageStart(pickStageDateOrDefault(activity.planStageStart, `${ys}-01-01`));
+      setPlanStageEnd(pickStageDateOrDefault(activity.planStageEnd, `${ys}-01-31`));
+      setMidStageStart(pickStageDateOrDefault(activity.midStageStart, `${ys}-07-01`));
+      setMidStageEnd(pickStageDateOrDefault(activity.midStageEnd, `${ys}-07-31`));
+      setAppraisalStageStart(pickStageDateOrDefault(activity.appraisalStageStart, `${ys}-12-01`));
+      setAppraisalStageEnd(pickStageDateOrDefault(activity.appraisalStageEnd, `${ys}-12-31`));
+    } else {
+      applyDefaultStageWindows(ys);
+    }
+    if (isEdit && activity?.name != null) {
+      setActivityName(String(activity.name));
+    } else if (isCopy && activity?.name != null) {
+      setActivityName(`${String(activity.name)}_复制`);
+    } else {
+      setActivityName('');
+    }
+    setDrawerSubmitError(null);
+  }, [isOpen, isEdit, isCopy, activity?.id, activity?.year, activity?.name, calendarYear]);
+
+  const onAssessmentYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const ys = e.target.value;
+    setAssessmentYear(ys);
+    setCycleStart(`${ys}-01-01`);
+    setCycleEnd(`${ys}-12-31`);
+    applyDefaultStageWindows(ys);
+    setDrawerSubmitError(null);
+  };
+
+  const handleActivityDrawerSubmit = () => {
+    setDrawerSubmitError(null);
+    const name = activityName.trim();
+    if (!name) {
+      setDrawerSubmitError('请填写活动名称');
+      return;
+    }
+    const cs = cycleStart.trim();
+    const ce = cycleEnd.trim();
+    if (!cs || !ce) {
+      setDrawerSubmitError('请填写周期开始日期与周期结束日期');
+      return;
+    }
+    if (cs > ce) {
+      setDrawerSubmitError('周期开始日期不能晚于周期结束日期');
+      return;
+    }
+    const stages: { name: string; s: string; e: string }[] = [
+      { name: '绩效计划制定', s: planStageStart.trim(), e: planStageEnd.trim() },
+      { name: '绩效中期回顾', s: midStageStart.trim(), e: midStageEnd.trim() },
+      { name: '绩效考核', s: appraisalStageStart.trim(), e: appraisalStageEnd.trim() },
+    ];
+    for (const st of stages) {
+      if (!st.s || !st.e) {
+        setDrawerSubmitError(`请完整填写「${st.name}」的开始日期与结束日期`);
+        return;
+      }
+      if (st.s > st.e) {
+        setDrawerSubmitError(`「${st.name}」开始日期不能晚于结束日期`);
+        return;
+      }
+      if (st.s < cs || st.e > ce) {
+        setDrawerSubmitError(
+          `「${st.name}」（${st.s} ~ ${st.e}）须完全落在周期范围内（${cs} ~ ${ce}），请调整该阶段或活动周期。`
+        );
+        return;
+      }
+    }
+    if (mode === 'add' && onSubmit) {
+      onSubmit({
+        name,
+        year: assessmentYear,
+        cycleStart: cs,
+        cycleEnd: ce,
+        planStageStart: planStageStart.trim(),
+        planStageEnd: planStageEnd.trim(),
+        midStageStart: midStageStart.trim(),
+        midStageEnd: midStageEnd.trim(),
+        appraisalStageStart: appraisalStageStart.trim(),
+        appraisalStageEnd: appraisalStageEnd.trim(),
+      });
+    }
+    onClose();
+  };
+
+  // Filter enabled items
+  const enabledDeptConfigs = deptConfigs.filter(c => c.status);
+  const enabledLevelConfigs = levelConfigs.filter(c => c.status);
+  const enabledNotifyConfigs = notifyConfigs.filter(c => c.status);
+  const enabledProcessConfigs = processConfigs.filter(c => c.status);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Overlay */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[2px]"
+          />
+          
+          {/* Drawer Wrapper */}
+          <motion.div 
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed right-0 top-0 bottom-0 z-[101] w-full max-w-2xl bg-[#fcfcfc] shadow-2xl flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100 shrink-0">
+              <h2 className="text-[16px] font-semibold text-gray-900">{title}</h2>
+              <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content Container */}
+            <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8 pb-24">
+              {/* Section: 基本信息 */}
+              <div className="bg-white rounded-lg border border-gray-100 p-6 space-y-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                  <span className="text-[15px] font-semibold text-gray-900">基本信息</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-500">活动编码</label>
+                    <div className="text-[14px] text-gray-900 bg-gray-50 px-3 py-1.5 rounded">
+                      {isEdit ? activity.id : isCopy ? 'AUTO-GENERATE' : 'NEW'}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-500 font-medium">活动状态</label>
+                    <div className="text-[14px] text-gray-700 bg-gray-50 px-3 py-1.5 rounded">
+                      {isEdit ? activity.status : '草稿'}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>考核类型
+                    </label>
+                    <div className="relative">
+                      <select
+                        value="年度"
+                        disabled
+                        aria-readonly
+                        className="w-full border border-gray-200 rounded px-3 py-2 text-[14px] outline-none appearance-none bg-gray-50 text-gray-700 cursor-not-allowed"
+                      >
+                        <option value="年度">年度</option>
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>活动名称
+                    </label>
+                    <input
+                      type="text"
+                      value={activityName}
+                      onChange={(e) => {
+                        setActivityName(e.target.value);
+                        setDrawerSubmitError(null);
+                      }}
+                      placeholder="请填写活动名称"
+                      className="w-full border border-gray-200 rounded px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all placeholder:text-gray-300"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>考核年度
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={assessmentYear}
+                        onChange={onAssessmentYearChange}
+                        className="w-full border border-gray-200 rounded px-3 py-2 text-[14px] outline-none appearance-none bg-white focus:border-[#2f54eb] transition-colors"
+                      >
+                        {yearSelectOptions.map((y) => (
+                          <option key={y} value={y}>
+                            {y}年
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>周期开始日期
+                    </label>
+                    <input
+                      type="date"
+                      value={cycleStart}
+                      onChange={(e) => setCycleStart(e.target.value)}
+                      className="w-full border border-gray-200 rounded px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>周期结束日期
+                    </label>
+                    <input
+                      type="date"
+                      value={cycleEnd}
+                      onChange={(e) => setCycleEnd(e.target.value)}
+                      className="w-full border border-gray-200 rounded px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section: 阶段窗口期 */}
+              <div className="bg-white rounded-lg border border-gray-100 p-6 space-y-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                  <span className="text-[15px] font-semibold text-gray-900">阶段窗口期</span>
+                </div>
+                <p className="text-[12px] text-gray-500 leading-relaxed -mt-2 mb-4">
+                  以下三阶段的开始、结束日期须<strong className="font-medium text-gray-700">全部落在</strong>上方「周期开始日期」与「周期结束日期」范围内（含边界）；提交时将自动校验。
+                </p>
+                <div className="space-y-5">
+                  {(
+                    [
+                      {
+                        label: '绩效计划制定',
+                        start: planStageStart,
+                        end: planStageEnd,
+                        setStart: setPlanStageStart,
+                        setEnd: setPlanStageEnd,
+                      },
+                      {
+                        label: '绩效中期回顾',
+                        start: midStageStart,
+                        end: midStageEnd,
+                        setStart: setMidStageStart,
+                        setEnd: setMidStageEnd,
+                      },
+                      {
+                        label: '绩效考核',
+                        start: appraisalStageStart,
+                        end: appraisalStageEnd,
+                        setStart: setAppraisalStageStart,
+                        setEnd: setAppraisalStageEnd,
+                      },
+                    ] as const
+                  ).map((row) => (
+                    <div key={row.label} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                      <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1 shrink-0 w-36">
+                        <span className="text-red-500">*</span>
+                        {row.label}
+                      </label>
+                      <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+                        <input
+                          type="date"
+                          value={row.start}
+                          onChange={(e) => {
+                            row.setStart(e.target.value);
+                            setDrawerSubmitError(null);
+                          }}
+                          className="flex-1 min-w-[140px] border border-gray-200 rounded px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-colors"
+                        />
+                        <span className="text-[13px] text-gray-400 shrink-0">至</span>
+                        <input
+                          type="date"
+                          value={row.end}
+                          onChange={(e) => {
+                            row.setEnd(e.target.value);
+                            setDrawerSubmitError(null);
+                          }}
+                          className="flex-1 min-w-[140px] border border-gray-200 rounded px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-colors"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section: 考核规则 */}
+              <div className="bg-white rounded-lg border border-gray-100 p-6 space-y-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                  <span className="text-[15px] font-semibold text-gray-900">考核规则</span>
+                </div>
+
+                <div className="space-y-6">
+                  {/* 考核维度 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>考核指标维度方案
+                    </label>
+                    <div className="relative group">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input 
+                          type="text"
+                          placeholder="搜索并选择考核指标维度方案"
+                          value={searchTerms.dept}
+                          onChange={(e) => setSearchTerms(prev => ({ ...prev, dept: e.target.value }))}
+                          className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                        />
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:rotate-180 transition-transform" />
+                      </div>
+                      
+                      <div
+                        className="absolute left-0 right-0 top-[105%] bg-white border border-gray-100 rounded shadow-xl z-50 max-h-48 overflow-y-auto hidden group-focus-within:block border-t-0 -mt-1 py-1"
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        {enabledDeptConfigs
+                          .filter(c => c.name.toLowerCase().includes(searchTerms.dept.toLowerCase()))
+                          .map(config => (
+                            <div
+                              key={config.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setSearchTerms((prev) => ({ ...prev, dept: config.name }))}
+                              className="px-4 py-2.5 text-[13px] hover:bg-blue-50 cursor-pointer text-gray-700 hover:text-[#2f54eb] transition-colors flex items-center justify-between"
+                            >
+                              <span>{config.name}</span>
+                              <span className="text-[11px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded italic">{config.deptType}</span>
+                            </div>
+                          ))}
+                        {enabledDeptConfigs.filter(c => c.name.toLowerCase().includes(searchTerms.dept.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用配置</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 绩效流程方案 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>绩效流程方案
+                    </label>
+                    <div className="relative group">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input 
+                          type="text"
+                          placeholder="搜索并选择已启用的绩效流程方案"
+                          value={searchTerms.process}
+                          onChange={(e) => setSearchTerms(prev => ({ ...prev, process: e.target.value }))}
+                          className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                        />
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:rotate-180 transition-transform" />
+                      </div>
+                      
+                      <div
+                        className="absolute left-0 right-0 top-[105%] bg-white border border-gray-100 rounded shadow-xl z-50 max-h-48 overflow-y-auto hidden group-focus-within:block border-t-0 -mt-1 py-1"
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        {enabledProcessConfigs
+                          .filter(c => c.name.toLowerCase().includes(searchTerms.process.toLowerCase()))
+                          .map(config => (
+                            <div
+                              key={config.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setSearchTerms((prev) => ({ ...prev, process: config.name }))}
+                              className="px-4 py-2.5 text-[13px] hover:bg-blue-50 cursor-pointer text-gray-700 hover:text-[#2f54eb] transition-colors"
+                            >
+                              {config.name}
+                            </div>
+                          ))}
+                        {enabledProcessConfigs.filter(c => c.name.toLowerCase().includes(searchTerms.process.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用方案</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 等级分数区间 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>等级分数区间方案
+                    </label>
+                    <div className="relative group">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input 
+                          type="text"
+                          placeholder="搜索并选择等级分数区间方案"
+                          value={searchTerms.level}
+                          onChange={(e) => setSearchTerms(prev => ({ ...prev, level: e.target.value }))}
+                          className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                        />
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:rotate-180 transition-transform" />
+                      </div>
+                      
+                      <div
+                        className="absolute left-0 right-0 top-[105%] bg-white border border-gray-100 rounded shadow-xl z-50 max-h-48 overflow-y-auto hidden group-focus-within:block border-t-0 -mt-1 py-1"
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        {enabledLevelConfigs
+                          .filter(c => c.name.toLowerCase().includes(searchTerms.level.toLowerCase()))
+                          .map(config => (
+                            <div
+                              key={config.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setSearchTerms((prev) => ({ ...prev, level: config.name }))}
+                              className="px-4 py-2.5 text-[13px] hover:bg-blue-50 cursor-pointer text-gray-700 hover:text-[#2f54eb] transition-colors"
+                            >
+                              {config.name}
+                            </div>
+                          ))}
+                        {enabledLevelConfigs.filter(c => c.name.toLowerCase().includes(searchTerms.level.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用方案</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 通知规则 */}
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
+                      <span className="text-red-500">*</span>通知规则方案
+                    </label>
+                    <div className="relative group">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input 
+                          type="text"
+                          placeholder="搜索并选择通知规则方案"
+                          value={searchTerms.notify}
+                          onChange={(e) => setSearchTerms(prev => ({ ...prev, notify: e.target.value }))}
+                          className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                        />
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:rotate-180 transition-transform" />
+                      </div>
+                      
+                      <div
+                        className="absolute left-0 right-0 top-[105%] bg-white border border-gray-100 rounded shadow-xl z-50 max-h-48 overflow-y-auto hidden group-focus-within:block border-t-0 -mt-1 py-1"
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        {enabledNotifyConfigs
+                          .filter(c => c.name.toLowerCase().includes(searchTerms.notify.toLowerCase()))
+                          .map(config => (
+                            <div
+                              key={config.id}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => setSearchTerms((prev) => ({ ...prev, notify: config.name }))}
+                              className="px-4 py-2.5 text-[13px] hover:bg-blue-50 cursor-pointer text-gray-700 hover:text-[#2f54eb] transition-colors"
+                            >
+                              {config.name}
+                            </div>
+                          ))}
+                        {enabledNotifyConfigs.filter(c => c.name.toLowerCase().includes(searchTerms.notify.toLowerCase())).length === 0 && (
+                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用规则</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky Footer */}
+            <div className="px-8 py-4 bg-white border-t border-gray-100 shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] z-20">
+              {drawerSubmitError && (
+                <div className="mb-3 text-[13px] text-red-600 leading-snug">{drawerSubmitError}</div>
+              )}
+              <div className="flex items-center gap-3">
+                <button 
+                  type="button"
+                  onClick={handleActivityDrawerSubmit}
+                  className="px-8 py-2 bg-[#2f54eb] text-white rounded text-[14px] font-medium hover:bg-[#1d39c4] transition-colors shadow-sm cursor-pointer"
+                >
+                  确定
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setDrawerSubmitError(null);
+                    onClose();
+                  }}
+                  className="px-8 py-2 border border-gray-200 rounded text-[14px] text-gray-600 font-medium hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const ConfirmModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  content,
+  confirmText = "确认删除",
+  confirmColor = "bg-red-500 hover:bg-red-600"
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onConfirm: () => void; 
+  title: string; 
+  content: string;
+  confirmText?: string;
+  confirmColor?: string;
+}) => {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden relative z-10"
+          >
+            <div className="p-6">
+              <div className="flex items-center gap-3 text-amber-500 mb-4">
+                <AlertCircle size={24} />
+                <h3 className="text-[16px] font-semibold text-gray-900">{title}</h3>
+              </div>
+              <p className="text-[14px] text-gray-600 leading-relaxed">{content}</p>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+              <button 
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                取消
+              </button>
+              <button 
+                onClick={onConfirm}
+                className={`px-4 py-2 ${confirmColor} text-white rounded text-[13px] transition-colors shadow-sm cursor-pointer font-medium`}
+              >
+                {confirmText}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const ColumnFilterDropdown = ({ 
+  label, 
+  options, 
+  selectedValues, 
+  onSelect, 
+  onClear 
+}: { 
+  label: string; 
+  options: string[]; 
+  selectedValues: string[]; 
+  onSelect: (value: string) => void; 
+  onClear: () => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative inline-block ml-1">
+      <Filter 
+        size={12} 
+        className={`cursor-pointer transition-colors ${selectedValues.length > 0 ? 'text-[#2f54eb]' : 'text-gray-400 hover:text-gray-600'}`} 
+        onClick={() => setIsOpen(!isOpen)}
+      />
+      
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-[10002]" onClick={() => setIsOpen(false)} />
+          <div className="absolute left-0 mt-2 min-w-[200px] bg-white border border-gray-100 rounded-lg shadow-xl z-[10003] py-2 animate-in fade-in zoom-in duration-100 origin-top-left">
+            <div className="px-3 py-1 mb-1 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+              <span className="text-[12px] font-bold text-gray-400">筛选 {label}</span>
+              {selectedValues.length > 0 && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onClear(); }}
+                  className="text-[11px] text-[#2f54eb] hover:underline"
+                >
+                  重置
+                </button>
+              )}
+            </div>
+            <div className="max-h-[240px] overflow-y-auto px-1 custom-scrollbar">
+              {options.map(opt => (
+                <div 
+                  key={opt}
+                  onClick={() => onSelect(opt)}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer rounded transition-colors group"
+                >
+                  <div className={`w-3.5 h-3.5 border rounded flex items-center justify-center transition-all ${
+                    selectedValues.includes(opt) ? 'bg-[#2f54eb] border-[#2f54eb]' : 'border-gray-300 group-hover:border-gray-400'
+                  }`}>
+                    {selectedValues.includes(opt) && <Check size={10} className="text-white" />}
+                  </div>
+                  <span className={`text-[13px] ${selectedValues.includes(opt) ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
+                    {opt === '-' ? '空' : opt}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+interface MonitoringTab {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  startDate: string;
+  endDate: string;
+}
+
+/** 根据已填写开始/结束时间的中期回顾轮次，返回整体最早开始与最晚结束；无有效轮次时为 null */
+function computeMidTermBoundsFromTabs(tabs: { startDate?: string; endDate?: string }[]): { start: string; end: string } | null {
+  const filled = tabs.filter((t) => (t.startDate || '').trim() && (t.endDate || '').trim());
+  if (!filled.length) return null;
+  const starts = filled.map((t) => (t.startDate || '').trim()).sort();
+  const ends = filled.map((t) => (t.endDate || '').trim()).sort();
+  return { start: starts[0], end: ends[ends.length - 1] };
+}
+
+function formatMidTermStepperDate(tabs: { startDate?: string; endDate?: string }[]): string {
+  const b = computeMidTermBoundsFromTabs(tabs);
+  if (!b) return '';
+  return `${b.start.replace(/-/g, '/')} ~ ${b.end.replace(/-/g, '/')}`;
+}
+
+/** 两端闭区间是否交叉（日期均为 YYYY-MM-DD） */
+function inclusiveDateRangesOverlap(s1: string, e1: string, s2: string, e2: string): boolean {
+  if (!s1 || !e1 || !s2 || !e2) return false;
+  return s1 <= e2 && s2 <= e1;
+}
+
+/** 中期回顾多轮：与 excludeTabId 以外且已填写起止日的轮次是否存在时间交叉 */
+function findOverlappingMidTermRound(
+  tabs: MonitoringTab[],
+  excludeTabId: string | undefined,
+  startDate: string,
+  endDate: string
+): MonitoringTab | null {
+  const s = (startDate || '').trim();
+  const e = (endDate || '').trim();
+  if (!s || !e) return null;
+  for (const t of tabs) {
+    if (excludeTabId && t.id === excludeTabId) continue;
+    const ts = (t.startDate || '').trim();
+    const te = (t.endDate || '').trim();
+    if (!ts || !te) continue;
+    if (inclusiveDateRangesOverlap(s, e, ts, te)) return t;
+  }
+  return null;
+}
+
+/** 季度 · 组织考核各阶段默认窗口（ISO）。中期回顾「2026-01-31」按 7 月整月记为 2026-07-31；考核「2026-1-31」按跨年记为 2027-01-31。 */
+const QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS = {
+  plan: { start: '2026-01-01', end: '2026-01-31' },
+  midTerm: { start: '2026-07-01', end: '2026-07-31' },
+  appraisal: { start: '2026-12-01', end: '2027-01-31' },
+} as const;
+
+/** 弹层标题右侧展示的整体周期（季度） */
+const QUARTER_ORG_ASSESSMENT_HEADER_CYCLE = '2026/01/01 ~ 2027/01/31';
+
+function isoStageWindowToStepperLabel(w: { start: string; end: string }): string {
+  return `${w.start.replace(/-/g, '/')} ~ ${w.end.replace(/-/g, '/')}`;
+}
+
+function isoRangeWithinWindow(s: string, e: string, w: { start: string; end: string }): boolean {
+  const ts = (s || '').trim();
+  const te = (e || '').trim();
+  if (!ts || !te || ts > te) return false;
+  return ts >= w.start && te <= w.end;
+}
+
+function addDaysIso(iso: string, deltaDays: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = Date.UTC(y, m - 1, d) + deltaDays * 86400000;
+  const x = new Date(t);
+  return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** 用于「中期回顾归档推送」与「组织主数据」比对的单行结构 */
+interface OrgRosterDiffLine {
+  code: string;
+  path: string;
+  level: string;
+  orgType: string;
+  leader: string;
+  exec: string;
+  hrbp: string;
+  node: string;
+  approver: string;
+}
+
+interface MidTermVsMasterDiff {
+  /** 主数据有、中期归档未包含 — 可新增至本轮 */
+  added: OrgRosterDiffLine[];
+  /** 中期归档有、主数据已不存在 — 可从本轮移除 */
+  removed: OrgRosterDiffLine[];
+  /** 编码一致但主数据字段与归档不一致 — 可更新 */
+  changed: { line: OrgRosterDiffLine; master: OrgRosterDiffLine; labels: string[] }[];
+}
+
+function orgPathDisplayName(path: string): string {
+  const parts = path.split('/').filter(Boolean);
+  return parts[parts.length - 1] || path;
+}
+
+function orgLineDiffLabels(mid: OrgRosterDiffLine, master: OrgRosterDiffLine): string[] {
+  const pairs: [keyof OrgRosterDiffLine, string][] = [
+    ['leader', '组织负责人'],
+    ['exec', '分管常委/分管执委'],
+    ['hrbp', 'HRBP'],
+    ['orgType', '组织类型'],
+    ['level', '组织层级'],
+    ['node', '节点'],
+    ['approver', '审批人'],
+    ['path', '部门路径'],
+  ];
+  const out: string[] = [];
+  for (const [key, label] of pairs) {
+    if (mid[key] !== master[key]) {
+      out.push(`${label}：${mid[key]} → ${master[key]}`);
+    }
+  }
+  return out;
+}
+
+function computeMidTermVsMasterDiff(
+  midTerm: OrgRosterDiffLine[],
+  master: OrgRosterDiffLine[]
+): MidTermVsMasterDiff {
+  const midBy = new Map(midTerm.map((r) => [r.code, r]));
+  const masterBy = new Map(master.map((r) => [r.code, r]));
+  const added: OrgRosterDiffLine[] = [];
+  const removed: OrgRosterDiffLine[] = [];
+  const changed: MidTermVsMasterDiff['changed'] = [];
+  for (const [code, m] of masterBy) {
+    if (!midBy.has(code)) added.push(m);
+    else {
+      const labels = orgLineDiffLabels(midBy.get(code)!, m);
+      if (labels.length) changed.push({ line: midBy.get(code)!, master: m, labels });
+    }
+  }
+  for (const [code, m] of midBy) {
+    if (!masterBy.has(code)) removed.push(m);
+  }
+  return { added, removed, changed };
+}
+
+/** 模拟：绩效中期回顾阶段已归档并推送的组织快照 */
+const MOCK_MID_TERM_ARCHIVED_ORGS: OrgRosterDiffLine[] = [
+  { code: 'D001', path: '集团总部/信息化中心', level: '一级部门', orgType: '能力中心', leader: '刘信息 (M1001)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '能力中心负责人', approver: '孙七 (50001)' },
+  { code: 'D002', path: '集团总部/人力行政中心', level: '一级部门', orgType: '职能部门', leader: '张人力 (M1002)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '相关方', approver: '吴九 (20002)' },
+  { code: 'D003', path: '集团总部/财务管理中心', level: '一级部门', orgType: '经营单元', leader: '陈效能 (M1003)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '-', approver: '-' },
+  { code: 'D004', path: '集团总部/战略发展部', level: '一级部门', orgType: '职能部门', leader: '卫系统 (M1004)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '主BP', approver: '朱九 (20004)' },
+  { code: 'D005', path: '集团总部/法务合规部', level: '一级部门', orgType: '能力中心', leader: '何法务 (M1005)', exec: '孙执委 (E1002)', hrbp: '张BP (H1003)', node: '分管执委', approver: '施五 (30005)' },
+  { code: 'D006', path: '集团总部/品牌营销部', level: '一级部门', orgType: '职能部门', leader: '曹营销 (M1006)', exec: '孙执委 (E1002)', hrbp: '张BP (H1003)', node: '分管常委', approver: '金一 (40006)' },
+  { code: 'D007', path: '集团总部/供应链管理中心', level: '一级部门', orgType: '经营单元', leader: '陶供应 (M1007)', exec: '孙执委 (E1002)', hrbp: '赵BP (H1004)', node: '能力中心负责人', approver: '邹七 (50007)' },
+  { code: 'D008', path: '集团总部/审计监察部', level: '一级部门', orgType: '职能部门', leader: '喻审计 (M1008)', exec: '孙执委 (E1002)', hrbp: '赵BP (H1004)', node: '-', approver: '-' },
+];
+
+/** 模拟：组织主数据（权威） */
+const MOCK_ORG_MASTER_ORGS: OrgRosterDiffLine[] = [
+  { code: 'D001', path: '集团总部/信息化中心', level: '一级部门', orgType: '能力中心', leader: '刘信息 (M1001)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '能力中心负责人', approver: '孙七 (50001)' },
+  { code: 'D002', path: '集团总部/人力行政中心', level: '一级部门', orgType: '职能部门', leader: '张研发 (M1002)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '相关方', approver: '吴九 (20002)' },
+  { code: 'D003', path: '集团总部/财务管理中心', level: '一级部门', orgType: '经营单元', leader: '陈效能 (M1003)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '-', approver: '-' },
+  { code: 'D004', path: '集团总部/战略发展部', level: '一级部门', orgType: '职能部门', leader: '卫系统 (M1004)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '主BP', approver: '朱九 (20004)' },
+  { code: 'D005', path: '集团总部/法务合规部', level: '一级部门', orgType: '能力中心', leader: '何法务 (M1005)', exec: '孙执委 (E1002)', hrbp: '张BP (H1003)', node: '分管执委', approver: '施五 (30005)' },
+  { code: 'D006', path: '集团总部/品牌营销部', level: '一级部门', orgType: '职能部门', leader: '曹营销 (M1006)', exec: '孙执委 (E1002)', hrbp: '张BP (H1003)', node: '分管常委', approver: '金一 (40006)' },
+  { code: 'D007', path: '集团总部/供应链管理中心', level: '一级部门', orgType: '经营单元', leader: '陶供应 (M1007)', exec: '孙执委 (E1002)', hrbp: '赵BP (H1004)', node: '能力中心负责人', approver: '邹七 (50007)' },
+  { code: 'D009', path: '集团总部/产品创新部', level: '一级部门', orgType: '能力中心', leader: '蒋产品 (M1009)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '能力中心负责人', approver: '-' },
+];
+
+const PRE_ASSESSMENT_ROSTER_DIFF = computeMidTermVsMasterDiff(MOCK_MID_TERM_ARCHIVED_ORGS, MOCK_ORG_MASTER_ORGS);
+
+/** 中期回顾「更新轮次名单」与预考核对齐：上一阶段基线 vs 主数据（演示数据与预考核同源） */
+const MID_TERM_ROSTER_UPDATE_DIFF = PRE_ASSESSMENT_ROSTER_DIFF;
+
+/** 绩效考核 · 正式考核：与预考核对齐的演示比对数据（中期归档基线 vs 主数据） */
+const FORMAL_ASSESSMENT_ROSTER_DIFF = PRE_ASSESSMENT_ROSTER_DIFF;
+
+function applyOrgRosterDiffToAssessmentRows(
+  prev: any[],
+  diff: MidTermVsMasterDiff,
+  applyAdd: boolean,
+  applyRemove: boolean,
+  applyChange: boolean
+): any[] {
+  let next = [...prev];
+  const removeCodes =
+    applyRemove && diff.removed.length > 0 ? new Set(diff.removed.map((r) => r.code)) : null;
+  const addLines = applyAdd ? diff.added : [];
+  const changeByCode = new Map(
+    applyChange ? diff.changed.map((c) => [c.line.code, c.master] as const) : []
+  );
+  if (removeCodes) {
+    next = next.filter((row) => !removeCodes.has(row.code));
+  }
+  const existingCodes = new Set(next.map((r) => r.code));
+  for (const line of addLines) {
+    if (!existingCodes.has(line.code)) {
+      next.push(orgLineToAssessmentRow(line));
+      existingCodes.add(line.code);
+    }
+  }
+  next = next.map((row) => {
+    const master = changeByCode.get(row.code);
+    if (!master) return row;
+    const merged = orgLineToAssessmentRow(master, row.status as '未开始' | '进行中' | '已完成');
+    return {
+      ...row,
+      path: merged.path,
+      level: merged.level,
+      orgType: merged.orgType,
+      leader: merged.leader,
+      exec: merged.exec,
+      hrbp: merged.hrbp,
+      node: merged.node,
+      approver: merged.approver,
+    };
+  });
+  return next;
+}
+
+function orgLineToAssessmentRow(line: OrgRosterDiffLine, status: '未开始' | '进行中' | '已完成' = '未开始') {
+  return {
+    id: line.code,
+    code: line.code,
+    path: line.path,
+    level: line.level,
+    orgType: line.orgType,
+    leader: line.leader,
+    exec: line.exec,
+    hrbp: line.hrbp,
+    node: line.node,
+    approver: line.approver,
+    status,
+    isTimeout: false,
+  };
+}
+
+const OrgAssessmentModal = ({
+  isOpen,
+  onClose,
+  activity,
+  onFormalAssessmentArchived,
+  onEditActivity,
+  onDeleteActivity
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  activity: any;
+  /** 绩效考核 · 正式考核：在「归档并完成」校验通过并完成归档后回调（如将活动标为已完成并关弹层） */
+  onFormalAssessmentArchived?: () => void;
+  /** 草稿活动：顶部「编辑」打开活动抽屉编辑 */
+  onEditActivity?: () => void;
+  /** 草稿活动：顶部「删除」走活动删除确认 */
+  onDeleteActivity?: () => void;
+}) => {
+  if (!isOpen) return null;
+
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeletePreAssessmentOpen, setIsDeletePreAssessmentOpen] = useState(false);
+  const [isMidTermArchiveModalOpen, setIsMidTermArchiveModalOpen] = useState(false);
+  const [midTermIncludePreChoice, setMidTermIncludePreChoice] = useState<boolean | null>(null);
+  /** 用户在「归档并进入绩效考核」弹窗中明确选择不开启预考核后，隐藏「添加组织绩效预考核」；离开绩效考核阶段后重置 */
+  const [suppressAddPreAssessmentRound, setSuppressAddPreAssessmentRound] = useState(false);
+  /** null | 'pre' | 'mid' | 'formal' — 与组织主数据比对更新名单 */
+  const [rosterUpdateModalKind, setRosterUpdateModalKind] = useState<null | 'pre' | 'mid' | 'formal'>(null);
+  const [preRosterApplyAdd, setPreRosterApplyAdd] = useState(true);
+  const [preRosterApplyRemove, setPreRosterApplyRemove] = useState(true);
+  const [preRosterApplyChange, setPreRosterApplyChange] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'warning', durationMs = 3000) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), durationMs);
+  };
+
+  /** 与标题展示一致：未传状态时视为「进行中」，顶部活动级编辑/删除关闭 */
+  const isActivityInProgress = (activity?.status ?? '进行中') === '进行中';
+  /** 已完成活动：详情页头部仅保留「返回」，步骤条可在各阶段间自由切换查看 */
+  const isActivityCompleted = activity?.status === '已完成';
+
+  const handleDeleteConfirm = () => {
+    setAssessmentData(prev => prev.filter(item => !selectedIds.includes(item.id)));
+    setSelectedIds([]);
+    setIsDeleteConfirmOpen(false);
+    showToast('删除成功', 'success');
+  };
+
+  const handleDeletePreAssessmentConfirm = () => {
+    setMonitoringTabs2(prev => prev.filter(t => t.id !== 'pre'));
+    setActiveMonitoringTab2('formal');
+    setIsDeletePreAssessmentOpen(false);
+    showToast('已移除组织绩效预考核（本阶段为可选，可随时再次添加）', 'success');
+  };
+
+  const [currentStep, setCurrentStep] = useState(0);
+  const [currentSubStepIndex, setCurrentSubStepIndex] = useState(0);
+  const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
+  /** 已在计划制定阶段「归档并进入下一步」，才允许从步骤条进入绩效中期回顾 */
+  const [planStageArchivedToMidTerm, setPlanStageArchivedToMidTerm] = useState(false);
+  /** 已在中期回顾「归档并进入下一步」并完成弹窗确认，才允许从步骤条进入绩效考核 */
+  const [midTermArchivedToAppraisal, setMidTermArchivedToAppraisal] = useState(false);
+  const [isInterventionModalOpen, setIsInterventionModalOpen] = useState(false);
+  const [isApprovalChainModalOpen, setIsApprovalChainModalOpen] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<any>(null);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [reviewFrequency, setReviewFrequency] = useState('季度');
+  const [reviewStages, setReviewStages] = useState([{ name: '第一轮回顾' }, { name: '第二轮回顾' }]);
+  
+  const [tempFrequency, setTempFrequency] = useState('季度');
+  const [tempStages, setTempStages] = useState([{ name: '第一轮回顾' }, { name: '第二轮回顾' }]);
+  const [activeTab, setActiveTab] = useState('考核对象');
+
+  const [monitoringTabs1, setMonitoringTabs1] = useState<MonitoringTab[]>([
+    { id: '1', name: '组织绩效中期回顾', isDefault: true, startDate: '', endDate: '' }
+  ]);
+  const [monitoringTabs2, setMonitoringTabs2] = useState<MonitoringTab[]>([
+    { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
+    { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' }
+  ]);
+
+  const [activeMonitoringTab1, setActiveMonitoringTab1] = useState('1');
+  const [activeMonitoringTab2, setActiveMonitoringTab2] = useState('pre');
+
+  const lastMidTermRoundId = monitoringTabs1.at(-1)?.id ?? '';
+  const isLastMidTermRoundTab = currentStep === 1 && activeMonitoringTab1 === lastMidTermRoundId;
+  /** 「更多」菜单：仅多轮且非最后一轮时显示「归档并进入下一轮次」；中期回顾不再展示「跳过此阶段」（含单轮） */
+  const showMidTermArchiveNextRoundInMore =
+    currentStep === 1 && monitoringTabs1.length > 1 && activeMonitoringTab1 !== lastMidTermRoundId;
+
+  const monitoringTabs = currentStep === 2 ? monitoringTabs2 : monitoringTabs1;
+  const setMonitoringTabs = currentStep === 2 ? setMonitoringTabs2 : setMonitoringTabs1;
+  const activeMonitoringTab = currentStep === 2 ? activeMonitoringTab2 : activeMonitoringTab1;
+  const setActiveMonitoringTab = currentStep === 2 ? setActiveMonitoringTab2 : setActiveMonitoringTab1;
+  const [isPlanStarted, setIsPlanStarted] = useState(false);
+  const [isSubjectsGenerated, setIsSubjectsGenerated] = useState(false);
+  const [isRoundModalOpen, setIsRoundModalOpen] = useState(false);
+  const [roundModalData, setRoundModalData] = useState<Partial<MonitoringTab>>({});
+  const [roundModalMode, setRoundModalMode] = useState<'add' | 'edit'>('add');
+
+  const steps = useMemo(() => {
+    const midDateFromTabs = formatMidTermStepperDate(monitoringTabs1);
+    const midFallback = isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.midTerm);
+    const midDate = midDateFromTabs || midFallback;
+    /** 季度与年度均为三阶段：计划制定、中期回顾、绩效考核（年度不再单独展示「绩效预考核」步骤；预考核仍为绩效考核内的可选轮次 Tab） */
+    return [
+      { title: '绩效计划制定', date: isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.plan) },
+      { title: '绩效中期回顾', date: midDate },
+      { title: '绩效考核', date: isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal) }
+    ];
+  }, [monitoringTabs1]);
+
+  const midTermBounds = useMemo(() => computeMidTermBoundsFromTabs(monitoringTabs1), [monitoringTabs1]);
+
+  /** 步骤条：未满足前置归档时不可进入后续阶段（hover 见 title） */
+  const getStepNavigationBlockTitle = (stepIndex: number): string | undefined => {
+    if (isActivityCompleted) return undefined;
+    if (stepIndex <= 0) return undefined;
+    if (stepIndex === 1 && !planStageArchivedToMidTerm) {
+      return '请先在「绩效计划制定」阶段勾选已完成的数据，并点击「归档并进入下一步」后，方可进入「绩效中期回顾」。';
+    }
+    if (stepIndex >= 2 && !midTermArchivedToAppraisal) {
+      return '请先在「绩效中期回顾」最后一轮勾选已完成的数据，并点击「归档并进入下一步」且在弹窗中确认后，方可进入「绩效考核」。';
+    }
+    return undefined;
+  };
+
+  const handleStepNavigationClick = (stepIndex: number) => {
+    const tip = getStepNavigationBlockTitle(stepIndex);
+    if (tip) {
+      showToast(tip, 'warning');
+      return;
+    }
+    setCurrentStep(stepIndex);
+  };
+
+  const addPreAssessmentRound = () => {
+    const formal = monitoringTabs2.find(t => t.id === 'formal');
+    const isQuarter = activity?.type !== '年度';
+    const b = isQuarter ? QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal : midTermBounds;
+    const rangeLabel = isQuarter ? '绩效考核阶段' : '绩效中期回顾';
+    if (!b) {
+      showToast(isQuarter ? '无法获取绩效考核阶段窗口' : '无法解析绩效中期回顾时间', 'error');
+      return;
+    }
+    let startDate = b.start;
+    let endDate = b.start;
+    if (formal?.startDate) {
+      const preEnd = addDaysIso(formal.startDate, -1);
+      if (preEnd < b.start) {
+        showToast(`${rangeLabel}时间内无法容纳预考核，请将正式考核开始时间后移后再添加`, 'warning');
+        return;
+      }
+      let preStart = addDaysIso(preEnd, -2);
+      if (preStart < b.start) preStart = b.start;
+      if (preEnd > b.end) {
+        showToast(`预考核须落在${rangeLabel}时间内，请先调整正式考核时间`, 'warning');
+        return;
+      }
+      if (preStart > preEnd) {
+        showToast(`${rangeLabel}时间内无法容纳预考核，请先缩短或后移正式考核时间`, 'warning');
+        return;
+      }
+      startDate = preStart;
+      endDate = preEnd;
+    } else {
+      endDate = addDaysIso(b.start, 2);
+      if (endDate > b.end) endDate = b.end;
+    }
+    if (formal?.startDate && formal?.endDate && inclusiveDateRangesOverlap(startDate, endDate, formal.startDate, formal.endDate)) {
+      showToast('与正式考核时间交叉，请调整后再添加', 'error');
+      return;
+    }
+    setMonitoringTabs2(prev => {
+      const rest = prev.filter(t => t.id !== 'pre');
+      return [{ id: 'pre', name: '组织绩效预考核', isDefault: true, startDate, endDate }, ...rest];
+    });
+    setActiveMonitoringTab2('pre');
+    showToast('已添加组织绩效预考核', 'success');
+  };
+
+  const handleOpenAddModal = () => {
+    const roundNames = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+    const roundNameIndex = monitoringTabs.length;
+    const roundChar = roundNames[roundNameIndex] || (roundNameIndex + 1).toString();
+    const defaultSuffix = currentStep === 2 ? '考核' : '回顾';
+    setRoundModalData({
+      name: `第${roundChar}轮${defaultSuffix}`,
+      startDate: currentStep === 2 ? new Date().toISOString().split('T')[0] : '',
+      endDate: currentStep === 2 ? new Date().toISOString().split('T')[0] : ''
+    });
+    setRoundModalMode('add');
+    setIsRoundModalOpen(true);
+  };
+
+  const handleOpenEditModal = (tab: MonitoringTab, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    
+    // Ensure the name in modal matches what's displayed or expected for the current stage
+    let displayName = tab.name;
+    if (currentStep === 2) {
+      displayName = displayName.replace('回顾', '考核');
+    } else if (currentStep === 1) {
+      displayName = displayName.replace('考核', '回顾');
+    }
+
+    setRoundModalData({
+      ...tab,
+      name: displayName
+    });
+    setRoundModalMode('edit');
+    setIsRoundModalOpen(true);
+  };
+
+  const validateOrgAssessmentRoundDates = (tabId: string | undefined, startDate: string, endDate: string): boolean => {
+    if (currentStep !== 2 || !tabId) return true;
+    const s = startDate || '';
+    const e = endDate || '';
+    if (!s || !e) {
+      showToast('请填写轮次开始时间与结束时间', 'error');
+      return false;
+    }
+    if (s > e) {
+      showToast('开始时间不能晚于结束时间', 'error');
+      return false;
+    }
+    if (activity?.type !== '年度') {
+      const aw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal;
+      if (s < aw.start || e > aw.end) {
+        showToast(`轮次时间须在绩效考核阶段窗口内（${isoStageWindowToStepperLabel(aw)}）`, 'error');
+        return false;
+      }
+    } else {
+      const bounds = midTermBounds;
+      if (bounds) {
+        if (s < bounds.start || e > bounds.end) {
+          showToast(`轮次时间须在绩效中期回顾范围内（${bounds.start} ~ ${bounds.end}）`, 'error');
+          return false;
+        }
+      }
+    }
+    const other = monitoringTabs.find(t => t.id !== tabId && t.startDate && t.endDate);
+    if (other && inclusiveDateRangesOverlap(s, e, other.startDate, other.endDate)) {
+      showToast('组织绩效预考核与正式考核的时间段不能交叉', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  /** 绩效中期回顾：保存轮次弹窗时校验起止日与多轮不交叉 */
+  const validateMidTermRoundModal = (tabId: string | undefined, startDate: string, endDate: string): boolean => {
+    if (currentStep !== 1) return true;
+    const s = startDate || '';
+    const e = endDate || '';
+    if (!s.trim() || !e.trim()) {
+      showToast('请填写当前回顾轮次的开始时间与结束时间', 'error');
+      return false;
+    }
+    if (s > e) {
+      showToast('开始时间不能晚于结束时间', 'error');
+      return false;
+    }
+    const overlap = findOverlappingMidTermRound(monitoringTabs1, tabId, s, e);
+    if (overlap) {
+      showToast(`当前轮次时间与「${overlap.name}」存在交叉，请调整。多轮回顾的起止时间不得重叠。`, 'error');
+      return false;
+    }
+    if (activity?.type !== '年度') {
+      const mw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.midTerm;
+      if (!isoRangeWithinWindow(s, e, mw)) {
+        showToast(
+          `当前轮次时间须在绩效中期回顾阶段窗口内（${isoStageWindowToStepperLabel(mw)}），且不能超出该整体窗口。`,
+          'error',
+          6500
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleDeleteTab = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newTabs = monitoringTabs.filter(t => t.id !== id);
+    if (newTabs.length === 0) return; // Prevent deleting all tabs
+    
+    setMonitoringTabs(newTabs);
+    setSelectedIds([]); // Clear selections when a tab is deleted to avoid sync issues
+    
+    if (activeMonitoringTab === id) {
+      // Find the nearest tab to switch to
+      const deletedIndex = monitoringTabs.findIndex(t => t.id === id);
+      const nextTab = newTabs[deletedIndex] || newTabs[deletedIndex - 1] || newTabs[0];
+      setActiveMonitoringTab(nextTab.id);
+    }
+  };
+
+  const handleMonitoringTabClick = (id: string) => {
+    if (activeMonitoringTab === id) return;
+    setActiveMonitoringTab(id);
+    setSelectedIds([]); // Clear selections when switching tabs
+  };
+
+  const handleSaveRound = () => {
+    if (!roundModalData.name) return;
+
+    const s = roundModalData.startDate || '';
+    const e = roundModalData.endDate || '';
+    if (currentStep === 1) {
+      if (!validateMidTermRoundModal(roundModalMode === 'edit' ? roundModalData.id : undefined, s, e)) return;
+    } else if (!validateOrgAssessmentRoundDates(roundModalData.id, s, e)) {
+      return;
+    }
+
+    if (roundModalMode === 'add') {
+      const newId = Date.now().toString();
+      setMonitoringTabs([...monitoringTabs, { 
+        id: newId, 
+        name: roundModalData.name, 
+        startDate: roundModalData.startDate || '', 
+        endDate: roundModalData.endDate || '',
+        isDefault: false 
+      }]);
+      setActiveMonitoringTab(newId);
+    } else {
+      setMonitoringTabs(monitoringTabs.map(t => t.id === roundModalData.id ? { ...t, ...roundModalData } : t));
+    }
+    setIsRoundModalOpen(false);
+  };
+
+  const [assessmentData, setAssessmentData] = useState([
+    { id: 'D001', code: 'D001', path: '集团总部/信息化中心', level: '一级部门', orgType: '能力中心', leader: '刘信息 (M1001)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '能力中心负责人', approver: '孙七 (50001)', status: '未开始', isTimeout: false },
+    { id: 'D002', code: 'D002', path: '集团总部/人力行政中心', level: '一级部门', orgType: '职能部门', leader: '张人力 (M1002)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '相关方', approver: '吴九 (20002)', status: '进行中', isTimeout: true },
+    { id: 'D003', code: 'D003', path: '集团总部/财务管理中心', level: '一级部门', orgType: '经营单元', leader: '陈效能 (M1003)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '-', approver: '-', status: '未开始', isTimeout: false },
+    { id: 'D004', code: 'D004', path: '集团总部/战略发展部', level: '一级部门', orgType: '职能部门', leader: '卫系统 (M1004)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '主BP', approver: '朱九 (20004)', status: '已完成', isTimeout: false },
+    { id: 'D005', code: 'D005', path: '集团总部/法务合规部', level: '一级部门', orgType: '能力中心', leader: '何法务 (M1005)', exec: '孙执委 (E1002)', hrbp: '张BP (H1003)', node: '分管执委', approver: '施五 (30005)', status: '进行中', isTimeout: false },
+    { id: 'D006', code: 'D006', path: '集团总部/品牌营销部', level: '一级部门', orgType: '职能部门', leader: '曹营销 (M1006)', exec: '孙执委 (E1002)', hrbp: '张BP (H1003)', node: '分管常委', approver: '金一 (40006)', status: '未开始', isTimeout: false },
+    { id: 'D007', code: 'D007', path: '集团总部/供应链管理中心', level: '一级部门', orgType: '经营单元', leader: '陶供应 (M1007)', exec: '孙执委 (E1002)', hrbp: '赵BP (H1004)', node: '能力中心负责人', approver: '邹七 (50007)', status: '进行中', isTimeout: true },
+    { id: 'D008', code: 'D008', path: '集团总部/审计监察部', level: '一级部门', orgType: '职能部门', leader: '喻审计 (M1008)', exec: '孙执委 (E1002)', hrbp: '赵BP (H1004)', node: '-', approver: '-', status: '未开始', isTimeout: false },
+  ]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (assessmentData.some(item => item.status !== '未开始')) {
+      setIsPlanStarted(true);
+    }
+    if (assessmentData.length > 0) {
+      setIsSubjectsGenerated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentStep !== 2) {
+      setSuppressAddPreAssessmentRound(false);
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (currentStep === 2) setIsMoreMenuOpen(false);
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (currentStep !== 2) return;
+    setRosterUpdateModalKind((k) => {
+      if (k === 'pre' && activeMonitoringTab !== 'pre') return null;
+      if (k === 'formal' && activeMonitoringTab !== 'formal') return null;
+      return k;
+    });
+  }, [currentStep, activeMonitoringTab]);
+
+  useEffect(() => {
+    if (currentStep !== 1) {
+      setRosterUpdateModalKind((k) => (k === 'mid' ? null : k));
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (currentStep === 1) {
+      setRosterUpdateModalKind((k) => (k === 'mid' ? null : k));
+    }
+  }, [activeMonitoringTab1, currentStep]);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
+  const [columnFilters, setColumnFilters] = useState<{
+    path: string[];
+    orgType: string[];
+    level: string[];
+    status: string[];
+    node: string[];
+    approver: string[];
+    leader: string[];
+    exec: string[];
+    hrbp: string[];
+  }>({
+    path: [],
+    orgType: [],
+    level: [],
+    status: [],
+    node: [],
+    approver: [],
+    leader: [],
+    exec: [],
+    hrbp: [],
+  });
+
+  const filteredData = assessmentData.filter(item => {
+    const matchesSearch = item.path.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.approver.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesPath = columnFilters.path.length === 0 || columnFilters.path.includes(item.path);
+    const matchesOrgType = columnFilters.orgType.length === 0 || columnFilters.orgType.includes(item.orgType);
+    const matchesLevel = columnFilters.level.length === 0 || columnFilters.level.includes(item.level);
+    const matchesStatus = columnFilters.status.length === 0 || columnFilters.status.includes(item.status);
+    const matchesNode = columnFilters.node.length === 0 || columnFilters.node.includes(item.node);
+    const matchesApprover = columnFilters.approver.length === 0 || columnFilters.approver.includes(item.approver);
+    const matchesLeader = columnFilters.leader.length === 0 || columnFilters.leader.includes((item as any).leader);
+    const matchesExec = columnFilters.exec.length === 0 || columnFilters.exec.includes((item as any).exec);
+    const matchesHrbp = columnFilters.hrbp.length === 0 || columnFilters.hrbp.includes((item as any).hrbp);
+
+    return matchesSearch && matchesPath && matchesOrgType && matchesLevel && matchesStatus && matchesNode && matchesApprover && matchesLeader && matchesExec && matchesHrbp;
+  });
+
+  const handleToggleColumnFilter = (column: keyof typeof columnFilters, value: string) => {
+    setColumnFilters(prev => ({
+      ...prev,
+      [column]: prev[column].includes(value) 
+        ? prev[column].filter(v => v !== value) 
+        : [...prev[column], value]
+    }));
+  };
+
+  const clearColumnFilter = (column: keyof typeof columnFilters) => {
+    setColumnFilters(prev => ({ ...prev, [column]: [] }));
+  };
+
+  const getUniqueValues = (column: keyof typeof assessmentData[0]): string[] => {
+    const values = assessmentData.map(item => item[column as keyof typeof item] as string);
+    return Array.from(new Set(values)).filter((v): v is string => Boolean(v));
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === assessmentData.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(assessmentData.map(item => item.id));
+    }
+  };
+
+  const getSelectedAssessmentRows = () => assessmentData.filter((item) => selectedIds.includes(item.id));
+
+  const toastNeedSelection = () => {
+    showToast('请至少选择一条数据', 'warning');
+  };
+
+  /** 进行中（含滞留/超时）、已完成不可再次「启动」 */
+  const isRowBlockedForRestart = (item: { status: string }) =>
+    item.status === '进行中' || item.status === '已完成';
+
+  /** 「归档并进入下一步」等：仅允许勾选已完成的数据 */
+  const validateArchiveSelection = (): boolean => {
+    if (selectedIds.length === 0) {
+      toastNeedSelection();
+      return false;
+    }
+    const selected = getSelectedAssessmentRows();
+    if (selected.some((item) => item.status !== '已完成')) {
+      showToast('仅「已完成」状态的数据可执行归档并进入下一步', 'warning');
+      return false;
+    }
+    return true;
+  };
+
+  const handleStartPlan = () => {
+    if (selectedIds.length === 0) {
+      toastNeedSelection();
+      return;
+    }
+    if (currentStep === 1) {
+      const tab = monitoringTabs1.find((t) => t.id === activeMonitoringTab1);
+      if (!tab || !(tab.startDate || '').trim() || !(tab.endDate || '').trim()) {
+        showToast(
+          [
+            '请先维护当前回顾轮次的开始时间与结束时间。',
+            '绩效中期回顾整体周期可能较长，后续还可能新增多轮回顾；当前轮次的起止仅代表本轮，不等同于整个中期回顾阶段，请为后续轮次预留时间窗口。',
+            '若存在多轮回顾，各轮次的起止时间不得交叉。'
+          ].join('\n'),
+          'error',
+          8000
+        );
+        return;
+      }
+      if (tab.startDate > tab.endDate) {
+        showToast('当前轮次开始时间不能晚于结束时间', 'error');
+        return;
+      }
+      const overlap = findOverlappingMidTermRound(monitoringTabs1, tab.id, tab.startDate, tab.endDate);
+      if (overlap) {
+        showToast(
+          `当前轮次时间与「${overlap.name}」存在交叉，请调整后再启动。\n多轮回顾的起止时间不得重叠。`,
+          'error',
+          6000
+        );
+        return;
+      }
+      if (activity?.type !== '年度') {
+        const mw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.midTerm;
+        if (!isoRangeWithinWindow(tab.startDate, tab.endDate, mw)) {
+          showToast(
+            `当前轮次时间须在绩效中期回顾阶段窗口内（${isoStageWindowToStepperLabel(mw)}），且不能超出该整体窗口后再启动。`,
+            'error',
+            6500
+          );
+          return;
+        }
+      }
+    }
+    if (currentStep === 2) {
+      const appraisalTabs = monitoringTabs2.filter((t) => t.id === 'pre' || t.id === 'formal');
+      for (const tab of appraisalTabs) {
+        const s = (tab.startDate || '').trim();
+        const e = (tab.endDate || '').trim();
+        if (!s || !e) {
+          showToast(
+            [
+              `考核对象已勾选，但「${tab.name}」的开始时间、结束时间尚未填写，无法启动考核。`,
+              '请点击该轮次标签右侧的「编辑」图标，在弹窗中补全起止日期后再点击「启动绩效考核」。',
+            ].join('\n'),
+            'warning',
+            6500
+          );
+          return;
+        }
+        if (s > e) {
+          showToast(`「${tab.name}」开始时间不能晚于结束时间`, 'error');
+          return;
+        }
+      }
+      const pre = monitoringTabs2.find((t) => t.id === 'pre');
+      const formal = monitoringTabs2.find((t) => t.id === 'formal');
+      if (
+        pre &&
+        formal &&
+        (pre.startDate || '').trim() &&
+        (pre.endDate || '').trim() &&
+        (formal.startDate || '').trim() &&
+        (formal.endDate || '').trim() &&
+        inclusiveDateRangesOverlap(
+          pre.startDate.trim(),
+          pre.endDate.trim(),
+          formal.startDate.trim(),
+          formal.endDate.trim()
+        )
+      ) {
+        showToast('组织绩效预考核与组织绩效正式考核的时间段不能交叉，请调整后再启动。', 'error', 5000);
+        return;
+      }
+    }
+    const selected = getSelectedAssessmentRows();
+    if (selected.some(isRowBlockedForRestart)) {
+      showToast('进行中、滞留/超时、已完成状态的数据不能重复启动', 'warning');
+      return;
+    }
+    setAssessmentData(prev => prev.map(item => 
+      selectedIds.includes(item.id) ? { ...item, status: '进行中' as any } : item
+    ));
+    setSelectedIds([]);
+    if (currentStep === 0) {
+      setIsPlanStarted(true);
+      showToast('计划制定已启动', 'success');
+    } else {
+      showToast('流程已启动', 'success');
+    }
+  };
+
+  const handleArchive = () => {
+    if (currentStep === 2 && activeMonitoringTab === 'formal') {
+      if (assessmentData.length === 0) {
+        showToast('暂无考核对象', 'warning');
+        return;
+      }
+      if (!assessmentData.every((item) => item.status === '已完成')) {
+        showToast(
+          '「归档并完成」针对组织绩效正式考核下的全部考核对象：须均为「已完成」后方可归档；当前存在未完成数据，请处理后再试。',
+          'warning',
+          5500
+        );
+        return;
+      }
+      setSelectedIds([]);
+      showToast('已归档并完成', 'success');
+      onFormalAssessmentArchived?.();
+      return;
+    }
+
+    if (!validateArchiveSelection()) return;
+    setAssessmentData(prev => prev.map(item => 
+      selectedIds.includes(item.id) ? { ...item, status: '已完成' as any } : item
+    ));
+    setSelectedIds([]);
+    if (currentStep === 0) {
+      setPlanStageArchivedToMidTerm(true);
+      setCurrentStep(1);
+      showToast('已进入绩效中期回顾', 'success');
+    }
+  };
+
+  /** 绩效中期回顾 · 多轮非末轮：归档勾选数据并切换到下一轮 Tab */
+  const handleMidTermArchiveAndNextRound = () => {
+    if (!validateArchiveSelection()) return;
+    const idx = monitoringTabs1.findIndex((t) => t.id === activeMonitoringTab1);
+    const nextTab = idx >= 0 && idx < monitoringTabs1.length - 1 ? monitoringTabs1[idx + 1] : null;
+    if (!nextTab) {
+      showToast('当前已是最后一轮回顾', 'warning');
+      return;
+    }
+    setAssessmentData((prev) =>
+      prev.map((item) =>
+        selectedIds.includes(item.id) ? { ...item, status: '已完成' as any } : item
+      )
+    );
+    setSelectedIds([]);
+    setActiveMonitoringTab1(nextTab.id);
+    showToast(`已归档并进入${nextTab.name}`, 'success');
+  };
+
+  /** 绩效考核阶段 · 组织绩效预考核：归档勾选数据并切换到正式考核轮次 */
+  const handlePreAssessmentArchiveAndNextRound = () => {
+    if (!validateArchiveSelection()) return;
+    setAssessmentData(prev => prev.map(item =>
+      selectedIds.includes(item.id) ? { ...item, status: '已完成' as any } : item
+    ));
+    setSelectedIds([]);
+    if (monitoringTabs2.some(t => t.id === 'formal')) {
+      setActiveMonitoringTab2('formal');
+    }
+    showToast('已归档并进入组织绩效正式考核', 'success');
+  };
+
+  const openPreRosterUpdateModal = () => {
+    const diff = PRE_ASSESSMENT_ROSTER_DIFF;
+    if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
+      showToast('中期归档推送数据与组织主数据一致，无需更新名单', 'success');
+      return;
+    }
+    setPreRosterApplyAdd(true);
+    setPreRosterApplyRemove(true);
+    setPreRosterApplyChange(true);
+    setRosterUpdateModalKind('pre');
+  };
+
+  const openMidTermRosterUpdateModal = () => {
+    const diff = MID_TERM_ROSTER_UPDATE_DIFF;
+    if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
+      showToast('绩效计划制定阶段名单与组织主数据一致，无需更新名单', 'success');
+      return;
+    }
+    setPreRosterApplyAdd(true);
+    setPreRosterApplyRemove(true);
+    setPreRosterApplyChange(true);
+    setRosterUpdateModalKind('mid');
+  };
+
+  const handleApplyPreRosterUpdate = () => {
+    const diff = PRE_ASSESSMENT_ROSTER_DIFF;
+    const willAdd = preRosterApplyAdd && diff.added.length > 0;
+    const willRemove = preRosterApplyRemove && diff.removed.length > 0;
+    const willChange = preRosterApplyChange && diff.changed.length > 0;
+    if (!willAdd && !willRemove && !willChange) {
+      showToast('请至少勾选一类需要应用的变更，或点击取消关闭', 'warning');
+      return;
+    }
+    setAssessmentData((prev) =>
+      applyOrgRosterDiffToAssessmentRows(prev, diff, preRosterApplyAdd, preRosterApplyRemove, preRosterApplyChange)
+    );
+    setRosterUpdateModalKind(null);
+    showToast('已按确认结果更新组织绩效预考核名单', 'success');
+  };
+
+  const handleApplyMidTermRosterUpdate = () => {
+    const diff = MID_TERM_ROSTER_UPDATE_DIFF;
+    const willAdd = preRosterApplyAdd && diff.added.length > 0;
+    const willRemove = preRosterApplyRemove && diff.removed.length > 0;
+    const willChange = preRosterApplyChange && diff.changed.length > 0;
+    if (!willAdd && !willRemove && !willChange) {
+      showToast('请至少勾选一类需要应用的变更，或点击取消关闭', 'warning');
+      return;
+    }
+    setAssessmentData((prev) =>
+      applyOrgRosterDiffToAssessmentRows(prev, diff, preRosterApplyAdd, preRosterApplyRemove, preRosterApplyChange)
+    );
+    setRosterUpdateModalKind(null);
+    showToast('已按确认结果更新本回顾轮次组织名单', 'success');
+  };
+
+  const openFormalRosterUpdateModal = () => {
+    const diff = FORMAL_ASSESSMENT_ROSTER_DIFF;
+    if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
+      showToast('中期归档推送数据与组织主数据一致，无需更新名单', 'success');
+      return;
+    }
+    setPreRosterApplyAdd(true);
+    setPreRosterApplyRemove(true);
+    setPreRosterApplyChange(true);
+    setRosterUpdateModalKind('formal');
+  };
+
+  const handleApplyFormalRosterUpdate = () => {
+    const diff = FORMAL_ASSESSMENT_ROSTER_DIFF;
+    const willAdd = preRosterApplyAdd && diff.added.length > 0;
+    const willRemove = preRosterApplyRemove && diff.removed.length > 0;
+    const willChange = preRosterApplyChange && diff.changed.length > 0;
+    if (!willAdd && !willRemove && !willChange) {
+      showToast('请至少勾选一类需要应用的变更，或点击取消关闭', 'warning');
+      return;
+    }
+    setAssessmentData((prev) =>
+      applyOrgRosterDiffToAssessmentRows(prev, diff, preRosterApplyAdd, preRosterApplyRemove, preRosterApplyChange)
+    );
+    setRosterUpdateModalKind(null);
+    showToast('已按确认结果更新组织绩效正式考核名单', 'success');
+  };
+
+  const confirmMidTermArchiveAndNext = () => {
+    if (!validateArchiveSelection()) return;
+    if (midTermIncludePreChoice !== true && midTermIncludePreChoice !== false) {
+      showToast('请先选择是否开启组织绩效预考核，再点击确认', 'warning');
+      return;
+    }
+    setAssessmentData(prev => prev.map(item =>
+      selectedIds.includes(item.id) ? { ...item, status: '已完成' as any } : item
+    ));
+    setSelectedIds([]);
+    const b = midTermBounds;
+    const isQuarter = activity?.type !== '年度';
+    const aw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal;
+
+    if (isQuarter) {
+      if (midTermIncludePreChoice) {
+        let preEnd = addDaysIso(aw.start, 14);
+        if (preEnd >= aw.end) preEnd = aw.end;
+        let formalStart = addDaysIso(preEnd, 1);
+        if (formalStart > aw.end) {
+          showToast('绩效考核阶段时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
+          setMonitoringTabs2([
+            { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+          ]);
+          setActiveMonitoringTab2('formal');
+        } else {
+          setMonitoringTabs2([
+            { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
+            { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+          ]);
+          setActiveMonitoringTab2('pre');
+        }
+      } else {
+        setMonitoringTabs2([
+          { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+        ]);
+        setActiveMonitoringTab2('formal');
+      }
+    } else if (midTermIncludePreChoice && b) {
+      let preEnd = addDaysIso(b.start, 2);
+      if (preEnd > b.end) preEnd = b.end;
+      let formalStart = addDaysIso(preEnd, 1);
+      if (formalStart > b.end) {
+        showToast('绩效中期回顾时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
+        setMonitoringTabs2([
+          { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+        ]);
+        setActiveMonitoringTab2('formal');
+      } else {
+        setMonitoringTabs2([
+          { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
+          { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+        ]);
+        setActiveMonitoringTab2('pre');
+      }
+    } else if (midTermIncludePreChoice && !b) {
+      setMonitoringTabs2([
+        { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
+        { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+      ]);
+      setActiveMonitoringTab2('pre');
+    } else {
+      setMonitoringTabs2([
+        { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+      ]);
+      setActiveMonitoringTab2('formal');
+    }
+    setSuppressAddPreAssessmentRound(midTermIncludePreChoice === false);
+    setMidTermArchivedToAppraisal(true);
+    setCurrentStep(2);
+    setIsMidTermArchiveModalOpen(false);
+    setMidTermIncludePreChoice(null);
+    showToast('已进入绩效考核', 'success');
+  };
+
+  const getStatusText = (item: any) => {
+    if (item.status === '进行中' && item.isTimeout) return '滞留/超时';
+    return item.status;
+  };
+
+  const getStatusStyle = (status: string, isTimeout?: boolean) => {
+    if (status === '进行中' && isTimeout) {
+      return 'bg-red-50 text-red-600 border-red-100';
+    }
+    switch (status) {
+      case '进行中':
+        return 'bg-blue-50 text-blue-600 border-blue-100';
+      case '已完成':
+        return 'bg-green-50 text-green-600 border-green-100';
+      default:
+        return 'bg-gray-50 text-gray-400 border-gray-100';
+    }
+  };
+
+  const getStatusDot = (status: string, isTimeout?: boolean) => {
+    if (status === '进行中' && isTimeout) return 'bg-red-600';
+    switch (status) {
+      case '进行中': return 'bg-blue-600';
+      case '已完成': return 'bg-green-600';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  const handleApplyFrequency = () => {
+    setReviewFrequency(tempFrequency);
+    setReviewStages(tempStages);
+    setIsFrequencyModalOpen(false);
+  };
+
+  const handleAddStage = () => {
+    setTempStages([...tempStages, { name: `第${tempStages.length + 1}轮回顾` }]);
+  };
+
+  const handleDeleteStage = (index: number) => {
+    setTempStages(tempStages.filter((_, i) => i !== index));
+  };
+
+  return (
+    <AnimatePresence>
+      <AnimatePresence>
+        {isDeleteConfirmOpen && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-lg shadow-2xl w-full max-w-sm overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                    <AlertCircle className="text-red-500" size={24} />
+                  </div>
+                  <h3 className="text-[16px] font-semibold text-gray-900">确认删除数据？</h3>
+                </div>
+                <p className="text-[14px] text-gray-600 leading-relaxed mb-6">
+                  确认要删除当前选中的考核对象吗？删除数据后数据不可恢复。
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setIsDeleteConfirmOpen(false)}
+                    className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleDeleteConfirm}
+                    className="px-4 py-2 bg-red-500 text-white rounded text-[13px] hover:bg-red-600 shadow-md shadow-red-100 transition-colors"
+                  >
+                    确认删除
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isDeletePreAssessmentOpen && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-lg shadow-2xl w-full max-w-sm overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                    <AlertCircle className="text-red-500" size={24} />
+                  </div>
+                  <h3 className="text-[16px] font-semibold text-gray-900">删除组织绩效预考核？</h3>
+                </div>
+                <p className="text-[14px] text-gray-600 leading-relaxed mb-6">
+                  「组织绩效预考核」是否在活动中有此阶段，是在<strong className="text-gray-800">绩效中期回顾完成、归档并进入绩效考核</strong>时确认的，属于<strong className="text-gray-800">可选</strong>轮次，因此仅预考核支持删除。删除后仍保留「组织绩效正式考核」；若后续需要，可再添加预考核轮次。
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeletePreAssessmentOpen(false)}
+                    className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeletePreAssessmentConfirm}
+                    className="px-4 py-2 bg-red-500 text-white rounded text-[13px] hover:bg-red-600 shadow-md shadow-red-100 transition-colors"
+                  >
+                    确认删除
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isMidTermArchiveModalOpen && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden"
+            >
+              <div className="p-6 border-b border-gray-100">
+                <h3 className="text-[16px] font-semibold text-gray-900">归档并进入绩效考核</h3>
+                <p className="text-[13px] text-gray-600 mt-3 leading-relaxed">
+                  即将进入<strong className="text-gray-800">绩效考核</strong>阶段。该阶段包含两个轮次：
+                </p>
+                <ul className="mt-2 text-[13px] text-gray-700 space-y-1.5 list-disc pl-5">
+                  <li><strong>组织绩效正式考核</strong>为<strong className="text-[#2f54eb]">必有</strong>轮次；</li>
+                  <li><strong>组织绩效预考核</strong>为<strong className="text-gray-600">可选</strong>轮次。</li>
+                </ul>
+                <p className="text-[13px] text-gray-600 mt-3 leading-relaxed">
+                  请确认是否在本活动中<strong>开启</strong>「组织绩效预考核」：开启后可在绩效考核中管理预考核与正式考核两轮；不开启则仅进入正式考核轮次。
+                </p>
+                <div className="mt-5 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="midterm-pre"
+                      className="mt-1"
+                      checked={midTermIncludePreChoice === true}
+                      onChange={() => setMidTermIncludePreChoice(true)}
+                    />
+                    <span className="text-[13px] text-gray-800 leading-snug">
+                      开启组织绩效预考核（进入绩效考核后可见预考核与正式考核两个 Tab）
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="midterm-pre"
+                      className="mt-1"
+                      checked={midTermIncludePreChoice === false}
+                      onChange={() => setMidTermIncludePreChoice(false)}
+                    />
+                    <span className="text-[13px] text-gray-800 leading-snug">
+                      不开启，仅进入组织绩效正式考核（仅展示正式考核 Tab）
+                    </span>
+                  </label>
+                </div>
+              </div>
+              <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMidTermArchiveModalOpen(false);
+                    setMidTermIncludePreChoice(null);
+                  }}
+                  className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-white transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmMidTermArchiveAndNext}
+                  className="px-4 py-2 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-[#1d39c4] transition-colors shadow-sm"
+                >
+                  确认归档并进入
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -12, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -12, x: '-50%' }}
+            className="fixed top-3 left-1/2 z-[10050] px-4 py-2.5 rounded-lg shadow-xl flex items-start gap-2 bg-white border border-orange-200 min-w-[240px] max-w-[min(92vw,560px)] pointer-events-auto"
+          >
+            {toast.type === 'warning' && <AlertCircle size={16} className="text-orange-500 shrink-0 mt-0.5" />}
+            {toast.type === 'error' && <X size={16} className="text-red-500 shrink-0 mt-0.5" />}
+            {toast.type === 'success' && <CheckCircle2 size={16} className="text-green-500 shrink-0 mt-0.5" />}
+            <span className="text-[13px] text-gray-800 leading-snug whitespace-pre-line">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 20 }}
+        className="fixed inset-0 z-[200] bg-[#f0f2f5] flex flex-col"
+      >
+        {/* Header - Styled like Figure 1 */}
+        <div className="bg-white px-6 py-3 flex items-center justify-between shrink-0 border-b border-gray-100 shadow-sm z-50">
+          <div className="flex items-center gap-4 text-[14px]">
+            <div className="flex items-center gap-1">
+              <span
+                className={`font-medium ${
+                  activity?.status === '草稿'
+                    ? 'inline-flex items-center px-2 py-0.5 rounded text-[13px] bg-gray-100 text-gray-700 border border-gray-200'
+                    : 'text-gray-900'
+                }`}
+              >
+                {activity?.status || '进行中'}
+              </span>
+              <span className="text-gray-300 mx-1">/</span>
+              <span className="font-medium text-gray-800">{activity?.name || '产品考核方案'}</span>
+              <span className="text-gray-400 mx-1">·</span>
+              <span className="text-gray-800">{activity?.year || '2024'} {activity?.period || '第三季度'}</span>
+              <span className="text-gray-400 mx-1">·</span>
+              <span className="text-gray-800">{activity?.type === '年度' ? '2024/07/01 ~ 2024/09/30' : QUARTER_ORG_ASSESSMENT_HEADER_CYCLE}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={onClose} 
+              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer bg-white"
+            >
+              返回
+            </button>
+            {activity?.status !== '已完成' && (
+              activity?.status === '草稿' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onEditActivity?.()}
+                    className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer bg-white"
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteActivity?.()}
+                    className="px-4 py-1.5 border border-red-200 rounded text-[13px] text-red-600 hover:bg-red-50 hover:border-red-300 transition-all cursor-pointer bg-white"
+                  >
+                    删除
+                  </button>
+                </>
+              ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isActivityInProgress) return;
+                    if (currentStep !== 2) return;
+                    const tab = monitoringTabs.find(t => t.id === activeMonitoringTab);
+                    if (tab) handleOpenEditModal(tab);
+                  }}
+                  disabled={isActivityInProgress || currentStep !== 2}
+                  title={
+                    isActivityInProgress
+                      ? '活动进行中：顶部「编辑」已关闭。请通过上方轮次标签旁的铅笔图标，维护各轮次的开始与结束时间。'
+                      : currentStep !== 2
+                        ? '请进入「绩效考核」阶段后编辑轮次时间'
+                        : '编辑当前轮次开始/结束时间（与轮次标签旁图标相同）'
+                  }
+                  className={`px-4 py-1.5 border rounded text-[13px] transition-all cursor-pointer bg-white ${
+                    currentStep === 2 && !isActivityInProgress
+                      ? 'border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                      : 'border-gray-100 text-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isActivityInProgress) return;
+                    if (currentStep === 2 && activeMonitoringTab === 'pre') {
+                      setIsDeletePreAssessmentOpen(true);
+                    }
+                  }}
+                  disabled={
+                    isActivityInProgress ||
+                    currentStep !== 2 ||
+                    activeMonitoringTab !== 'pre'
+                  }
+                  title={
+                    isActivityInProgress
+                      ? '活动进行中，不可删除活动或移除此处轮次'
+                      : currentStep !== 2
+                        ? '请进入「绩效考核」阶段'
+                        : activeMonitoringTab !== 'pre'
+                          ? '仅「组织绩效预考核」为可选阶段，可删除；正式考核不可删除'
+                          : '删除可选的组织绩效预考核轮次'
+                  }
+                  className={`px-4 py-1.5 border rounded text-[13px] transition-all cursor-pointer bg-white ${
+                    currentStep === 2 && activeMonitoringTab === 'pre' && !isActivityInProgress
+                      ? 'border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                      : 'border-gray-100 text-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  删除
+                </button>
+              </>
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto p-4 space-y-3">
+          {/* Steps Bar - Optimized for space */}
+          <div className="bg-white py-4 px-6 rounded-lg shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between max-w-5xl mx-auto relative">
+              {/* Connection Line */}
+              <div className="absolute top-[14px] left-[8%] right-[8%] h-[1px] bg-gray-100 z-0" />
+              <div 
+                className="absolute top-[14px] left-[8%] h-[1px] bg-[#2f54eb] transition-all duration-500 z-0 opacity-30" 
+                style={{
+                  width: isActivityCompleted ? '84%' : `${(currentStep / Math.max(1, steps.length - 1)) * 84}%`,
+                }}
+              />
+
+              {steps.map((step, idx) => {
+                const stepBlockTitle = getStepNavigationBlockTitle(idx);
+                const stepNavLocked = Boolean(stepBlockTitle);
+                return (
+                <div key={step.title} className="relative z-10 flex flex-col items-center gap-2 max-w-[28%]">
+                  <div 
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleStepNavigationClick(idx)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleStepNavigationClick(idx);
+                      }
+                    }}
+                    title={stepBlockTitle}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 text-[12px] font-bold border-2 ${
+                      stepNavLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                    } ${
+                      isActivityCompleted || idx <= currentStep 
+                        ? 'bg-[#2f54eb] text-white border-blue-50 shadow-md shadow-blue-50' 
+                        : 'bg-white text-gray-300 border-gray-100'
+                    }`}
+                  >
+                    {idx + 1}
+                  </div>
+                  <div className="text-center" title={stepBlockTitle}>
+                    <div className={`text-[13px] font-medium transition-colors ${isActivityCompleted || idx <= currentStep ? 'text-[#2f54eb]' : 'text-gray-400'}`}>
+                      {step.title}
+                    </div>
+                    {step.date && (
+                      <div className="text-[11px] text-gray-400 mt-1 px-2 py-0.5 bg-gray-50/80 border border-gray-100/50 rounded inline-block min-w-max">
+                        {step.date}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Dynamic Review Rounds Tabs - Optimized UI */}
+          {currentStep >= 1 && (
+            <div className="bg-[#f8f9fb] px-6 pt-3 flex items-center border-b border-gray-200 overflow-x-auto no-scrollbar gap-2 relative">
+              {monitoringTabs.map((tab) => (
+                <div 
+                  key={tab.id}
+                  onClick={() => handleMonitoringTabClick(tab.id)}
+                  className={`group relative flex items-center gap-2 px-5 py-3 text-[14px] font-medium transition-all cursor-pointer whitespace-nowrap rounded-t-lg border-t border-x ${
+                    activeMonitoringTab === tab.id 
+                      ? 'bg-white text-[#2f54eb] border-gray-200 shadow-[0_-2px_4px_rgba(0,0,0,0.02)] z-10 -mb-[1px]' 
+                      : 'text-gray-500 border-transparent hover:text-gray-700 hover:bg-gray-100/80'
+                  }`}
+                >
+                  <span className={activeMonitoringTab === tab.id ? 'font-bold' : ''}>
+                    {currentStep === 2 ? tab.name : (currentStep === 1 ? tab.name.replace('考核', '回顾') : tab.name)}
+                  </span>
+                  
+                  {/* Action Icons */}
+                  {(currentStep === 1 || currentStep === 2) && !isActivityCompleted && (
+                    <div className={`flex items-center gap-1.5 transition-all duration-200 ${activeMonitoringTab === tab.id ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100'}`}>
+                      <Edit 
+                        size={13} 
+                        className="cursor-pointer hover:text-[#2f54eb] text-gray-400 hover:scale-110 transition-transform shrink-0" 
+                        onClick={(e) => handleOpenEditModal(tab, e)}
+                      />
+                      {currentStep === 1 && !tab.isDefault && (
+                        <X 
+                          size={13} 
+                          className="cursor-pointer hover:text-red-500 text-gray-400 hover:scale-110 transition-transform shrink-0" 
+                          onClick={(e) => handleDeleteTab(tab.id, e)}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Active Indicator Line */}
+                  {activeMonitoringTab === tab.id && (
+                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#2f54eb] rounded-t-lg" />
+                  )}
+                </div>
+              ))}
+              
+              {!isActivityCompleted && currentStep !== 2 && (
+                <button 
+                  onClick={handleOpenAddModal}
+                  className="flex items-center justify-center p-2 mb-1.5 text-gray-400 hover:text-[#2f54eb] hover:bg-white hover:shadow-sm rounded-full transition-all shrink-0 ml-1 group border border-transparent hover:border-gray-200"
+                  title="添加新一轮"
+                >
+                  <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
+                </button>
+              )}
+              {!isActivityCompleted && currentStep === 2 && !monitoringTabs2.some(t => t.id === 'pre') && !suppressAddPreAssessmentRound && (
+                <button
+                  type="button"
+                  onClick={addPreAssessmentRound}
+                  title="若进入本阶段时未开启预考核，此处可补充添加（已在归档时明确选择不开启的，不显示此入口）"
+                  className="mb-1.5 ml-1 shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-[#2f54eb] bg-white border border-[#2f54eb]/30 rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  <Plus size={16} />
+                  添加组织绩效预考核
+                </button>
+              )}
+            </div>
+          )}
+
+          {currentStep === 1 && monitoringTabs1.length > 1 && !isLastMidTermRoundTab && !isActivityCompleted && (
+            <div className="mx-4 mb-0 px-4 py-2.5 rounded-md bg-amber-50 border border-amber-100 text-[12px] text-amber-900 leading-relaxed">
+              「归档并进入下一步」仅在<strong className="font-semibold">绩效中期回顾最后一轮</strong>（{monitoringTabs1.at(-1)?.name ?? ''}）下显示；请切换至该轮次后再归档。
+            </div>
+          )}
+
+          {/* Secondary View Filter - 考核对象 / 考核监控 */}
+          {![0, 1, 2].includes(currentStep) && (
+            <div className="bg-white px-6 py-4 flex items-center gap-2 border-b border-gray-50">
+              {['考核对象', '考核监控'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-5 py-1.5 text-[13px] font-semibold rounded-full transition-all cursor-pointer ${
+                    activeTab === tab 
+                      ? 'bg-[#2f54eb] text-white shadow-[0_2px_8px_rgba(47,84,235,0.25)]' 
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Round Modal */}
+          {isRoundModalOpen && (
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-[2px] flex items-center justify-center z-[1000] animate-in fade-in duration-200">
+              <div className="bg-white rounded-lg shadow-2xl w-[450px] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="text-[16px] font-bold text-gray-800">
+                    {roundModalMode === 'add' 
+                      ? (currentStep === 2 ? '新增考核轮次' : '新增回顾轮次') 
+                      : (currentStep === 2 ? '编辑考核轮次' : '编辑回顾轮次')}
+                  </h3>
+                  <button onClick={() => setIsRoundModalOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-6 space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[13px] font-medium text-gray-600">轮次名称</label>
+                    <input 
+                      type="text"
+                      value={roundModalData.name || ''}
+                      onChange={(e) => setRoundModalData({ ...roundModalData, name: e.target.value })}
+                      placeholder="请输入轮次名称"
+                      disabled={currentStep === 2 && (roundModalData.id === 'pre' || roundModalData.id === 'formal')}
+                      className="w-full border border-gray-200 rounded-md px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-colors disabled:bg-gray-50 disabled:text-gray-500"
+                      autoFocus={!(currentStep === 2 && (roundModalData.id === 'pre' || roundModalData.id === 'formal'))}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[13px] font-medium text-gray-600">开始时间</label>
+                      <input 
+                        type="date"
+                        value={roundModalData.startDate || ''}
+                        onChange={(e) => setRoundModalData({ ...roundModalData, startDate: e.target.value })}
+                        className="w-full border border-gray-200 rounded-md px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[13px] font-medium text-gray-600">结束时间</label>
+                      <input 
+                        type="date"
+                        value={roundModalData.endDate || ''}
+                        onChange={(e) => setRoundModalData({ ...roundModalData, endDate: e.target.value })}
+                        className="w-full border border-gray-200 rounded-md px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-colors"
+                      />
+                    </div>
+                  </div>
+                  {currentStep === 2 && midTermBounds && (
+                    <p className="text-[12px] text-gray-500 leading-relaxed">
+                      说明：是否启用「组织绩效预考核」在<strong className="font-medium text-gray-600">绩效中期回顾归档并进入本阶段</strong>时确认，为可选轮次。约束：开始、结束须在绩效中期回顾（{midTermBounds.start} ~ {midTermBounds.end}）内；预考核与正式考核时间段不可交叉。
+                    </p>
+                  )}
+                </div>
+                <div className="px-6 py-4 bg-gray-50 flex items-center justify-end gap-3">
+                  <button 
+                    onClick={() => setIsRoundModalOpen(false)}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded text-[14px] transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button 
+                    onClick={handleSaveRound}
+                    className="px-4 py-2 bg-[#2f54eb] text-white rounded text-[14px] hover:bg-[#1d39c4] transition-colors shadow-sm"
+                  >
+                    确定
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 更新轮次名单：预考核 / 正式考核 / 中期回顾（比对 + 二次确认） */}
+          {rosterUpdateModalKind !== null && (
+            <div className="fixed inset-0 bg-black/35 backdrop-blur-[2px] flex items-center justify-center z-[1001] animate-in fade-in duration-200 p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-[640px] max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-3 shrink-0">
+                  <div>
+                    <h3 className="text-[16px] font-bold text-gray-900">更新轮次名单 · 数据比对确认</h3>
+                    <p className="text-[12px] text-gray-500 mt-1.5 leading-relaxed">
+                      {rosterUpdateModalKind === 'mid' ? (
+                        <>
+                          将<strong className="text-gray-700">绩效计划制定阶段已确认的组织名单</strong>与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">当前回顾轮次</strong>名单。
+                        </>
+                      ) : rosterUpdateModalKind === 'formal' ? (
+                        <>
+                          将<strong className="text-gray-700">绩效中期回顾阶段已归档并推送</strong>的组织数据与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">组织绩效正式考核</strong>本轮名单。
+                        </>
+                      ) : (
+                        <>
+                          将<strong className="text-gray-700">绩效中期回顾阶段已归档并推送</strong>的组织数据与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">组织绩效预考核</strong>本轮名单。
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRosterUpdateModalKind(null)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors shrink-0 p-1"
+                    aria-label="关闭"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="px-6 py-4 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
+                  {/* 新增 */}
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-emerald-50/80 border-b border-emerald-100 flex items-center justify-between gap-3">
+                      <span className="text-[13px] font-semibold text-emerald-900">
+                        新增 <span className="font-normal text-emerald-700">（{rosterUpdateModalKind === 'mid' ? '主数据有、计划阶段名单未包含' : '主数据有、中期归档未包含'} · {PRE_ASSESSMENT_ROSTER_DIFF.added.length}）</span>
+                      </span>
+                      <label className="flex items-center gap-2 text-[12px] text-emerald-900 cursor-pointer select-none shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={preRosterApplyAdd}
+                          onChange={(e) => setPreRosterApplyAdd(e.target.checked)}
+                          disabled={PRE_ASSESSMENT_ROSTER_DIFF.added.length === 0}
+                          className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        应用新增
+                      </label>
+                    </div>
+                    <ul className="px-4 py-2 max-h-[140px] overflow-y-auto text-[13px] text-gray-800 space-y-1.5">
+                      {PRE_ASSESSMENT_ROSTER_DIFF.added.length === 0 ? (
+                        <li className="text-gray-400 py-1">无</li>
+                      ) : (
+                        PRE_ASSESSMENT_ROSTER_DIFF.added.map((row) => (
+                          <li key={row.code} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                            <span className="font-mono text-[12px] text-gray-500">{row.code}</span>
+                            <span className="font-medium">{orgPathDisplayName(row.path)}</span>
+                            <span className="text-gray-500 text-[12px]">（{row.path}）</span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                  {/* 删除 */}
+                  <div className="rounded-lg border border-rose-100 bg-rose-50/40 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-rose-50/80 border-b border-rose-100 flex items-center justify-between gap-3">
+                      <span className="text-[13px] font-semibold text-rose-900">
+                        删除 <span className="font-normal text-rose-700">（{rosterUpdateModalKind === 'mid' ? '计划阶段名单有、主数据已不存在' : '中期归档有、主数据已不存在'} · {PRE_ASSESSMENT_ROSTER_DIFF.removed.length}）</span>
+                      </span>
+                      <label className="flex items-center gap-2 text-[12px] text-rose-900 cursor-pointer select-none shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={preRosterApplyRemove}
+                          onChange={(e) => setPreRosterApplyRemove(e.target.checked)}
+                          disabled={PRE_ASSESSMENT_ROSTER_DIFF.removed.length === 0}
+                          className="rounded border-gray-300 text-rose-600 focus:ring-rose-500"
+                        />
+                        应用删除
+                      </label>
+                    </div>
+                    <ul className="px-4 py-2 max-h-[140px] overflow-y-auto text-[13px] text-gray-800 space-y-1.5">
+                      {PRE_ASSESSMENT_ROSTER_DIFF.removed.length === 0 ? (
+                        <li className="text-gray-400 py-1">无</li>
+                      ) : (
+                        PRE_ASSESSMENT_ROSTER_DIFF.removed.map((row) => (
+                          <li key={row.code} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                            <span className="font-mono text-[12px] text-gray-500">{row.code}</span>
+                            <span className="font-medium">{orgPathDisplayName(row.path)}</span>
+                            <span className="text-gray-500 text-[12px]">（{row.path}）</span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                  {/* 信息变更 */}
+                  <div className="rounded-lg border border-amber-100 bg-amber-50/40 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-amber-50/80 border-b border-amber-100 flex items-center justify-between gap-3">
+                      <span className="text-[13px] font-semibold text-amber-900">
+                        信息变更 <span className="font-normal text-amber-800">（部门名称、部门负责人、HRBP、分管执委/常委等发生变化 · {PRE_ASSESSMENT_ROSTER_DIFF.changed.length}）</span>
+                      </span>
+                      <label className="flex items-center gap-2 text-[12px] text-amber-900 cursor-pointer select-none shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={preRosterApplyChange}
+                          onChange={(e) => setPreRosterApplyChange(e.target.checked)}
+                          disabled={PRE_ASSESSMENT_ROSTER_DIFF.changed.length === 0}
+                          className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        应用更新
+                      </label>
+                    </div>
+                    <ul className="px-4 py-2 max-h-[180px] overflow-y-auto text-[13px] space-y-3">
+                      {PRE_ASSESSMENT_ROSTER_DIFF.changed.length === 0 ? (
+                        <li className="text-gray-400 py-1">无</li>
+                      ) : (
+                        PRE_ASSESSMENT_ROSTER_DIFF.changed.map((c) => (
+                          <li key={c.line.code} className="border-b border-amber-100/80 last:border-0 pb-3 last:pb-0">
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 font-medium text-gray-900">
+                              <span className="font-mono text-[12px] text-gray-500">{c.line.code}</span>
+                              {orgPathDisplayName(c.line.path)}
+                            </div>
+                            <ul className="mt-1.5 space-y-1 text-[12px] text-amber-900/90">
+                              {c.labels.map((t, i) => (
+                                <li key={i} className="pl-2 border-l-2 border-amber-200">{t}</li>
+                              ))}
+                            </ul>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                </div>
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setRosterUpdateModalKind(null)}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-[14px] transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={
+                      rosterUpdateModalKind === 'mid'
+                        ? handleApplyMidTermRosterUpdate
+                        : rosterUpdateModalKind === 'formal'
+                          ? handleApplyFormalRosterUpdate
+                          : handleApplyPreRosterUpdate
+                    }
+                    className="px-4 py-2 bg-[#2f54eb] text-white rounded-lg text-[14px] hover:bg-[#1d39c4] transition-colors shadow-sm"
+                  >
+                    确认执行
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main Content Area */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 flex flex-col relative z-10">
+            {(activeTab === '考核对象' || [0, 1, 2].includes(currentStep)) ? (
+              <>
+                <div className="px-6 py-3 border-b flex items-center justify-between bg-white relative z-40 backdrop-blur-sm bg-white/80">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="搜索部门编码/名称/负责人/HRBP" 
+                        defaultValue={searchTerm}
+                        onBlur={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setSearchTerm(e.currentTarget.value);
+                          }
+                        }}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] min-w-[320px] transition-all bg-white"
+                      />
+                    </div>
+                    <div className="relative">
+                      <div 
+                        onClick={() => setActiveFilterColumn(activeFilterColumn === 'orgType' ? null : 'orgType')}
+                        className={`flex items-center gap-2 px-3 py-2 border rounded text-[13px] cursor-pointer transition-all ${
+                          columnFilters.orgType.length > 0 ? 'border-[#2f54eb] text-[#2f54eb] bg-blue-50/30' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        <span>组织类型</span>
+                        {columnFilters.orgType.length > 0 && (
+                          <span className="bg-[#2f54eb] text-white text-[10px] min-w-4 h-4 px-1 flex items-center justify-center rounded-full">
+                            {columnFilters.orgType.length}
+                          </span>
+                        )}
+                        <ChevronDown size={14} className={`text-gray-400 transition-transform ${activeFilterColumn === 'orgType' ? 'rotate-180' : ''}`} />
+                      </div>
+                      
+                      {activeFilterColumn === 'orgType' && (
+                        <>
+                          <div className="fixed inset-0 z-[10002]" onClick={() => setActiveFilterColumn(null)} />
+                          <div className="absolute top-full left-0 mt-2 min-w-[200px] bg-white border border-gray-100 rounded-lg shadow-xl z-[10003] py-2 animate-in fade-in zoom-in duration-100 origin-top-left">
+                            <div className="px-3 py-1 mb-1 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                              <span className="text-[12px] font-bold text-gray-400">筛选 组织类型</span>
+                              {columnFilters.orgType.length > 0 && !isActivityCompleted && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); clearColumnFilter('orgType'); }}
+                                  className="text-[11px] text-[#2f54eb] hover:underline"
+                                >
+                                  重置
+                                </button>
+                              )}
+                            </div>
+                            <div className="max-h-[240px] overflow-y-auto px-1 custom-scrollbar">
+                              {getUniqueValues('orgType').sort().map(opt => (
+                                <div 
+                                  key={opt}
+                                  onClick={() => handleToggleColumnFilter('orgType', opt)}
+                                  className="flex items-center gap-2 px-3 py-2 hover:bg-black/[0.02] cursor-pointer group rounded-md"
+                                >
+                                  <div className={`w-3.5 h-3.5 border rounded flex items-center justify-center transition-all ${
+                                    columnFilters.orgType.includes(opt) ? 'bg-[#2f54eb] border-[#2f54eb]' : 'bg-white border-gray-300 group-hover:border-gray-400'
+                                  }`}>
+                                    {columnFilters.orgType.includes(opt) && <Check size={10} className="text-white" />}
+                                  </div>
+                                  <span className={`text-[13px] ${columnFilters.orgType.includes(opt) ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
+                                    {opt}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {!isActivityCompleted && (
+                    <button 
+                      onClick={() => {
+                        setSearchTerm('');
+                        setColumnFilters({
+                          path: [],
+                          orgType: [],
+                          level: [],
+                          status: [],
+                          node: [],
+                          approver: [],
+                          leader: [],
+                          exec: [],
+                          hrbp: [],
+                        });
+                      }}
+                      className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
+                    >
+                      重置
+                    </button>
+                    )}
+                  </div>
+
+                  {/* Action Buttons Area */}
+                  {!isActivityCompleted && (
+                  <div className="flex items-center gap-2">
+                    {currentStep >= 1 ? (
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (currentStep === 2 && activeMonitoringTab === 'pre') {
+                            openPreRosterUpdateModal();
+                            return;
+                          }
+                          if (currentStep === 2 && activeMonitoringTab === 'formal') {
+                            openFormalRosterUpdateModal();
+                            return;
+                          }
+                          if (currentStep === 1) {
+                            openMidTermRosterUpdateModal();
+                            return;
+                          }
+                          showToast('当前阶段请通过对应轮次入口更新名单', 'warning');
+                        }}
+                        className="flex items-center gap-2 text-[13px] px-3 py-1.5 rounded transition-colors font-medium border bg-white text-[#2f54eb] border-[#2f54eb] hover:bg-blue-50 cursor-pointer"
+                      >
+                        <Settings size={14} />
+                        <span>更新轮次名单</span>
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          setIsSubjectsGenerated(true);
+                          showToast('考核对象生成成功', 'success');
+                        }}
+                        disabled={isPlanStarted}
+                        className={`px-4 py-1.5 border border-gray-200 rounded text-[13px] transition-all bg-white ${
+                          isPlanStarted 
+                            ? 'text-gray-300 cursor-not-allowed border-gray-100' 
+                            : 'text-gray-600 hover:bg-gray-50 hover:border-gray-300 cursor-pointer'
+                        }`}
+                      >
+                        生成考核对象
+                      </button>
+                    )}
+                    <button 
+                      onClick={handleStartPlan}
+                      className="px-4 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-all cursor-pointer shadow-sm"
+                    >
+                      {currentStep === 1 ? '启动中期回顾' : currentStep === 2 ? '启动绩效考核' : '启动计划制定'}
+                    </button>
+                    {currentStep === 2 && activeMonitoringTab === 'pre' && (
+                      <button
+                        type="button"
+                        onClick={handlePreAssessmentArchiveAndNextRound}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-all cursor-pointer shadow-sm"
+                      >
+                        <FileCheck size={14} />
+                        <span>归档并进入下一轮次</span>
+                      </button>
+                    )}
+                    {(currentStep !== 1 || isLastMidTermRoundTab) && !(currentStep === 2 && activeMonitoringTab === 'pre') && (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (currentStep === 1) {
+                          if (!validateArchiveSelection()) return;
+                          setMidTermIncludePreChoice(null);
+                          setIsMidTermArchiveModalOpen(true);
+                          return;
+                        }
+                        handleArchive();
+                      }}
+                      title={
+                        currentStep === 1
+                          ? '在最后一轮中期回顾归档后进入绩效考核，并确认是否开启组织绩效预考核'
+                          : undefined
+                      }
+                      className="px-4 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-all cursor-pointer shadow-sm"
+                    >
+                      {currentStep === 2 ? '归档并完成' : '归档并进入下一步'}
+                    </button>
+                    )}
+                    
+                    {/* 绩效中期回顾：不使用「更多」，将「归档并进入下一轮次」平铺（单轮不展示「跳过此阶段」） */}
+                    {currentStep === 1 && showMidTermArchiveNextRoundInMore && (
+                      <button
+                        type="button"
+                        onClick={handleMidTermArchiveAndNextRound}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-all cursor-pointer shadow-sm"
+                      >
+                        <FileCheck size={14} />
+                        <span>归档并进入下一轮次</span>
+                      </button>
+                    )}
+
+                    {/* 仅计划制定阶段保留「更多」下拉 */}
+                    {currentStep === 0 && (
+                    <div className="relative">
+                      <button 
+                        onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+                        className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer bg-white"
+                      >
+                        <span>更多</span>
+                        <ChevronDown size={14} className={`transition-transform duration-200 ${isMoreMenuOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      
+                      {isMoreMenuOpen && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => setIsMoreMenuOpen(false)}
+                          />
+                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-white border border-gray-100 rounded-lg shadow-xl z-50 py-2 animate-in fade-in zoom-in duration-100 origin-bottom-right">
+                            {([
+                              { label: '添加考核对象', icon: <Plus size={14} />, disabled: isPlanStarted },
+                              { label: '删除考核对象', icon: <Trash2 size={14} />, disabled: isPlanStarted },
+                              { label: '导入', icon: <FileUp size={14} /> },
+                              { label: '导出', icon: <FileDown size={14} /> },
+                            ] as any).map((item: any) => {
+                              const isDeleteRow = item.label === '删除考核对象';
+                              const rowInactive = item.disabled;
+                              return (
+                              <button 
+                                key={item.label}
+                                type="button"
+                                disabled={item.disabled}
+                                onClick={() => {
+                                  if (item.disabled) return;
+                                  if (isDeleteRow) {
+                                    if (selectedIds.length === 0) {
+                                      showToast('请至少选择一条数据', 'warning');
+                                      return;
+                                    }
+                                    const archivedCount = assessmentData.filter(
+                                      (r) => selectedIds.includes(r.id) && r.status === '已完成'
+                                    ).length;
+                                    if (archivedCount > 0) {
+                                      showToast('已归档的数据，不能再执行删除考核对象操作', 'error');
+                                      return;
+                                    }
+                                    setIsDeleteConfirmOpen(true);
+                                    setIsMoreMenuOpen(false);
+                                    return;
+                                  }
+                                  if (item.onClick) {
+                                    item.onClick();
+                                  }
+                                  setIsMoreMenuOpen(false);
+                                }}
+                                className={`group w-full text-left px-4 py-2 text-[13px] flex items-center gap-3 transition-colors ${
+                                  rowInactive
+                                    ? 'text-gray-300 cursor-not-allowed bg-white'
+                                    : isDeleteRow
+                                      ? 'text-red-500 hover:text-red-600 hover:bg-red-50/50 cursor-pointer'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-[#2f54eb] cursor-pointer'
+                                }`}
+                              >
+                                <span className={
+                                  rowInactive
+                                    ? 'text-gray-200'
+                                    : isDeleteRow
+                                      ? 'text-red-400'
+                                      : 'text-gray-400 group-hover:text-[#2f54eb]'
+                                }>
+                                  {item.icon}
+                                </span>
+                                {item.label}
+                              </button>
+                            );
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    )}
+                  </div>
+                  )}
+                </div>
+
+                <div className="overflow-x-auto relative custom-scrollbar">
+                  <table className="w-full text-left border-collapse min-w-[1000px] table-fixed">
+                    <thead>
+                      <tr className="bg-gray-50/50 text-[12px] text-gray-400 uppercase tracking-wider font-semibold">
+                        {!isActivityCompleted && (
+                        <th className="px-4 py-4 border-b w-12 text-center sticky left-0 bg-gray-50/50 z-20">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedIds.length === assessmentData.length && assessmentData.length > 0}
+                            onChange={handleSelectAll}
+                            className="w-4 h-4 rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                          />
+                        </th>
+                        )}
+                        <th className="px-6 py-4 border-b w-[120px]">部门编码</th>
+                        <th className="px-6 py-4 border-b w-[240px]">
+                          <div className="flex items-center gap-1">
+                            部门名称
+                          </div>
+                        </th>
+                        <th className="px-6 py-4 border-b w-[140px]">
+                          <div className="flex items-center gap-1">
+                            组织类型
+                          </div>
+                        </th>
+                        <th className="px-6 py-4 border-b w-[120px]">
+                          <div className="flex items-center gap-1">
+                            组织层级
+                          </div>
+                        </th>
+                        <th className="px-6 py-4 border-b w-[150px]">
+                          <div className="flex items-center gap-1">
+                            组织负责人
+                          </div>
+                        </th>
+                        <th className="px-6 py-4 border-b w-[180px]">
+                          <div className="flex items-center gap-1">
+                            分管常委/分管执委
+                          </div>
+                        </th>
+                        <th className="px-6 py-4 border-b w-[150px]">
+                          <div className="flex items-center gap-1">
+                            HRBP
+                          </div>
+                        </th>
+                        <th className="px-6 py-4 border-b w-[120px] text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            状态
+                          </div>
+                        </th>
+                        {!isActivityCompleted && (
+                        <th className="px-6 py-4 border-b w-[100px] text-center sticky right-0 bg-white shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.1)] z-20">
+                          操作
+                        </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 text-[13px]">
+                      {filteredData.map((item) => (
+                        <tr key={`obj-${item.id}`} className="hover:bg-gray-50/80 transition-colors group">
+                          {!isActivityCompleted && (
+                          <td className="px-4 py-4 text-center sticky left-0 bg-white group-hover:bg-gray-50/80 z-10">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(item.id)}
+                              onChange={() => handleToggleSelect(item.id)}
+                              className="w-4 h-4 rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                            />
+                          </td>
+                          )}
+                          <td className="px-6 py-4 font-mono text-gray-500 whitespace-nowrap">{item.code}</td>
+                          <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis" title={item.path.replace('集团总部/', '')}>{item.path.replace('集团总部/', '')}</td>
+                          <td className="px-6 py-4 font-medium text-gray-600 whitespace-nowrap">{item.orgType}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                            {item.level}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                            {item.leader}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                            {item.exec}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                            {item.hrbp}
+                          </td>
+                          <td className="px-6 py-4 text-center whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold border ${getStatusStyle(item.status, item.isTimeout)}`}>
+                              <div className={`w-1 h-1 rounded-full ${getStatusDot(item.status, item.isTimeout)}`} />
+                              {getStatusText(item)}
+                            </span>
+                          </td>
+                          {!isActivityCompleted && (
+                          <td className="px-6 py-4 text-center sticky right-0 bg-white group-hover:bg-gray-50/80 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.1)] z-10">
+                            {item.status !== '未开始' && (
+                              <button className="text-[#2f54eb] hover:underline font-medium cursor-pointer whitespace-nowrap">查看表单</button>
+                            )}
+                          </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pager Area in Footer */}
+                {!isActivityCompleted && (
+                <div className="px-6 py-3 border-t flex items-center justify-end bg-gray-50/30">
+                  <div className="flex items-center gap-4 text-[13px] text-gray-500">
+                    <div className="flex items-center gap-2 border border-gray-200 px-2 py-1 rounded hover:border-gray-300 transition-colors cursor-pointer bg-white group">
+                      <span>10 条/页</span>
+                      <ChevronDown size={14} className="text-gray-400 group-hover:text-gray-600" />
+                    </div>
+                    <span className="text-gray-400 ml-1">共 {assessmentData.length} 条</span>
+                    <div className="flex items-center gap-2 ml-2">
+                      <button className="p-1 hover:bg-gray-200 rounded text-gray-300 cursor-not-allowed transition-colors">
+                        <ChevronLeft size={18} />
+                      </button>
+                      <div className="flex items-center gap-1">
+                        <span className="w-6 h-6 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[12px] font-medium">1</span>
+                      </div>
+                      <button className="p-1 hover:bg-gray-100 rounded text-gray-600 cursor-pointer transition-colors">
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                )}
+              </>
+            ) : (
+              /* Assessment Monitoring View */
+              <div className="flex flex-col h-full bg-[#f8f9fa]">
+                {/* Stats Cards Row - Optimized for space */}
+                <div className="grid grid-cols-4 gap-3 p-3 shrink-0">
+                  <div className="bg-white px-4 py-3 rounded border border-gray-100 shadow-sm flex items-center justify-between">
+                    <div>
+                      <div className="text-[12px] text-gray-400 mb-0.5">考核对象数</div>
+                      <div className="text-[20px] font-bold text-gray-900 leading-tight">{assessmentData.length}</div>
+                    </div>
+                    <div className="text-[11px] text-gray-300 text-right max-w-[80px]">当前考核数</div>
+                  </div>
+                  <div className="bg-white px-4 py-3 rounded border border-gray-100 shadow-sm border-l-4 border-l-green-400 flex items-center justify-between">
+                    <div>
+                      <div className="text-[12px] text-gray-400 mb-0.5">已完成</div>
+                      <div className="text-[20px] font-bold text-green-500 leading-tight">
+                        {assessmentData.filter(i => i.status === '已完成').length}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[12px] font-bold text-green-500">
+                        {Math.round((assessmentData.filter(i => i.status === '已完成').length / assessmentData.length) * 100)}%
+                      </div>
+                      <div className="w-16 h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-green-400" style={{ width: `${(assessmentData.filter(i => i.status === '已完成').length / assessmentData.length) * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white px-4 py-3 rounded border border-gray-100 shadow-sm border-l-4 border-l-blue-400 flex items-center justify-between">
+                    <div>
+                      <div className="text-[12px] text-gray-400 mb-0.5">进行中</div>
+                      <div className="text-[20px] font-bold text-blue-500 leading-tight">
+                        {assessmentData.filter(i => i.status === '进行中').length}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[12px] font-bold text-blue-500">
+                        {Math.round((assessmentData.filter(i => i.status === '进行中').length / assessmentData.length) * 100)}%
+                      </div>
+                      <div className="w-16 h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-blue-400" style={{ width: `${(assessmentData.filter(i => i.status === '进行中').length / assessmentData.length) * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white px-4 py-3 rounded border border-gray-100 shadow-sm border-l-4 border-l-red-400 flex items-center justify-between">
+                    <div>
+                      <div className="text-[12px] text-gray-400 mb-0.5">未开始</div>
+                      <div className="text-[20px] font-bold text-red-500 leading-tight">
+                        {assessmentData.filter(i => i.status === '未开始').length}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-red-400 font-medium">存在超时节点</div>
+                      <div className="w-16 h-1 bg-red-50 rounded-full mt-1 overflow-hidden">
+                        <div className="h-full bg-red-400" style={{ width: `${(assessmentData.filter(i => i.status === '进行中' && i.isTimeout).length / assessmentData.length) * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filter & Actions Bar */}
+                <div className="px-4 py-2 border-t border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="搜索部门编码/名称/负责人/HRBP" 
+                        defaultValue={searchTerm}
+                        onBlur={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setSearchTerm(e.currentTarget.value);
+                          }
+                        }}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] min-w-[320px] transition-all bg-white"
+                      />
+                    </div>
+                    
+                    <div className="relative">
+                      <div 
+                        onClick={() => setActiveFilterColumn(activeFilterColumn === 'orgType' ? null : 'orgType')}
+                        className={`flex items-center gap-2 px-3 py-2 border rounded text-[13px] cursor-pointer transition-all ${
+                          columnFilters.orgType.length > 0 ? 'border-[#2f54eb] text-[#2f54eb] bg-blue-50/30' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        <span>组织类型</span>
+                        {columnFilters.orgType.length > 0 && (
+                          <span className="bg-[#2f54eb] text-white text-[10px] min-w-4 h-4 px-1 flex items-center justify-center rounded-full">
+                            {columnFilters.orgType.length}
+                          </span>
+                        )}
+                        <ChevronDown size={14} className={`text-gray-400 transition-transform ${activeFilterColumn === 'orgType' ? 'rotate-180' : ''}`} />
+                      </div>
+                      
+                      {activeFilterColumn === 'orgType' && (
+                        <>
+                          <div className="fixed inset-0 z-[10002]" onClick={() => setActiveFilterColumn(null)} />
+                          <div className="absolute top-full left-0 mt-2 min-w-[200px] bg-white border border-gray-100 rounded-lg shadow-xl z-[10003] py-2 animate-in fade-in zoom-in duration-100 origin-top-left">
+                            <div className="px-3 py-1 mb-1 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                              <span className="text-[12px] font-bold text-gray-400">筛选 组织类型</span>
+                              {columnFilters.orgType.length > 0 && !isActivityCompleted && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); clearColumnFilter('orgType'); }}
+                                  className="text-[11px] text-[#2f54eb] hover:underline"
+                                >
+                                  重置
+                                </button>
+                              )}
+                            </div>
+                            <div className="max-h-[240px] overflow-y-auto px-1 custom-scrollbar">
+                              {getUniqueValues('orgType').sort().map(opt => (
+                                <div 
+                                  key={opt}
+                                  onClick={() => handleToggleColumnFilter('orgType', opt)}
+                                  className="flex items-center gap-2 px-3 py-2 hover:bg-black/[0.02] cursor-pointer group rounded-md"
+                                >
+                                  <div className={`w-3.5 h-3.5 border rounded flex items-center justify-center transition-all ${
+                                    columnFilters.orgType.includes(opt) ? 'bg-[#2f54eb] border-[#2f54eb]' : 'bg-white border-gray-300 group-hover:border-gray-400'
+                                  }`}>
+                                    {columnFilters.orgType.includes(opt) && <Check size={10} className="text-white" />}
+                                  </div>
+                                  <span className={`text-[13px] ${columnFilters.orgType.includes(opt) ? 'text-gray-900 font-medium' : 'text-gray-600'}`}>
+                                    {opt}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {!isActivityCompleted && (
+                    <button 
+                      onClick={() => {
+                        setSearchTerm('');
+                        setColumnFilters({
+                          path: [],
+                          orgType: [],
+                          level: [],
+                          status: [],
+                          node: [],
+                          approver: [],
+                          leader: [],
+                          exec: [],
+                          hrbp: [],
+                        });
+                      }}
+                      className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
+                    >
+                      重置
+                    </button>
+                    )}
+                  </div>
+                  
+                  {!isActivityCompleted && (
+                  <div className="flex items-center gap-3">
+                    <button className="flex items-center gap-1.5 px-4 py-2 bg-[#faad14] text-white rounded text-[13px] hover:bg-[#d48806] transition-all cursor-pointer shadow-sm font-medium">
+                      <Bell size={14} />
+                      <span>发送提醒</span>
+                    </button>
+                    
+                    {/* Export Dropdown */}
+                    <div className="relative">
+                      <button 
+                        onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                        className="flex items-center gap-1.5 px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer bg-white"
+                      >
+                        <FileDown size={14} />
+                        <span>导出</span>
+                      </button>
+                      
+                      {isExportMenuOpen && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => setIsExportMenuOpen(false)}
+                          />
+                          <div className="absolute left-0 mt-2 w-36 bg-white border border-gray-100 rounded shadow-xl z-50 py-1 animate-in fade-in zoom-in duration-100 origin-top-left">
+                            <button className="w-full text-left px-4 py-2 text-[13px] text-gray-600 hover:bg-blue-50 hover:text-[#2f54eb] transition-colors cursor-pointer">
+                              导出明细
+                            </button>
+                            <button className="w-full text-left px-4 py-2 text-[13px] text-gray-600 hover:bg-blue-50 hover:text-[#2f54eb] transition-colors cursor-pointer">
+                              导出表单
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  )}
+                </div>
+
+                {/* Tables Grid */}
+                <div className="flex-1 overflow-auto bg-white custom-scrollbar">
+                  <table className="w-full text-left border-collapse min-w-[1240px] table-fixed">
+                    <thead className="sticky top-0 bg-[#f8f9fa] text-[13px] text-gray-500 border-b border-gray-200 z-30 font-medium">
+                      <tr>
+                        {!isActivityCompleted && (
+                        <th className="px-4 py-4 w-12 text-center sticky left-0 bg-[#f8f9fa] z-40">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedIds.length === assessmentData.length && assessmentData.length > 0}
+                            onChange={handleSelectAll}
+                            className="w-4 h-4 rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                          />
+                        </th>
+                        )}
+                        <th className="px-4 py-4 font-semibold w-[100px]">部门编码</th>
+                        <th className="px-4 py-4 font-semibold w-[220px]">
+                          <div className="flex items-center gap-1">
+                            部门名称
+                          </div>
+                        </th>
+                        <th className="px-4 py-4 font-semibold w-[120px]">
+                          <div className="flex items-center gap-1">
+                            组织类型
+                          </div>
+                        </th>
+                        <th className="px-4 py-4 font-semibold w-[100px]">
+                          <div className="flex items-center gap-1">
+                            组织层级
+                          </div>
+                        </th>
+                        <th className="px-4 py-4 font-semibold w-[140px]">
+                          <div className="flex items-center gap-1">
+                            当前办理节点
+                          </div>
+                        </th>
+                        <th className="px-4 py-4 font-semibold w-[150px]">
+                          <div className="flex items-center gap-1">
+                            当前办理人
+                          </div>
+                        </th>
+                        <th className="px-4 py-4 font-semibold text-center w-[120px]">
+                          <div className="flex items-center justify-center gap-1">
+                            状态
+                          </div>
+                        </th>
+                        {!isActivityCompleted && (
+                        <th className="px-4 py-4 font-semibold text-left pl-6 w-[280px] sticky right-0 bg-[#f8f9fa] shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.1)] z-40">
+                          操作
+                        </th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-[13px]">
+                      {filteredData.map((item, idx) => (
+                        <tr key={`mon-${item.code}`} className="hover:bg-blue-50/30 transition-colors group">
+                          {!isActivityCompleted && (
+                          <td className="px-4 py-4 text-center sticky left-0 bg-white group-hover:bg-blue-50/30 z-20 transition-colors">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(item.id)}
+                              onChange={() => handleToggleSelect(item.id)}
+                              className="w-4 h-4 rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                            />
+                          </td>
+                          )}
+                          <td className="px-4 py-4 font-mono text-gray-500 whitespace-nowrap">{item.code}</td>
+                          <td className="px-4 py-4 font-bold text-gray-800 whitespace-nowrap overflow-hidden text-ellipsis" title={item.path.replace('集团总部/', '')}>{item.path.replace('集团总部/', '')}</td>
+                          <td className="px-4 py-4 font-medium text-gray-600 whitespace-nowrap">{item.orgType}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-gray-600">
+                            {item.level}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap overflow-hidden text-ellipsis">
+                            {item.status !== '未开始' && item.node !== '-' && (
+                              <span className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] border border-blue-100 rounded text-[11px] font-medium whitespace-nowrap">{item.node}</span>
+                            )}
+                            {(item.status === '未开始' || item.node === '-') && <span className="text-gray-300">--</span>}
+                          </td>
+                          <td className="px-4 py-4 text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis" title={item.approver}>
+                            {item.status === '未开始' ? '--' : item.approver}
+                          </td>
+                          <td className="px-4 py-4 text-center whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold border ${getStatusStyle(item.status, item.isTimeout)}`}>
+                              <div className={`w-1 h-1 rounded-full ${getStatusDot(item.status, item.isTimeout)}`} />
+                              {getStatusText(item)}
+                            </span>
+                          </td>
+                          {!isActivityCompleted && (
+                          <td className="px-4 py-4 text-left pl-6 whitespace-nowrap sticky right-0 bg-white group-hover:bg-blue-50/30 shadow-[-4px_0_10px_-4px_rgba(0,0,0,0.1)] z-20 transition-colors">
+                            {item.status === '进行中' ? (
+                              <div className="flex items-center justify-start gap-3 translate-x-0">
+                                <button 
+                                  onClick={() => { setSelectedRow(item); setIsInterventionModalOpen(true); }}
+                                  className="text-[#2f54eb] hover:text-blue-700 transition-colors cursor-pointer text-xs font-medium"
+                                >
+                                  流程干预
+                                </button>
+                                <button 
+                                  onClick={() => { setSelectedRow(item); setIsApprovalChainModalOpen(true); }}
+                                  className="text-[#2f54eb] hover:text-blue-700 transition-colors cursor-pointer text-xs font-medium"
+                                >
+                                  审批链
+                                </button>
+                                <button className="text-[#2f54eb] hover:text-blue-700 transition-colors cursor-pointer text-xs font-medium">查看表单</button>
+                                <button className="text-[#2f54eb] hover:text-blue-700 transition-colors cursor-pointer text-xs font-medium">导出表单</button>
+                              </div>
+                            ) : item.status === '已完成' ? (
+                              <div className="flex items-center justify-start gap-3 translate-x-0">
+                                <button className="text-[#2f54eb] hover:text-blue-700 transition-colors cursor-pointer text-xs font-medium">查看表单</button>
+                                <button className="text-[#2f54eb] hover:text-blue-700 transition-colors cursor-pointer text-xs font-medium">导出表单</button>
+                              </div>
+                            ) : null}
+                          </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+
+        <AnimatePresence>
+          {isInterventionModalOpen && (
+            <ProcessInterventionModal 
+              isOpen={isInterventionModalOpen} 
+              onClose={() => setIsInterventionModalOpen(false)} 
+              data={selectedRow}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isApprovalChainModalOpen && (
+            <ApprovalChainModal 
+              isOpen={isApprovalChainModalOpen} 
+              onClose={() => setIsApprovalChainModalOpen(false)} 
+              data={selectedRow}
+            />
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+type IndicatorDimItem = { id: string; name: string };
+
+const DEFAULT_INDICATOR_DIMENSION_CATALOG: IndicatorDimItem[] = [
+  { id: 'dim-def-1', name: '财务指标' },
+  { id: 'dim-def-2', name: '运营指标' },
+  { id: 'dim-def-3', name: '客户指标' },
+  { id: 'dim-def-4', name: '组织发展指标' },
+  { id: 'dim-def-5', name: '能力建设指标' },
+];
+
+const FIXED_INDICATOR_DEPT_ROWS = [
+  { id: 'fixed-1', deptType: '经营单元' },
+  { id: 'fixed-2', deptType: '职级部门' },
+  { id: 'fixed-3', deptType: '能力中心' },
+] as const;
+
+function collectLegacyDimensionNamesFromRules(rules: any[] | undefined): string[] {
+  const out: string[] = [];
+  for (const r of rules || []) {
+    for (const d of r.optionalDimensions || []) {
+      const s = String(d || '').trim();
+      if (s && !out.includes(s)) out.push(s);
+    }
+    for (const d of r.requiredDimensions || []) {
+      const s = String(d || '').trim();
+      if (s && !out.includes(s)) out.push(s);
+    }
+  }
+  return out;
+}
+
+function buildIndicatorDimensionCatalog(data: any | null): IndicatorDimItem[] {
+  if (data?.dimensionCatalog && Array.isArray(data.dimensionCatalog) && data.dimensionCatalog.length > 0) {
+    return data.dimensionCatalog.map((d: any, i: number) => ({
+      id: String(d.id || `dim-${i}`),
+      name: String(d.name || '').trim() || `指标维度${i + 1}`,
+    }));
+  }
+  const catalog = [...DEFAULT_INDICATOR_DIMENSION_CATALOG];
+  for (const name of collectLegacyDimensionNamesFromRules(data?.rules)) {
+    if (!catalog.some((c) => c.name === name)) {
+      catalog.push({ id: `dim-legacy-${catalog.length}-${encodeURIComponent(name)}`, name });
+    }
+  }
+  return catalog;
+}
+
+function legacyNamesToIds(names: string[] | undefined, catalog: IndicatorDimItem[]): string[] {
+  return (names || [])
+    .map((n) => catalog.find((c) => c.name === n)?.id)
+    .filter((id): id is string => Boolean(id));
+}
+
+function mergeIndicatorFixedRules(data: any | null, catalog: IndicatorDimItem[]) {
+  return FIXED_INDICATOR_DEPT_ROWS.map((template) => {
+    const existing = data?.rules?.find((r: any) => r.deptType === template.deptType);
+    let optionalIds: string[] =
+      existing?.optionalDimensionIds?.length > 0
+        ? [...existing.optionalDimensionIds]
+        : legacyNamesToIds(existing?.optionalDimensions, catalog);
+    let requiredIds: string[] =
+      existing?.requiredDimensionIds?.length > 0
+        ? [...existing.requiredDimensionIds]
+        : legacyNamesToIds(existing?.requiredDimensions, catalog);
+    requiredIds = requiredIds.filter((id) => optionalIds.includes(id));
+    return {
+      id: existing?.id || template.id,
+      deptType: template.deptType,
+      isFixed: true,
+      optionalDimensionIds: optionalIds,
+      requiredDimensionIds: requiredIds,
+    };
+  });
+}
+
+const IndicatorDimensionDrawer = ({ 
+  isOpen, 
+  onClose, 
+  data, 
+  onSave 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  data: any, 
+  onSave: (newData: any) => void 
+}) => {
+  const [formData, setFormData] = useState<any>(() => ({
+    name: '',
+    description: '',
+    dimensionCatalog: DEFAULT_INDICATOR_DIMENSION_CATALOG,
+    rules: mergeIndicatorFixedRules(null, DEFAULT_INDICATOR_DIMENSION_CATALOG),
+  }));
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [editingDimId, setEditingDimId] = useState<string | null>(null);
+  const [editingDimName, setEditingDimName] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const catalog = buildIndicatorDimensionCatalog(data);
+    const rules = mergeIndicatorFixedRules(data, catalog);
+    if (data) {
+      setFormData({
+        name: data.name || '',
+        description: data.description || '',
+        dimensionCatalog: catalog,
+        rules,
+      });
+    } else {
+      setFormData({
+        name: '',
+        description: '',
+        dimensionCatalog: catalog,
+        rules: mergeIndicatorFixedRules(null, catalog),
+      });
+    }
+    setSubmitError(null);
+    setEditingDimId(null);
+    setEditingDimName('');
+  }, [data, isOpen]);
+
+  const idToName = (id: string) =>
+    (formData.dimensionCatalog as IndicatorDimItem[] | undefined)?.find((d) => d.id === id)?.name || '';
+
+  const serializeForSave = () => {
+    const cat = (formData.dimensionCatalog || []) as IndicatorDimItem[];
+    const rules = (formData.rules || []).map((r: any) => {
+      const opt = (r.optionalDimensionIds || []) as string[];
+      const req = ((r.requiredDimensionIds || []) as string[]).filter((id) => opt.includes(id));
+      return {
+        ...r,
+        optionalDimensionIds: opt,
+        requiredDimensionIds: req,
+        optionalDimensions: opt.map(idToName).filter(Boolean),
+        requiredDimensions: req.map(idToName).filter(Boolean),
+      };
+    });
+    return {
+      name: formData.name?.trim() || '',
+      description: formData.description || '',
+      dimensionCatalog: cat,
+      rules,
+    };
+  };
+
+  const handleConfirm = () => {
+    setSubmitError(null);
+    const cat = (formData.dimensionCatalog || []) as IndicatorDimItem[];
+    if (!String(formData.name || '').trim()) {
+      setSubmitError('请填写规则名称。');
+      return;
+    }
+    if (cat.length === 0) {
+      setSubmitError('请至少保留一个指标维度。');
+      return;
+    }
+    if (cat.some((d) => !String(d.name || '').trim())) {
+      setSubmitError('指标维度名称不能为空。');
+      return;
+    }
+    const seenNames = new Set<string>();
+    for (const d of cat) {
+      const k = String(d.name).trim();
+      if (seenNames.has(k)) {
+        setSubmitError(`指标维度名称「${k}」重复。`);
+        return;
+      }
+      seenNames.add(k);
+    }
+    for (const r of formData.rules || []) {
+      if (!(r.optionalDimensionIds || []).length) {
+        setSubmitError(`「${r.deptType}」请至少勾选一个可选指标维度。`);
+        return;
+      }
+    }
+    onSave(serializeForSave());
+  };
+
+  const addCatalogDimension = () => {
+    setSubmitError(null);
+    const id = `dim-${Date.now()}`;
+    setFormData((prev: any) => ({
+      ...prev,
+      dimensionCatalog: [
+        ...(prev.dimensionCatalog || []),
+        { id, name: `新指标维度${(prev.dimensionCatalog?.length || 0) + 1}` },
+      ],
+    }));
+  };
+
+  const removeCatalogDimension = (dimId: string) => {
+    setSubmitError(null);
+    if (catalog.length <= 1) {
+      setSubmitError('至少保留一个指标维度。');
+      return;
+    }
+    if (editingDimId === dimId) {
+      setEditingDimId(null);
+      setEditingDimName('');
+    }
+    setFormData((prev: any) => ({
+      ...prev,
+      dimensionCatalog: (prev.dimensionCatalog || []).filter((d: IndicatorDimItem) => d.id !== dimId),
+      rules: (prev.rules || []).map((r: any) => ({
+        ...r,
+        optionalDimensionIds: (r.optionalDimensionIds || []).filter((id: string) => id !== dimId),
+        requiredDimensionIds: (r.requiredDimensionIds || []).filter((id: string) => id !== dimId),
+      })),
+    }));
+  };
+
+  const startEditDimension = (d: IndicatorDimItem) => {
+    setEditingDimId(d.id);
+    setEditingDimName(d.name);
+  };
+
+  const saveEditDimension = () => {
+    const name = editingDimName.trim();
+    if (!editingDimId || !name) return;
+    setFormData((prev: any) => ({
+      ...prev,
+      dimensionCatalog: (prev.dimensionCatalog || []).map((d: IndicatorDimItem) =>
+        d.id === editingDimId ? { ...d, name } : d
+      ),
+    }));
+    setEditingDimId(null);
+    setEditingDimName('');
+  };
+
+  const cancelEditDimension = () => {
+    setEditingDimId(null);
+    setEditingDimName('');
+  };
+
+  const toggleOptional = (ruleId: string, dimId: string) => {
+    setSubmitError(null);
+    setFormData((prev: any) => ({
+      ...prev,
+      rules: (prev.rules || []).map((r: any) => {
+        if (r.id !== ruleId) return r;
+        const opt = (r.optionalDimensionIds || []) as string[];
+        const req = (r.requiredDimensionIds || []) as string[];
+        if (opt.includes(dimId)) {
+          return {
+            ...r,
+            optionalDimensionIds: opt.filter((x: string) => x !== dimId),
+            requiredDimensionIds: req.filter((x: string) => x !== dimId),
+          };
+        }
+        return { ...r, optionalDimensionIds: [...opt, dimId] };
+      }),
+    }));
+  };
+
+  const toggleRequired = (ruleId: string, dimId: string) => {
+    setSubmitError(null);
+    setFormData((prev: any) => ({
+      ...prev,
+      rules: (prev.rules || []).map((r: any) => {
+        if (r.id !== ruleId) return r;
+        const opt = (r.optionalDimensionIds || []) as string[];
+        const req = (r.requiredDimensionIds || []) as string[];
+        if (!opt.includes(dimId)) return r;
+        if (req.includes(dimId)) {
+          return { ...r, requiredDimensionIds: req.filter((x: string) => x !== dimId) };
+        }
+        return { ...r, requiredDimensionIds: [...req, dimId] };
+      }),
+    }));
+  };
+
+  const catalog = (formData.dimensionCatalog || []) as IndicatorDimItem[];
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/30 backdrop-blur-[2px] z-[100]"
+          />
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed top-0 right-0 h-full w-[800px] bg-white shadow-2xl z-[101] flex flex-col"
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}考核指标维度规则</h2>
+              <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
+                <X size={20} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 pb-32">
+              <section className="space-y-6">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                  <h3 className="text-[14px] font-bold text-gray-900">基本信息</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <label className="text-[13px] text-gray-600 font-medium">规则名称 <span className="text-red-500">*</span></label>
+                    <input 
+                      type="text"
+                      placeholder="请输入规则名称"
+                      className="w-full border border-gray-200 rounded px-3 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[13px] text-gray-600 font-medium">规则说明</label>
+                  <textarea 
+                    placeholder="请输入规则说明"
+                    rows={4}
+                    className="w-full border border-gray-200 rounded px-3 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all resize-none"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  />
+                </div>
+              </section>
+
+              <section className="space-y-6">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                    <h3 className="text-[14px] font-bold text-gray-900">考核指标维度</h3>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-100 bg-gray-50/40 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-[12px] text-gray-500 leading-relaxed">
+                      以下为<strong className="text-gray-700">全局指标维度库</strong>，可新增、编辑、删除；表格中「可选」与「必填」均引用此处维度。
+                      删除某维度时，将自动从各部门类型的勾选结果中移除。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={addCatalogDimension}
+                      className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded border border-[#2f54eb] text-[12px] font-medium text-[#2f54eb] hover:bg-blue-50 transition-colors cursor-pointer"
+                    >
+                      <Plus size={14} />
+                      新增指标维度
+                    </button>
+                  </div>
+                  <ul className="divide-y divide-gray-100 rounded-md border border-gray-100 bg-white overflow-hidden">
+                    {catalog.map((dim) => (
+                      <li
+                        key={dim.id}
+                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50/80 transition-colors"
+                      >
+                        {editingDimId === dim.id ? (
+                          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
+                            <input
+                              type="text"
+                              value={editingDimName}
+                              onChange={(e) => setEditingDimName(e.target.value)}
+                              className="flex-1 min-w-[120px] border border-gray-200 rounded px-2 py-1 text-[13px] outline-none focus:border-[#2f54eb]"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={saveEditDimension}
+                              className="text-[12px] text-[#2f54eb] font-medium hover:underline cursor-pointer"
+                            >
+                              保存
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditDimension}
+                              className="text-[12px] text-gray-500 hover:text-gray-700 cursor-pointer"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-[13px] text-gray-800 font-medium truncate">{dim.name}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => startEditDimension(dim)}
+                                className="text-[12px] text-[#2f54eb] hover:underline cursor-pointer"
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeCatalogDimension(dim.id)}
+                                className="text-[12px] text-red-500 hover:underline cursor-pointer"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="border border-gray-100 rounded-lg overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="px-6 py-4 text-[12px] font-bold text-gray-500 w-[180px]">部门类型</th>
+                        <th className="px-6 py-4 text-[12px] font-bold text-gray-500">可选指标维度</th>
+                        <th className="px-6 py-4 text-[12px] font-bold text-gray-500">必填指标维度</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {formData.rules.map((rule: any) => (
+                        <tr key={rule.id} className="hover:bg-gray-50/30 transition-colors">
+                          <td className="px-6 py-5 align-top">
+                            <div className="w-full border border-gray-100 rounded px-3 py-1.5 text-[13px] bg-gray-50 text-gray-500 font-medium">
+                              {rule.deptType}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex flex-wrap gap-x-6 gap-y-3">
+                              {catalog.map((dim) => (
+                                <label
+                                  key={dim.id}
+                                  className="flex items-center gap-2 cursor-pointer group"
+                                  onClick={() => toggleOptional(rule.id, dim.id)}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                                      rule.optionalDimensionIds?.includes(dim.id)
+                                        ? 'bg-[#2f54eb] border-[#2f54eb]'
+                                        : 'border-gray-300 group-hover:border-gray-400 bg-white'
+                                    }`}
+                                  >
+                                    {rule.optionalDimensionIds?.includes(dim.id) && (
+                                      <Check size={12} className="text-white" />
+                                    )}
+                                  </div>
+                                  <span className="text-[13px] text-gray-600 select-none group-hover:text-gray-900">
+                                    {dim.name}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-6 py-5">
+                            {(rule.optionalDimensionIds || []).length === 0 ? (
+                              <span className="text-[12px] text-gray-400">请先勾选左侧可选指标维度</span>
+                            ) : (
+                              <div className="flex flex-wrap gap-x-6 gap-y-3">
+                                {(rule.optionalDimensionIds || []).map((dimId: string) => {
+                                  const dim = catalog.find((d) => d.id === dimId);
+                                  if (!dim) return null;
+                                  return (
+                                    <label
+                                      key={dimId}
+                                      className="flex items-center gap-2 cursor-pointer group"
+                                      onClick={() => toggleRequired(rule.id, dimId)}
+                                    >
+                                      <div
+                                        className={`w-4 h-4 rounded border transition-all flex items-center justify-center ${
+                                          rule.requiredDimensionIds?.includes(dimId)
+                                            ? 'bg-[#2f54eb] border-[#2f54eb]'
+                                            : 'border-gray-300 group-hover:border-gray-400 bg-white'
+                                        }`}
+                                      >
+                                        {rule.requiredDimensionIds?.includes(dimId) && (
+                                          <Check size={12} className="text-white" />
+                                        )}
+                                      </div>
+                                      <span className="text-[13px] text-gray-600 select-none group-hover:text-gray-900">
+                                        {dim.name}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+
+            <div className="absolute bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex flex-col gap-3 z-20">
+              {submitError && (
+                <div className="text-[13px] text-red-600 leading-snug">{submitError}</div>
+              )}
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  className="px-10 py-2.5 bg-[#2f54eb] text-white rounded text-[14px] font-bold hover:bg-blue-600 transition-all shadow-sm cursor-pointer"
+                >
+                  确定
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-10 py-2.5 border border-gray-200 rounded text-[14px] text-gray-600 font-bold hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
+
+const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
+  const [activeTab, setActiveTab] = useState('更换办理人');
+  const tabs = ['更换办理人', '流程退回'];
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case '更换办理人':
+        return (
+          <div className="p-6">
+            <table className="w-full border border-gray-100 rounded overflow-hidden">
+              <thead>
+                <tr className="bg-gray-50 text-[13px] text-gray-500 border-b border-gray-100">
+                  <th className="py-2.5 px-4 font-medium text-left">节点名称</th>
+                  <th className="py-2.5 px-4 font-medium text-left">当前办理人</th>
+                  <th className="py-2.5 px-4 font-medium text-left">更换为</th>
+                </tr>
+              </thead>
+              <tbody className="text-[13px]">
+                <tr className="border-b border-gray-50">
+                  <td className="py-3 px-4 text-gray-900">目标制定</td>
+                  <td className="py-3 px-4 text-gray-600">员工1 (本人)</td>
+                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+                </tr>
+                <tr className="border-b border-gray-50">
+                  <td className="py-3 px-4 text-gray-900">直接上级审批</td>
+                  <td className="py-3 px-4 text-gray-600">张经理 (M001)</td>
+                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-gray-900">隔级上级审批</td>
+                  <td className="py-3 px-4 text-gray-600">王总监 (M002)</td>
+                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        );
+      case '添加办理人':
+        return (
+          <div className="p-6">
+            <table className="w-full border border-gray-100 rounded overflow-hidden">
+              <thead>
+                <tr className="bg-gray-50 text-[13px] text-gray-500 border-b border-gray-100">
+                  <th className="py-2.5 px-4 font-medium text-left">节点名称</th>
+                  <th className="py-2.5 px-4 font-medium text-left">当前办理人</th>
+                  <th className="py-2.5 px-4 font-medium text-left">添加人</th>
+                </tr>
+              </thead>
+              <tbody className="text-[13px]">
+                <tr className="border-b border-gray-50">
+                  <td className="py-3 px-4 text-gray-900">目标制定</td>
+                  <td className="py-3 px-4 text-gray-600">员工1 (本人)</td>
+                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+                </tr>
+                <tr className="border-b border-gray-50">
+                  <td className="py-3 px-4 text-gray-900">直接上级审批</td>
+                  <td className="py-3 px-4 text-gray-600">张经理 (M001)</td>
+                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-gray-900">隔级上级审批</td>
+                  <td className="py-3 px-4 text-gray-600">王总监 (M002)</td>
+                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        );
+      case '移除办理人':
+        return (
+          <div className="p-6">
+            <table className="w-full border border-gray-100 rounded overflow-hidden">
+              <thead>
+                <tr className="bg-gray-50 text-[13px] text-gray-500 border-b border-gray-100">
+                  <th className="py-2.5 px-4 font-medium text-left">节点名称</th>
+                  <th className="py-2.5 px-4 font-medium text-left">当前办理人</th>
+                  <th className="py-2.5 px-4 font-medium text-left">操作</th>
+                </tr>
+              </thead>
+              <tbody className="text-[13px]">
+                <tr className="border-b border-gray-50">
+                  <td className="py-3 px-4 text-gray-900">目标制定</td>
+                  <td className="py-3 px-4 text-gray-600">员工1 (本人)</td>
+                  <td className="py-3 px-4 text-red-500 cursor-pointer hover:underline flex items-center gap-1">
+                    <Trash2 size={14} /> 移除
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-50">
+                  <td className="py-3 px-4 text-gray-900">直接上级审批</td>
+                  <td className="py-3 px-4 text-gray-600">张经理 (M001)</td>
+                  <td className="py-3 px-4 text-red-500 cursor-pointer hover:underline flex items-center gap-1">
+                    <Trash2 size={14} /> 移除
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-3 px-4 text-gray-900">隔级上级审批</td>
+                  <td className="py-3 px-4 text-gray-600">王总监 (M002)</td>
+                  <td className="py-3 px-4 text-red-500 cursor-pointer hover:underline flex items-center gap-1">
+                    <Trash2 size={14} /> 移除
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        );
+      case '流程终审':
+        return (
+          <div className="p-6 space-y-6">
+            <div className="bg-orange-50 border border-orange-100 p-3 rounded flex items-start gap-3">
+              <AlertCircle size={16} className="text-orange-500 mt-0.5" />
+              <p className="text-[12px] text-orange-700">终审操作将直接结束流程，请谨慎操作。操作后将记录在审计日志中。</p>
+            </div>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[14px] font-bold text-gray-900">终审结果</label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="finalResult" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" defaultChecked />
+                    <span className="text-[13px] text-gray-700">审批同意 (Pass)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="finalResult" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
+                    <span className="text-[13px] text-gray-700">审批拒绝 (Reject)</span>
+                  </label>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[14px] font-bold text-gray-900"><span className="text-red-500 mr-1">*</span>审批意见</label>
+                <textarea 
+                  placeholder="请输入终审意见..." 
+                  className="w-full h-32 p-3 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] resize-none"
+                />
+              </div>
+            </div>
+          </div>
+        );
+      case '流程退回':
+        return (
+          <div className="p-6 space-y-6">
+            <div className="space-y-3">
+              <label className="text-[14px] font-bold text-gray-900">选择退回节点</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 p-3 border border-blue-100 bg-blue-50/30 rounded cursor-pointer">
+                  <input type="radio" name="returnNode" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" defaultChecked />
+                  <span className="text-[13px] text-gray-700">员工本人</span>
+                </label>
+                <label className="flex items-center gap-3 p-3 border border-gray-100 rounded cursor-pointer hover:bg-gray-50">
+                  <input type="radio" name="returnNode" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
+                  <span className="text-[13px] text-gray-700">直接上级审批</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        );
+      case '调整节点':
+        return (
+          <div className="p-6 space-y-6">
+            <div className="space-y-2">
+              <label className="text-[14px] font-bold text-gray-900">大阶段</label>
+              <div className="relative">
+                <select className="w-full p-2.5 border border-gray-200 rounded text-[13px] outline-none appearance-none bg-white cursor-pointer focus:border-[#2f54eb]">
+                  <option>绩效计划制定</option>
+                  <option>绩效中期回顾</option>
+                  <option>绩效考核评估</option>
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="text-[14px] font-bold text-gray-900">大阶段-流程子节点配置</label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 p-3 border border-blue-100 bg-blue-50/30 rounded cursor-pointer">
+                  <input type="radio" name="nodeConfig" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" defaultChecked />
+                  <div className="flex flex-col">
+                    <span className="text-[13px] text-gray-700">按原有流程审批</span>
+                    <span className="text-[11px] text-gray-400">阶段开启后，按阶段预设的审批链进行。</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 border border-gray-100 rounded cursor-pointer hover:bg-gray-50">
+                  <input type="radio" name="nodeConfig" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
+                  <div className="flex flex-col">
+                    <span className="text-[13px] text-gray-700">完成后跳转至指定节点</span>
+                    <span className="text-[11px] text-gray-400">提交后，跳过中间节点，直接跳转至指定的审批人节点...</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 border border-gray-100 rounded cursor-pointer hover:bg-gray-50">
+                  <input type="radio" name="nodeConfig" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
+                  <div className="flex flex-col">
+                    <span className="text-[13px] text-gray-700">无需审批</span>
+                    <span className="text-[11px] text-gray-400">提交后，流程自动完成，无需任何审批环节。</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[14px] font-bold text-gray-900"><span className="text-red-500 mr-1">*</span>操作原因</label>
+              <textarea 
+                placeholder="请输入调整原因，例如：新入职员工补充绩效目标" 
+                className="w-full h-24 p-3 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] resize-none"
+              />
+            </div>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex justify-end overflow-hidden">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <motion.div 
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="relative bg-white w-full max-w-2xl shadow-2xl flex flex-col h-full"
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="space-y-0.5">
+            <h2 className="text-[18px] font-bold text-gray-900">流程干预</h2>
+            <p className="text-[12px] text-gray-400">针对: {data?.path || '员工1'}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <X size={20} className="text-gray-400" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 px-6">
+          {tabs.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-3 text-[14px] font-medium transition-all relative ${
+                activeTab === tab ? 'text-[#2f54eb]' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab}
+              {activeTab === tab && (
+                <motion.div 
+                  layoutId="activeTabIntervention"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]"
+                />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto min-h-[400px]">
+          {renderTabContent()}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50/50">
+          <button 
+            onClick={onClose}
+            className="px-6 py-2 border border-gray-200 rounded text-[14px] text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            取消
+          </button>
+          <button 
+            onClick={onClose}
+            className="px-8 py-2 bg-[#2f54eb] text-white rounded text-[14px] font-medium shadow-lg shadow-blue-200 hover:bg-blue-600 transition-all active:scale-95"
+          >
+            确认
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
+  const [activeTab, setActiveTab] = useState('绩效计划制定');
+  const [activeSubTab, setActiveSubTab] = useState('第一轮');
+
+  const tabs = [
+    { name: '绩效计划制定', hasSubTabs: false },
+    { name: '绩效中期回顾', hasSubTabs: true, subTabs: ['第一轮', '第二轮'] },
+    { name: '绩效考核', hasSubTabs: true, subTabs: ['第一轮', '第二轮', '年终'] },
+  ];
+
+  const currentTab = tabs.find(t => t.name === activeTab);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex justify-end overflow-hidden">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <motion.div 
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="relative bg-white w-full max-w-4xl shadow-2xl flex flex-col h-full"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="text-lg font-bold text-gray-900 tracking-tight">审批链 - {data?.currentApprover || data?.name || '刘信息 (M1001)'}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Parent Tabs */}
+        <div className="flex border-b border-gray-100 bg-white px-6 shrink-0 h-[56px] items-center gap-8">
+          {tabs.map(tab => (
+            <button
+              key={tab.name}
+              onClick={() => {
+                setActiveTab(tab.name);
+                if (tab.hasSubTabs && tab.subTabs) {
+                  setActiveSubTab(tab.subTabs[0]);
+                }
+              }}
+              className={`h-full text-[14px] font-bold transition-all relative ${
+                activeTab === tab.name ? 'text-[#2f54eb]' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              {tab.name}
+              {activeTab === tab.name && (
+                <motion.div 
+                  layoutId="activeTabUnderline"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]" 
+                />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Sub Tabs (Only for stages with sub-rounds) */}
+        {currentTab?.hasSubTabs && (
+          <div className="flex bg-gray-50/50 px-6 py-3 border-b border-gray-100 shrink-0 gap-2">
+            {currentTab.subTabs?.map(subTab => (
+              <button
+                key={subTab}
+                onClick={() => setActiveSubTab(subTab)}
+                className={`px-4 py-1.5 rounded-full text-[12px] font-medium transition-all ${
+                  activeSubTab === subTab 
+                    ? 'bg-white text-[#2f54eb] shadow-sm ring-1 ring-black/5' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {subTab}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Content - Timeline */}
+        <div className="flex-1 overflow-y-auto p-8 bg-white">
+          <div className="max-w-2xl mx-auto space-y-0">
+            {/* Timeline Item 1 */}
+            <div className="relative pl-12 pb-12 group last:pb-0">
+              {/* Connector */}
+              <div className="absolute left-[20px] top-4 w-px h-full bg-gray-100" />
+              {/* Dot */}
+              <div className="absolute left-[13px] top-1.5 w-[14px] h-[14px] rounded-full border-2 border-[#2f54eb] bg-white z-10 shadow-[0_0_0_4px_white]" />
+              
+              <div className="flex items-center justify-between mb-3 pt-0.5">
+                <div className="flex items-center gap-3">
+                  <span className="text-[15px] font-bold text-gray-900">
+                    {activeTab === '绩效计划制定' ? '发起' : activeTab === '绩效中期回顾' ? '自评发起' : '考核发起'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[11px] bg-blue-50 text-[#2f54eb] border border-blue-100 font-medium">
+                    {activeTab === '绩效计划制定' ? '发起' : '进行中'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-400 text-[12px] font-mono">
+                  <Clock size={12} />
+                  <span>2025-07-01 09:30:15</span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm hover:shadow-md transition-all group-hover:border-blue-100">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100">
+                    <User size={16} className="text-gray-400" />
+                  </div>
+                  <div>
+                    <div className="text-[14px] font-medium text-gray-900">
+                      员工本人 (202301) 
+                      <span className="mx-2 text-gray-300 font-normal">|</span> 
+                      <span className="text-gray-500 font-normal">信息化中心/研发组</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5 text-gray-600 text-[13px] pl-11">
+                  <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-40 text-[#2f54eb]" />
+                  <span>{activeTab === '绩效计划制定' ? '提交绩效目标' : '提交阶段反馈'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline Item 2 */}
+            <div className="relative pl-12 pb-12 group last:pb-0">
+              <div className="absolute left-[20px] top-4 w-px h-full bg-gray-100" />
+              <div className="absolute left-[13px] top-1.5 w-[14px] h-[14px] rounded-full border-2 border-green-500 bg-white z-10 shadow-[0_0_0_4px_white]" />
+              
+              <div className="flex items-center justify-between mb-3 pt-0.5">
+                <div className="flex items-center gap-3">
+                  <span className="text-[15px] font-bold text-gray-900">
+                    {activeTab === '绩效计划制定' ? '直接上级审批' : activeTab === '绩效中期回顾' ? '上级面谈' : '初评节点'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[11px] bg-green-50 text-green-600 border border-green-100 font-medium">
+                    审批通过
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-400 text-[12px] font-mono">
+                  <Clock size={12} />
+                  <span>2025-07-02 14:00:05</span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm hover:shadow-md transition-all group-hover:border-green-100">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100">
+                    <User size={16} className="text-gray-400" />
+                  </div>
+                  <div>
+                    <div className="text-[14px] font-medium text-gray-900">
+                      张经理 (M001) 
+                      <span className="mx-2 text-gray-300 font-normal">|</span> 
+                      <span className="text-gray-500 font-normal">信息化中心/研发组</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5 text-gray-600 text-[13px] pl-11">
+                  <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-40 text-green-500" />
+                  <span>符合阶段执行要求</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline Item 3 */}
+            <div className="relative pl-12 pb-12 group last:pb-0">
+              <div className="absolute left-[20px] top-4 w-px h-full bg-gray-100" />
+              <div className="absolute left-[13px] top-1.5 w-[14px] h-[14px] rounded-full border-2 border-orange-500 bg-white z-10 shadow-[0_0_0_4px_white]" />
+              
+              <div className="flex items-center justify-between mb-3 pt-0.5">
+                <div className="flex items-center gap-3">
+                  <span className="text-[15px] font-bold text-gray-900">
+                    {activeTab === '绩效计划制定' ? '管理员操作' : activeTab === '绩效中期回顾' ? '沟通确认' : '校准节点'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[11px] bg-orange-50 text-orange-600 border border-orange-100 font-medium flex items-center gap-1">
+                    <AlertCircle size={10} />
+                    系统干预-转交
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-400 text-[12px] font-mono">
+                  <Clock size={12} />
+                  <span>2025-07-03 10:00:00</span>
+                </div>
+              </div>
+
+              <div className="bg-white border border-gray-100 rounded-lg p-5 shadow-sm hover:shadow-md transition-all group-hover:border-orange-100">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100">
+                    <User size={16} className="text-gray-400" />
+                  </div>
+                  <div>
+                    <div className="text-[14px] font-medium text-gray-900">
+                      系统管理员 (admin) 
+                      <span className="mx-2 text-gray-300 font-normal">|</span> 
+                      <span className="text-gray-500 font-normal">系统管理</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5 text-gray-600 text-[13px] pl-11">
+                  <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-40 text-orange-500" />
+                  <span>原审批人休假，转交给 王总监(M002)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Timeline Item 4 */}
+            <div className="relative pl-12 pb-0 group last:pb-0 pt-0.5">
+              <div className="absolute left-[13px] top-1.5 w-[14px] h-[14px] rounded-full border-2 border-green-500 bg-white z-10 shadow-[0_0_0_4px_white]" />
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-[15px] font-bold text-gray-900">
+                    {activeTab === '绩效计划制定' ? '隔级上级审批' : activeTab === '绩效中期回顾' ? '结果发布' : '结果确认'}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md text-[11px] bg-green-50 text-green-600 border border-green-100 font-medium">
+                    审批通过
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-gray-400 text-[12px] font-mono">
+                  <Clock size={12} />
+                  <span>2025-07-03 16:25:40</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const DashboardDataMgmtPage = () => {
+  const [activeTab, setActiveTab] = useState<'group' | 'dept'>('group');
+  const [selectedActivity, setSelectedActivity] = useState('2025年组织绩效活动');
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  
+  const batches = [
+    { id: 'B2026040601', time: '2026-04-06 10:00:23', operator: 'HR管理员', status: '最新', count: 45 },
+    { id: 'B2026033102', time: '2026-03-31 15:30:12', operator: 'HR管理员', status: '已存档', count: 42 },
+    { id: 'B2026031501', time: '2026-03-15 09:15:44', operator: '系统自动导入', status: '已存档', count: 38 },
+  ];
+  
+  const [selectedBatch, setSelectedBatch] = useState(batches[0]);
+
+  const groupData = [
+    { id: 1, dimension: '财务指标', name: '集团年度营业收入', target: '1000亿', result: '850亿', progress: 85, light: 'green' },
+    { id: 2, dimension: '运营指标', name: '集团数字化转型进度', target: '100%', result: '75%', progress: 75, light: 'blue' },
+    { id: 3, dimension: '客户指标', name: '集团客户满意度', target: '95%', result: '92%', progress: 92, light: 'green' },
+  ];
+
+  const deptData = [
+    { id: 1, dept: '信息化中心', dimension: '财务指标', name: '部门预算执行率', weight: '20%', result: '98%', progress: 98, light: 'green' },
+    { id: 2, dept: '技术研发部', dimension: '运营指标', name: '核心产品研发进度', weight: '40%', result: '60%', progress: 60, light: 'yellow' },
+    { id: 3, dept: '流程效能部', dimension: '组织发展指标', name: '流程优化完成数', weight: '30%', result: '15个', progress: 50, light: 'red' },
+  ];
+
+  const getLightColor = (light: string) => {
+    switch (light) {
+      case 'red': return 'bg-red-500';
+      case 'yellow': return 'bg-yellow-500';
+      case 'blue': return 'bg-blue-500';
+      case 'green': return 'bg-green-500';
+      default: return 'bg-gray-300';
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col bg-[#f0f2f5] overflow-hidden">
+      {/* Header */}
+      <div className="bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="text-[18px] font-bold text-gray-900">绩效看板管理</h1>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] text-gray-500">绩效活动:</span>
+            <div className="relative">
+              <select 
+                value={selectedActivity}
+                onChange={(e) => setSelectedActivity(e.target.value)}
+                className="appearance-none bg-gray-50 border border-gray-200 rounded px-3 py-1.5 pr-8 text-[13px] outline-none focus:border-[#2f54eb] transition-colors"
+              >
+                <option>2025年组织绩效活动</option>
+                <option>2024年组织绩效活动</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] text-gray-500">当前数据批次:</span>
+            <div className="relative">
+              <select 
+                value={selectedBatch.id}
+                onChange={(e) => setSelectedBatch(batches.find(b => b.id === e.target.value) || batches[0])}
+                className={`appearance-none border rounded px-3 py-1.5 pr-8 text-[13px] outline-none transition-colors ${selectedBatch.status === '最新' ? 'bg-blue-50 border-blue-200 text-[#2f54eb]' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+              >
+                {batches.map(b => (
+                  <option key={b.id} value={b.id}>{b.time} ({b.status})</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white px-6 border-b border-gray-200 shrink-0">
+        <div className="flex gap-8">
+          {[
+            { id: 'group', label: '集团级指标' },
+            { id: 'dept', label: '部门级指标' }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`py-3 text-[14px] relative transition-colors ${activeTab === tab.id ? 'text-[#2f54eb] font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {tab.label}
+              {activeTab === tab.id && (
+                <motion.div 
+                  layoutId="activeTabDashboard"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]" 
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 p-6 overflow-hidden flex flex-col gap-4">
+        {selectedBatch.status !== '最新' && (
+          <div className="bg-orange-50 border border-orange-100 px-4 py-2 rounded flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2 text-orange-700 text-[13px]">
+              <AlertCircle size={16} />
+              <span>您当前正在查看历史批次数据（批次号：{selectedBatch.id}），该数据仅供参考，不可编辑。</span>
+            </div>
+            <button 
+              onClick={() => setSelectedBatch(batches[0])}
+              className="text-[#2f54eb] text-[13px] font-medium hover:underline"
+            >
+              返回最新数据
+            </button>
+          </div>
+        )}
+        
+        {/* Toolbar */}
+        <div className="flex items-center justify-between bg-white p-4 rounded shadow-sm border border-gray-100 shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="relative w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder="搜索指标名称/部门" 
+                className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb]"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] text-gray-500">指标维度:</span>
+              <select className="border border-gray-200 rounded px-2 py-1 text-[13px] outline-none">
+                <option>全部</option>
+                <option>财务指标</option>
+                <option>客户指标</option>
+                <option>运营指标</option>
+                <option>组织发展指标</option>
+                <option>能力建设指标</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-[#1d39c4] transition-colors shadow-sm">
+              <FileUp size={14} />
+              <span>导入</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 bg-white rounded shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-50/50 text-left text-[12px] text-gray-500 border-b border-gray-100 sticky top-0 z-10">
+                  <th className="py-3 px-4 font-medium w-16">序号</th>
+                  {activeTab === 'dept' && <th className="py-3 px-4 font-medium">一级部门名称</th>}
+                  <th className="py-3 px-4 font-medium">指标维度</th>
+                  <th className="py-3 px-4 font-medium">指标名称</th>
+                  {activeTab === 'group' ? (
+                    <th className="py-3 px-4 font-medium">目标值</th>
+                  ) : (
+                    <th className="py-3 px-4 font-medium">指标权重</th>
+                  )}
+                  <th className="py-3 px-4 font-medium">当前完成结果</th>
+                  <th className="py-3 px-4 font-medium">当前完成进度</th>
+                  <th className="py-3 px-4 font-medium text-center">红黄蓝绿灯</th>
+                  <th className="py-3 px-4 font-medium text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(activeTab === 'group' ? groupData : deptData).map((item: any, idx) => (
+                  <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50/30 transition-colors text-[13px]">
+                    <td className="py-3 px-4 text-gray-500">{idx + 1}</td>
+                    {activeTab === 'dept' && <td className="py-3 px-4 text-gray-900 font-medium">{item.dept}</td>}
+                    <td className="py-3 px-4">
+                      <span className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] rounded text-[11px]">{item.dimension}</span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-900">{item.name}</td>
+                    <td className="py-3 px-4 text-gray-600">{activeTab === 'group' ? item.target : item.weight}</td>
+                    <td className="py-3 px-4 text-gray-900 font-medium">{item.result}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${getLightColor(item.light)}`} 
+                            style={{ width: `${item.progress}%` }} 
+                          />
+                        </div>
+                        <span className="text-[11px] text-gray-500 w-8">{item.progress}%</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-center">
+                        <div className={`w-3 h-3 rounded-full ${getLightColor(item.light)} shadow-sm`} />
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex justify-center gap-3">
+                        <button 
+                          disabled={selectedBatch.status !== '最新'}
+                          className={`text-[#2f54eb] hover:underline disabled:opacity-30 disabled:no-underline`}
+                        >
+                          编辑
+                        </button>
+                        {activeTab === 'group' && (
+                          <button 
+                            disabled={selectedBatch.status !== '最新'}
+                            className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-30"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination */}
+          <div className="p-4 border-t border-gray-100 flex items-center justify-between text-[12px] text-gray-500 shrink-0">
+            <span>共 {(activeTab === 'group' ? groupData : deptData).length} 条数据</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <button className="p-1 hover:bg-gray-100 rounded border border-gray-200 disabled:opacity-30" disabled><ChevronLeft size={14} /></button>
+                <button className="w-6 h-6 flex items-center justify-center bg-[#2f54eb] text-white rounded">1</button>
+                <button className="p-1 hover:bg-gray-100 rounded border border-gray-200 disabled:opacity-30" disabled><ChevronRight size={14} /></button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>10条/页</span>
+                <ChevronDown size={14} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* History Records Modal */}
+      <AnimatePresence>
+        {isHistoryModalOpen && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-xl shadow-2xl w-[800px] max-h-[80vh] overflow-hidden flex flex-col"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                <div className="flex items-center gap-2">
+                  <History size={20} className="text-[#2f54eb]" />
+                  <h3 className="text-[16px] font-bold text-gray-900">数据导入历史记录</h3>
+                </div>
+                <X size={20} className="text-gray-400 cursor-pointer hover:text-gray-600" onClick={() => setIsHistoryModalOpen(false)} />
+              </div>
+              
+              <div className="p-6 overflow-y-auto">
+                <div className="border border-gray-100 rounded overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">批次编号</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">导入时间</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">操作人</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">数据量</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">状态</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500 text-center">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batches.map((batch) => (
+                        <tr key={batch.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                          <td className="px-4 py-3 text-[13px] font-mono text-gray-600">{batch.id}</td>
+                          <td className="px-4 py-3 text-[13px] text-gray-600">{batch.time}</td>
+                          <td className="px-4 py-3 text-[13px] text-gray-600">{batch.operator}</td>
+                          <td className="px-4 py-3 text-[13px] text-gray-600">{batch.count} 条</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] ${batch.status === '最新' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {batch.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button 
+                              onClick={() => {
+                                setSelectedBatch(batch);
+                                setIsHistoryModalOpen(false);
+                              }}
+                              className="text-[#2f54eb] text-[13px] hover:underline"
+                            >
+                              查看此批次
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end">
+                <button 
+                  onClick={() => setIsHistoryModalOpen(false)}
+                  className="px-6 py-2 bg-white border border-gray-300 rounded-lg text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  关闭
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/** 解析活动更新时间，用于比较「最近更新」 */
+function activityUpdateTimeMs(updateTime: string | undefined): number {
+  if (updateTime == null || String(updateTime).trim() === '') return 0;
+  const s = String(updateTime).trim();
+  const normalized = s.includes('T') ? s : s.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1/$2/$3');
+  const ms = new Date(normalized).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/** 在状态为「进行中」的活动中，取 updateTime 最新的一条（离当前时刻最近的一次更新） */
+function pickLatestUpdatedOngoingActivityId(activityList: any[]): string {
+  const ongoing = activityList.filter((a) => a?.status === '进行中');
+  if (ongoing.length === 0) return '';
+  const sorted = [...ongoing].sort(
+    (a, b) => activityUpdateTimeMs(b.updateTime) - activityUpdateTimeMs(a.updateTime)
+  );
+  return sorted[0]?.id ?? '';
+}
+
+const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: any[] }) => {
+  const [monitoringSearchTerm, setMonitoringSearchTerm] = useState('');
+  const [monitoringViewTab, setMonitoringViewTab] = useState<'考核流程监控' | '绩效计划变更监控'>('考核流程监控');
+  const [isInterventionModalOpen, setIsInterventionModalOpen] = useState(false);
+  const [isApprovalChainModalOpen, setIsApprovalChainModalOpen] = useState(false);
+  const [isSendMessageDrawerOpen, setIsSendMessageDrawerOpen] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [planChangeSearchTerm, setPlanChangeSearchTerm] = useState('');
+  const [planChangeSelectedIds, setPlanChangeSelectedIds] = useState<string[]>([]);
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({
+    path: [],
+    orgType: [],
+    level: [],
+    currentNode: [],
+    currentApprover: [],
+    status: []
+  });
+
+  const toggleFilterValue = (column: string, value: string) => {
+    setSelectedFilters(prev => {
+      const current = prev[column] || [];
+      const next = current.includes(value) 
+        ? current.filter(v => v !== value)
+        : [...current, value];
+      return { ...prev, [column]: next };
+    });
+  };
+
+  const clearFilter = (column: string) => {
+    setSelectedFilters(prev => ({ ...prev, [column]: [] }));
+  };
+
+  const getColumnOptions = (column: string) => {
+    const options = Array.from(new Set(tableData.map(row => (row as any)[column]).filter(v => v && v !== '-')));
+    return options.sort();
+  };
+
+  const FilterPopover = ({ column, label }: { column: string, label: string }) => {
+    if (activeFilterColumn !== column) return null;
+    
+    const options = getColumnOptions(column);
+    const selected = selectedFilters[column] || [];
+
+    return (
+      <div className="absolute top-full left-0 mt-2 w-[220px] bg-white rounded-lg shadow-xl border border-gray-100 z-[100] py-3">
+        <div className="px-3 mb-2 flex items-center justify-between">
+          <span className="text-[12px] font-bold text-gray-900">{label}筛选</span>
+          {selected.length > 0 && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); clearFilter(column); }}
+              className="text-[11px] text-[#2f54eb] hover:underline"
+            >
+              重置
+            </button>
+          )}
+        </div>
+        <div className="max-h-[240px] overflow-y-auto px-1">
+          {options.map(option => (
+            <label 
+              key={option}
+              className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer group transition-colors"
+            >
+              <div 
+                onClick={(e) => { e.stopPropagation(); toggleFilterValue(column, option); }}
+                className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-all ${
+                  selected.includes(option) ? 'bg-[#2f54eb] border-[#2f54eb]' : 'border-gray-300 group-hover:border-gray-400'
+                }`}
+              >
+                {selected.includes(option) && <Check size={10} className="text-white" />}
+              </div>
+              <span className="text-[13px] text-gray-600 group-hover:text-gray-900 truncate flex-1">
+                {column === 'path' ? option.replace('集团总部/', '') : option}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const getFilteredData = () => {
+    return tableData.filter(row => {
+      for (const [key, values] of Object.entries(selectedFilters)) {
+        const filterValues = values as any[];
+        if (filterValues.length > 0) {
+          const rowValue = (row as any)[key];
+          if (!filterValues.includes(rowValue)) return false;
+        }
+      }
+      return true;
+    });
+  };
+  
+  // Activity Selection：仅「进行中」，默认选中 updateTime 最新的活动
+  const ongoingActivities = useMemo(
+    () => activities.filter((a: any) => a?.status === '进行中'),
+    [activities]
+  );
+  const latestOngoingActivityId = useMemo(
+    () => pickLatestUpdatedOngoingActivityId(activities),
+    [activities]
+  );
+  const [selectedActivityId, setSelectedActivityId] = useState(() =>
+    pickLatestUpdatedOngoingActivityId(activities)
+  );
+
+  useEffect(() => {
+    const next = pickLatestUpdatedOngoingActivityId(activities);
+    setSelectedActivityId((prev) => (prev === next ? prev : next));
+  }, [activities]);
+
+  const [isActivityDropdownOpen, setIsActivityDropdownOpen] = useState(false);
+  const selectedActivity =
+    ongoingActivities.find((a) => a.id === selectedActivityId) ||
+    ongoingActivities.find((a) => a.id === latestOngoingActivityId);
+
+  // Phase Selection
+  const activityPhases = selectedActivity?.config?.phases || [
+    { name: '绩效计划制定', date: '2024/07/01 ~ 2024/07/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] },
+    { name: '绩效中期回顾', date: '2024/08/15 ~ 2024/08/20', showRounds: false, rounds: [] },
+    { name: '绩效考核', date: '2024/09/30 ~ 2024/10/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
+  ];
+  const [selectedPhase, setSelectedPhase] = useState('');
+  const [isPhaseDropdownOpen, setIsPhaseDropdownOpen] = useState(false);
+
+  // Rounds Selection
+  const [rounds, setRounds] = useState<any[]>([]);
+  const [activeRoundId, setActiveRoundId] = useState('');
+  const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+
+  // Update phase and rounds when activity changes
+  useEffect(() => {
+    if (selectedActivity) {
+      const phases = selectedActivity.config?.phases || activityPhases;
+      const initialPhase = phases[0]?.name || '';
+      setSelectedPhase(initialPhase);
+    }
+  }, [selectedActivityId]);
+
+  // Update rounds when phase changes
+  useEffect(() => {
+    const phaseConfig = activityPhases.find(p => p.name === selectedPhase);
+    if (phaseConfig) {
+      const newRounds = phaseConfig.showRounds ? (phaseConfig.rounds || []) : [];
+      setRounds(newRounds);
+      setActiveRoundId(newRounds[0]?.id || '');
+    } else {
+      setRounds([]);
+      setActiveRoundId('');
+    }
+  }, [selectedPhase, selectedActivityId]);
+
+  const activeRound = rounds.find(r => r.id === activeRoundId) || (rounds.length > 0 ? rounds[0] : { id: '', name: '-' });
+
+  const handleEditRound = (id: string, name: string) => {
+    setEditingRoundId(id);
+    setEditingValue(name);
+  };
+
+  const handleSaveRound = () => {
+    if (editingRoundId && editingValue.trim()) {
+      setRounds(prev => prev.map(r => r.id === editingRoundId ? { ...r, name: editingValue.trim() } : r));
+    }
+    setEditingRoundId(null);
+  };
+
+  const handleAddRound = () => {
+    const newId = Date.now().toString();
+    const newRound = { id: newId, name: `第${rounds.length + 1}轮考核` };
+    setRounds([...rounds, newRound]);
+    setActiveRoundId(newId);
+  };
+
+  const handleSendReminder = () => {
+    if (selectedIds.length === 0) {
+      setToast({ message: '请至少选择一条数据', type: 'info' });
+      return;
+    }
+    setIsSendMessageDrawerOpen(true);
+  };
+
+  const toggleSelectAll = () => {
+    const filtered = getFilteredData().slice(0, 10);
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map(row => row.id));
+    }
+  };
+
+  const toggleSelectRow = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleIntervention = (row: any) => {
+    setSelectedRow(row);
+    setIsInterventionModalOpen(true);
+  };
+
+  const handleApprovalChain = (row: any) => {
+    setSelectedRow(row);
+    setIsApprovalChainModalOpen(true);
+  };
+
+  const summaryCards = [
+    { title: '考核部门数', value: '28', subValue: '当前阶段应参与考核', color: 'text-gray-900', bgColor: 'bg-white' },
+    { title: '已完成', value: '12', subValue: '占比 43%', color: 'text-green-500', bgColor: 'bg-green-50/30' },
+    { title: '进行中', value: '14', subValue: '流程正常流转中', color: 'text-blue-500', bgColor: 'bg-blue-50/30' },
+    { title: '滞留 / 超时', value: '2', subValue: '2 个部门存在超时节点', color: 'text-red-500', bgColor: 'bg-red-50/30' },
+  ];
+
+  const phaseNodeConfigs: Record<string, any> = {
+    '绩效计划制定': [
+      { nodeName: '指标填报', role: 'leader' },
+      { nodeName: '指标审核', role: 'hrbp' }
+    ],
+    '绩效中期回顾': [
+      { nodeName: '指标回顾', role: 'leader' },
+      { nodeName: '回顾审核', role: 'hrbp' }
+    ],
+    '绩效考核': [
+      { nodeName: '自评', role: 'leader' },
+      { nodeName: '上级评价', role: 'exec' },
+      { nodeName: '隔级审核', role: 'standing' }
+    ]
+  };
+
+  const baseTableData = [
+    { id: 'D001', path: '集团总部/信息化中心', level: '一级部门', leader: '刘信息 (M1001)', hrbp: '李HR (H1001)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '能力中心', status: '进行中' },
+    { id: 'D002', path: '集团总部/人力行政中心', level: '一级部门', leader: '张研发 (M1002)', hrbp: '李HR (H1001)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '职能部门', status: '滞留/超时' },
+    { id: 'D003', path: '集团总部/财务管理中心', level: '一级部门', leader: '陈效能 (M1003)', hrbp: '王HR (H1002)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '职能部门', status: '未开始' },
+    { id: 'D004', path: '集团总部/战略发展部', level: '一级部门', leader: '卫系统 (M1004)', hrbp: '王HR (H1002)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '职能部门', status: '已完成' },
+    { id: 'D005', path: '集团总部/法务合规部', level: '一级部门', leader: '何法务 (M1005)', hrbp: '张BP (H1003)', exec: '孙执委 (E1002)', standing: '李常委 (S1002)', orgType: '能力中心', status: '进行中' },
+    { id: 'D006', path: '集团总部/品牌营销部', level: '一级部门', leader: '曹营销 (M1006)', hrbp: '张BP (H1003)', exec: '孙执委 (E1002)', standing: '李常委 (S1002)', orgType: '职能部门', status: '未开始' },
+    { id: 'D007', path: '集团总部/供应链管理中心', level: '一级部门', leader: '陶供应 (M1007)', hrbp: '赵BP (H1004)', exec: '孙执委 (E1002)', standing: '李常委 (S1002)', orgType: '经营单元', status: '未开始' },
+    { id: 'D008', path: '集团总部/审计监察部', level: '一级部门', leader: '喻审计 (M1008)', hrbp: '赵BP (H1004)', exec: '孙执委 (E1002)', standing: '李常委 (S1002)', orgType: '职能部门', status: '未开始' },
+    { id: 'D009', path: '集团总部/公共关系部', level: '一级部门', leader: '云公关 (M1009)', hrbp: '钱BP (H1005)', exec: '周执委 (E1003)', standing: '吴常委 (S1003)', orgType: '职能部门', status: '进行中' },
+    { id: 'D010', path: '集团总部/技术研发中心', level: '一级部门', leader: '范技术 (M1010)', hrbp: '钱BP (H1005)', exec: '周执委 (E1003)', standing: '吴常委 (S1003)', orgType: '能力中心', status: '未开始' },
+  ];
+
+  const tableData = baseTableData.map((row, index) => {
+    if (row.status === '未开始') {
+      return { ...row, currentNode: '-', currentApprover: '-' };
+    }
+    if (row.status === '已完成') {
+      return { ...row, currentNode: '已归档', currentApprover: '-' };
+    }
+
+    const configs = phaseNodeConfigs[selectedPhase] || [];
+    if (configs.length === 0) {
+      return { ...row, currentNode: '-', currentApprover: '-' };
+    }
+    
+    // 根据部门类型或索引模拟当前所处的节点配置
+    // 例如：信息化中心(D001)处于第1个节点，法务合规部(D005)也处于第1个节点
+    const configIndex = (index % 4 === 0 || index === 4) ? 0 : (index % 2 === 1 ? 1 : 2);
+    const config = configs[configIndex];
+    
+    let approver = '-';
+    if (config && config.role === 'leader') approver = row.leader;
+    else if (config && config.role === 'hrbp') approver = row.hrbp;
+    else if (config && config.role === 'exec') approver = (row as any).exec;
+    else if (config && config.role === 'standing') approver = (row as any).standing;
+
+    return {
+      ...row,
+      currentNode: config ? config.nodeName : '-',
+      currentApprover: approver
+    };
+  });
+
+  const planChangeFlowNodes = [
+    { nodeName: '变更申请填报', role: 'leader' as const },
+    { nodeName: '变更审批', role: 'hrbp' as const },
+    { nodeName: '计划发布确认', role: 'exec' as const },
+  ];
+
+  const planChangeRows = useMemo(() => {
+    return baseTableData.map((row, index) => {
+      if (row.status === '未开始') {
+        return { ...row, currentNode: '-', currentApprover: '-' };
+      }
+      if (row.status === '已完成') {
+        return { ...row, currentNode: '已归档', currentApprover: '-' };
+      }
+      const config = planChangeFlowNodes[index % planChangeFlowNodes.length];
+      let approver = '-';
+      if (config.role === 'leader') approver = row.leader;
+      else if (config.role === 'hrbp') approver = row.hrbp;
+      else if (config.role === 'exec') approver = (row as any).exec;
+      return {
+        ...row,
+        currentNode: config.nodeName,
+        currentApprover: approver,
+      };
+    });
+  }, []);
+
+  const planChangeSummaryCards = useMemo(() => {
+    const total = planChangeRows.length;
+    const done = planChangeRows.filter((r) => r.status === '已完成').length;
+    const ing = planChangeRows.filter((r) => r.status === '进行中').length;
+    const stuck = planChangeRows.filter((r) => r.status === '滞留/超时').length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    return [
+      { title: '涉及部门数', value: String(total), subValue: '当前存在计划变更流程', color: 'text-gray-900', bgColor: 'bg-white' },
+      { title: '已完成', value: String(done), subValue: `占比 ${pct}%`, color: 'text-green-500', bgColor: 'bg-green-50/30' },
+      { title: '进行中', value: String(ing), subValue: '变更流程处理中', color: 'text-blue-500', bgColor: 'bg-blue-50/30' },
+      {
+        title: '滞留 / 超时',
+        value: String(stuck),
+        subValue: stuck ? `${stuck} 个部门存在超时节点` : '暂无滞留',
+        color: 'text-red-500',
+        bgColor: 'bg-red-50/30',
+      },
+    ];
+  }, [planChangeRows]);
+
+  const getPlanChangeFilteredRows = () => {
+    const q = planChangeSearchTerm.trim().toLowerCase();
+    if (!q) return planChangeRows;
+    return planChangeRows.filter((row) => {
+      const pathShort = row.path.replace('集团总部/', '').toLowerCase();
+      return (
+        row.id.toLowerCase().includes(q) ||
+        pathShort.includes(q) ||
+        row.leader.toLowerCase().includes(q) ||
+        row.hrbp.toLowerCase().includes(q)
+      );
+    });
+  };
+
+  const handlePlanChangeSendReminder = () => {
+    if (planChangeSelectedIds.length === 0) {
+      setToast({ message: '请至少选择一条数据', type: 'info' });
+      return;
+    }
+    setIsSendMessageDrawerOpen(true);
+  };
+
+  const togglePlanChangeSelectAll = () => {
+    const filtered = getPlanChangeFilteredRows().slice(0, 10);
+    if (planChangeSelectedIds.length === filtered.length && filtered.length > 0) {
+      setPlanChangeSelectedIds([]);
+    } else {
+      setPlanChangeSelectedIds(filtered.map((r) => r.id));
+    }
+  };
+
+  const togglePlanChangeSelectRow = (id: string) => {
+    setPlanChangeSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+  };
+
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-[#f4f5f7] overflow-hidden">
+      {/* Page Header */}
+      <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-100 shrink-0">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <h1 className="text-[18px] font-bold text-gray-900 shrink-0">组织绩效流程监控</h1>
+          <div className="flex items-center h-9 rounded-lg bg-gray-100 p-0.5 gap-0.5 shrink-0">
+            {(['考核流程监控', '绩效计划变更监控'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => {
+                  setMonitoringViewTab(tab);
+                  setSelectedIds([]);
+                  setPlanChangeSelectedIds([]);
+                }}
+                className={`h-full px-4 rounded-md text-[13px] font-medium whitespace-nowrap transition-all ${
+                  monitoringViewTab === tab
+                    ? 'bg-white text-[#2f54eb] shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div 
+              onClick={() => setIsActivityDropdownOpen(!isActivityDropdownOpen)}
+              className="flex items-center gap-2 bg-white border border-gray-200 rounded px-3 py-1.5 cursor-pointer hover:border-[#2f54eb] transition-colors min-w-[200px] justify-between"
+            >
+              <span className="text-[13px] text-gray-600">
+                {selectedActivity?.name || '请选择活动'}
+              </span>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${isActivityDropdownOpen ? 'rotate-180' : ''}`} />
+            </div>
+
+            <AnimatePresence>
+              {isActivityDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setIsActivityDropdownOpen(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded shadow-lg z-40 py-1 max-h-[300px] overflow-y-auto"
+                  >
+                    {ongoingActivities.length > 0 ? (
+                      ongoingActivities.map((activity) => (
+                        <div
+                          key={activity.id}
+                          onClick={() => {
+                            setSelectedActivityId(activity.id);
+                            setIsActivityDropdownOpen(false);
+                          }}
+                          className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50 flex items-center justify-between ${selectedActivityId === activity.id ? 'text-[#2f54eb] bg-blue-50/50 font-medium' : 'text-gray-600'}`}
+                        >
+                          {activity.name}
+                          {selectedActivityId === activity.id && <div className="w-1.5 h-1.5 rounded-full bg-[#2f54eb]" />}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-[13px] text-gray-400 text-center">暂无进行中活动</div>
+                    )}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+
+      {monitoringViewTab === '考核流程监控' ? (
+      <>
+      {/* Phase Progress and Rounds */}
+      <div className="bg-white border-b border-gray-100 flex flex-col">
+        {/* Phase Steps */}
+        <div className="px-12 py-5 flex items-center justify-center relative">
+          <div className="absolute left-[15%] right-[15%] h-[1px] bg-gray-100" />
+          <div 
+            className="absolute left-[15%] h-[1px] bg-[#2f54eb] transition-all duration-300" 
+            style={{ 
+              right: selectedPhase === activityPhases[0]?.name 
+                ? '85%' 
+                : selectedPhase === activityPhases[1]?.name 
+                  ? '50%' 
+                  : '15%' 
+            }} 
+          />
+          
+          <div className="flex justify-between w-full max-w-4xl relative z-10 px-8">
+              {activityPhases.map((p, idx) => (
+                <div key={p.name} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setSelectedPhase(p.name)}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                    p.name === selectedPhase ? 'bg-[#2f54eb] border-[#2f54eb] text-white' : idx === 0 ? 'bg-white border-[#2f54eb] text-[#2f54eb]' : 'bg-white border-gray-200 text-gray-400 group-hover:border-gray-300'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className={`text-[13px] font-bold transition-colors ${p.name === selectedPhase ? 'text-[#2f54eb]' : 'text-gray-500'}`}>{p.name}</span>
+                    <span className="text-[11px] text-gray-400 min-w-max bg-gray-50/50 px-1.5 py-0.5 rounded border border-gray-100/50">{p.date}</span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        {/* Rounds Tabs */}
+        {rounds.length > 0 && (
+          <div className="px-6 flex items-center gap-1">
+            {rounds.map((round) => (
+              <div 
+                key={round.id}
+                className={`group flex items-center gap-2 px-6 py-2.5 border-t-2 border-x transition-all cursor-pointer relative ${
+                  activeRoundId === round.id 
+                    ? 'border-t-[#2f54eb] border-x-gray-100 bg-white text-[#2f54eb] font-bold z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.02)]' 
+                    : 'border-t-transparent border-x-transparent text-gray-500 hover:text-gray-700'
+                }`}
+                onClick={() => setActiveRoundId(round.id)}
+              >
+                <span className="text-[13px]">{round.name}</span>
+                {activeRoundId === round.id && <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-white" />}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-4 gap-4">
+          {summaryCards.map((card) => (
+            <div key={card.title} className={`${card.bgColor} p-5 rounded-sm shadow-sm border border-gray-100/80 relative overflow-hidden group hover:shadow-md transition-shadow`}>
+              <div className="relative z-10 flex flex-col py-1">
+                <span className="text-[13px] text-gray-500 mb-2">{card.title}</span>
+                <div className="flex items-baseline gap-3">
+                  <span className={`text-[32px] font-bold leading-none ${card.color}`}>{card.value}</span>
+                  <span className="text-[12px] text-gray-400 font-normal">{card.subValue}</span>
+                </div>
+              </div>
+              
+              {/* Decorative background elements like in Fig 1 */}
+              <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-gray-50/50 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+              {card.color !== 'text-gray-900' && (
+                <div className={`absolute top-0 right-0 w-1 h-full opacity-40 ${card.color.replace('text-', 'bg-')}`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Filters and Actions */}
+        <div className="bg-white p-3 rounded shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+                    <div className="relative w-80">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="搜索部门编码/名称/负责人/HRBP" 
+                        defaultValue={monitoringSearchTerm}
+                        onBlur={(e) => setMonitoringSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setMonitoringSearchTerm(e.currentTarget.value);
+                          }
+                        }}
+                        className="w-full pl-9 pr-12 py-1.5 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] bg-gray-50/50"
+                      />
+                      {monitoringSearchTerm && (
+                        <button 
+                          onClick={() => setMonitoringSearchTerm('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+            <button 
+              onClick={() => {
+                setMonitoringSearchTerm('');
+                setSelectedFilters({
+                  orgType: [],
+                  status: [],
+                  node: []
+                });
+              }}
+              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+            >
+              重置
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+              <Download size={14} />
+              导出
+            </button>
+            <button className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+              <Download size={14} />
+              批量导出表单
+            </button>
+            <button 
+              onClick={handleSendReminder}
+              className="px-4 py-1.5 bg-orange-50 border border-orange-200 text-orange-600 rounded text-[13px] hover:bg-orange-100 transition-colors flex items-center gap-1.5"
+            >
+              <Share2 size={14} className="rotate-90" />
+              发送提醒
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded shadow-sm border border-gray-100 overflow-x-auto">
+          <table className="w-full border-collapse min-w-[1000px]">
+            <thead>
+              <tr className="bg-gray-50/50 text-[12px] text-gray-500 border-b border-gray-100">
+                <th className="w-[48px] py-3 px-4 bg-gray-50/50">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb] cursor-pointer" 
+                    checked={selectedIds.length > 0 && selectedIds.length === getFilteredData().slice(0, 10).length}
+                    onChange={toggleSelectAll}
+                  />
+                </th>
+                <th className="w-[100px] py-3 px-4 font-medium text-left bg-gray-50/50 whitespace-nowrap">部门编码</th>
+                <th className="w-[200px] py-3 px-4 font-medium text-left bg-gray-50/50 whitespace-nowrap relative">
+                  <div className="flex items-center gap-1">
+                    部门名称
+                  </div>
+                </th>
+                <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
+                  <div className="flex items-center gap-1">
+                    组织类型
+                  </div>
+                </th>
+                <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
+                  <div className="flex items-center gap-1">
+                    组织层级
+                  </div>
+                </th>
+                <th className="w-[150px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
+                  <div className="flex items-center gap-1">
+                    当前办理节点
+                  </div>
+                </th>
+                <th className="w-[150px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
+                  <div className="flex items-center gap-1">
+                    当前办理人
+                  </div>
+                </th>
+                <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
+                  <div className="flex items-center gap-1">
+                    状态
+                  </div>
+                </th>
+                <th className="py-3 px-4 font-medium text-right sticky right-0 bg-gray-50 z-20 shadow-[-4px_0_8px_rgba(0,0,0,0.05)] whitespace-nowrap">操作</th>
+              </tr>
+            </thead>
+            <tbody className="text-[13px]">
+              {getFilteredData().slice(0, 10).map((row) => (
+                <tr key={row.id} className={`border-b border-gray-50 hover:bg-gray-50/30 transition-colors ${selectedIds.includes(row.id) ? 'bg-blue-50/20' : ''}`}>
+                  <td className="py-3 px-4 bg-transparent">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb] cursor-pointer" 
+                      checked={selectedIds.includes(row.id)}
+                      onChange={() => toggleSelectRow(row.id)}
+                    />
+                  </td>
+                  <td className="py-3 px-4 text-gray-600 font-mono bg-white whitespace-nowrap">{row.id}</td>
+                  <td className="py-3 px-4 font-medium text-gray-900 bg-white whitespace-nowrap">
+                    {row.path.replace('集团总部/', '')}
+                  </td>
+                  <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                    <span className="text-[13px]">{row.orgType}</span>
+                  </td>
+                  <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                    {row.level}
+                  </td>
+                  <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                    {row.currentNode === '-' ? (
+                      <span className="text-gray-300">-</span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[11px] border bg-blue-50 text-[#2f54eb] border-blue-100">
+                        {row.currentNode}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                    <span className="text-[13px]">{row.currentApprover}</span>
+                  </td>
+                  <td className="py-3 px-3 whitespace-nowrap">
+                    <span className={`px-2 py-0.5 rounded text-[11px] ${
+                      row.status === '已完成' ? 'bg-green-50 text-green-600 border border-green-100' :
+                      row.status === '进行中' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                      row.status === '滞留/超时' ? 'bg-red-50 text-red-600 border border-red-100' :
+                      'bg-gray-100 text-gray-500 border border-gray-200'
+                    }`}>
+                      {row.status}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right sticky right-0 bg-white z-10 shadow-[-4px_0_8px_rgba(0,0,0,0.05)] whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-3">
+                      <button 
+                        onClick={() => handleIntervention(row)}
+                        className="text-[#2f54eb] hover:underline whitespace-nowrap"
+                      >
+                        流程干预
+                      </button>
+                      <button 
+                        onClick={() => handleApprovalChain(row)}
+                        className="text-[#2f54eb] hover:underline whitespace-nowrap"
+                      >
+                        审批链
+                      </button>
+                      <button className="text-[#2f54eb] hover:underline whitespace-nowrap">查看表单</button>
+                      <button className="text-[#2f54eb] hover:underline whitespace-nowrap">导出表单</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-end gap-4 text-[12px] text-gray-500 py-2">
+          <span>第 1 页 / 共 3 页</span>
+          <div className="flex items-center gap-1">
+            <button className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-30" disabled>
+              <ChevronLeft size={12} />
+            </button>
+            <button className="w-6 h-6 flex items-center justify-center bg-[#2f54eb] text-white rounded shadow-sm">1</button>
+            <button className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50">2</button>
+            <button className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50">3</button>
+            <button className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50">
+              <ChevronRight size={12} />
+            </button>
+          </div>
+          <div className="relative">
+            <select className="border border-gray-200 rounded pl-2 pr-6 py-0.5 outline-none appearance-none bg-white cursor-pointer">
+              <option>10条/页</option>
+            </select>
+            <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+      </div>
+      </>
+      ) : (
+        <>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+            <div className="grid grid-cols-4 gap-4">
+              {planChangeSummaryCards.map((card) => (
+                <div
+                  key={card.title}
+                  className={`${card.bgColor} p-5 rounded-sm shadow-sm border border-gray-100/80 relative overflow-hidden group hover:shadow-md transition-shadow`}
+                >
+                  <div className="relative z-10 flex flex-col py-1">
+                    <span className="text-[13px] text-gray-500 mb-2">{card.title}</span>
+                    <div className="flex items-baseline gap-3">
+                      <span className={`text-[32px] font-bold leading-none ${card.color}`}>{card.value}</span>
+                      <span className="text-[12px] text-gray-400 font-normal">{card.subValue}</span>
+                    </div>
+                  </div>
+                  <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-gray-50/50 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
+                  {card.color !== 'text-gray-900' && (
+                    <div className={`absolute top-0 right-0 w-1 h-full opacity-40 ${card.color.replace('text-', 'bg-')}`} />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white p-3 rounded shadow-sm border border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="relative w-80">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="搜索部门编码/名称/负责人/HRBP"
+                    value={planChangeSearchTerm}
+                    onChange={(e) => setPlanChangeSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-10 py-1.5 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] bg-gray-50/50"
+                  />
+                  {planChangeSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setPlanChangeSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPlanChangeSearchTerm('')}
+                  className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  重置
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePlanChangeSendReminder}
+                  className="px-4 py-1.5 bg-orange-50 border border-orange-200 text-orange-600 rounded text-[13px] hover:bg-orange-100 transition-colors flex items-center gap-1.5"
+                >
+                  <Share2 size={14} className="rotate-90" />
+                  发送提醒
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded shadow-sm border border-gray-100 overflow-x-auto">
+              <table className="w-full border-collapse min-w-[1000px]">
+                <thead>
+                  <tr className="bg-gray-50/50 text-[12px] text-gray-500 border-b border-gray-100">
+                    <th className="w-[48px] py-3 px-4 bg-gray-50/50">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb] cursor-pointer"
+                        checked={
+                          planChangeSelectedIds.length > 0 &&
+                          planChangeSelectedIds.length === getPlanChangeFilteredRows().slice(0, 10).length
+                        }
+                        onChange={togglePlanChangeSelectAll}
+                      />
+                    </th>
+                    <th className="w-[100px] py-3 px-4 font-medium text-left bg-gray-50/50 whitespace-nowrap">部门编码</th>
+                    <th className="w-[200px] py-3 px-4 font-medium text-left bg-gray-50/50 whitespace-nowrap">部门名称</th>
+                    <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap">组织类型</th>
+                    <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap">组织层级</th>
+                    <th className="w-[150px] py-3 px-3 font-medium text-left whitespace-nowrap">当前办理节点</th>
+                    <th className="w-[150px] py-3 px-3 font-medium text-left whitespace-nowrap">当前办理人</th>
+                    <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap">状态</th>
+                    <th className="py-3 px-4 font-medium text-right sticky right-0 bg-gray-50 z-20 shadow-[-4px_0_8px_rgba(0,0,0,0.05)] whitespace-nowrap">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="text-[13px]">
+                  {getPlanChangeFilteredRows()
+                    .slice(0, 10)
+                    .map((row) => (
+                      <tr
+                        key={row.id}
+                        className={`border-b border-gray-50 hover:bg-gray-50/30 transition-colors ${
+                          planChangeSelectedIds.includes(row.id) ? 'bg-blue-50/20' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-4 bg-transparent">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb] cursor-pointer"
+                            checked={planChangeSelectedIds.includes(row.id)}
+                            onChange={() => togglePlanChangeSelectRow(row.id)}
+                          />
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 font-mono bg-white whitespace-nowrap">{row.id}</td>
+                        <td className="py-3 px-4 font-medium text-gray-900 bg-white whitespace-nowrap">
+                          {row.path.replace('集团总部/', '')}
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                          <span className="text-[13px]">{row.orgType}</span>
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{row.level}</td>
+                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                          {row.currentNode === '-' ? (
+                            <span className="text-gray-300">-</span>
+                          ) : row.currentNode === '已归档' ? (
+                            <span className="px-2 py-0.5 rounded text-[11px] border bg-gray-100 text-gray-600 border-gray-200">
+                              {row.currentNode}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[11px] border bg-blue-50 text-[#2f54eb] border-blue-100">
+                              {row.currentNode}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
+                          <span className="text-[13px]">{row.currentApprover}</span>
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] ${
+                              row.status === '已完成'
+                                ? 'bg-green-50 text-green-600 border border-green-100'
+                                : row.status === '进行中'
+                                  ? 'bg-blue-50 text-blue-600 border border-blue-100'
+                                  : row.status === '滞留/超时'
+                                    ? 'bg-red-50 text-red-600 border border-red-100'
+                                    : 'bg-gray-100 text-gray-500 border border-gray-200'
+                            }`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right sticky right-0 bg-white z-10 shadow-[-4px_0_8px_rgba(0,0,0,0.05)] whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => handleIntervention(row)}
+                              className="text-[#2f54eb] hover:underline whitespace-nowrap"
+                            >
+                              流程干预
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleApprovalChain(row)}
+                              className="text-[#2f54eb] hover:underline whitespace-nowrap"
+                            >
+                              审批链
+                            </button>
+                            <button type="button" className="text-[#2f54eb] hover:underline whitespace-nowrap">
+                              查看表单
+                            </button>
+                            <button type="button" className="text-[#2f54eb] hover:underline whitespace-nowrap">
+                              导出表单
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-end gap-4 text-[12px] text-gray-500 py-2">
+              <span>第 1 页 / 共 3 页</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-30"
+                  disabled
+                >
+                  <ChevronLeft size={12} />
+                </button>
+                <button
+                  type="button"
+                  className="w-6 h-6 flex items-center justify-center bg-[#2f54eb] text-white rounded shadow-sm"
+                >
+                  1
+                </button>
+                <button type="button" className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50">
+                  2
+                </button>
+                <button type="button" className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50">
+                  3
+                </button>
+                <button type="button" className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50">
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+              <div className="relative">
+                <select className="border border-gray-200 rounded pl-2 pr-6 py-0.5 outline-none appearance-none bg-white cursor-pointer">
+                  <option>10条/页</option>
+                </select>
+                <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <AnimatePresence>
+        {isSendMessageDrawerOpen && (
+          <SendMessageReminderDrawer 
+            isOpen={isSendMessageDrawerOpen}
+            onClose={() => setIsSendMessageDrawerOpen(false)}
+            selectedCount={monitoringViewTab === '考核流程监控' ? selectedIds.length : planChangeSelectedIds.length}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isInterventionModalOpen && (
+          <ProcessInterventionModal 
+            isOpen={isInterventionModalOpen} 
+            onClose={() => setIsInterventionModalOpen(false)} 
+            data={selectedRow}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isApprovalChainModalOpen && (
+          <ApprovalChainModal 
+            isOpen={isApprovalChainModalOpen} 
+            onClose={() => setIsApprovalChainModalOpen(false)} 
+            data={selectedRow}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[1000] bg-white border border-gray-100 shadow-xl rounded-full px-6 py-2.5 flex items-center gap-3"
+          >
+            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white">
+              <Info size={12} />
+            </div>
+            <span className="text-[14px] text-gray-700 font-medium">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// --- 发送消息提醒抽屉组件 ---
+const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
+  const [formData, setFormData] = useState<{
+    scope: string;
+    receivers: string[];
+    methods: string[];
+    methodTemplates: { [key: string]: string };
+    title: string;
+    content: string;
+  }>({
+    scope: '全部',
+    receivers: ['当前审批人'],
+    methods: ['企微消息'],
+    methodTemplates: {
+      '企微消息': ''
+    },
+    title: '',
+    content: ''
+  });
+
+  const availableParams = ['员工姓名', '直接上级姓名', '员工部门', '考核周期', '阶段窗口期开始日期', '阶段窗口期结束日期', '节点窗口期开始日期', '节点窗口期结束日期'];
+
+  const insertParam = (param: string) => {
+    setFormData(prev => ({
+      ...prev,
+      content: prev.content + `@${param} `
+    }));
+  };
+
+  const methodOptions = [
+    { id: '企微消息', label: '发企微', icon: <MessageCircle size={18} /> }
+  ];
+  const [activeMethodTab, setActiveMethodTab] = useState(methodOptions[0].id);
+
+  const templateMockData: { [key: string]: { title: string, content: string } } = {
+    'default': {
+      title: '【待办提醒】关于绩效考核流程处理通知',
+      content: '您处理的项目 {@考核周期} 已经开始，请于 {@节点窗口期结束日期} 前完成 {@考核阶段} 处理。\n点击查看详情：${系统链接}'
+    },
+    'timeout': {
+      title: '【超时提醒】绩效考核节点已逾期',
+      content: '您处理的项目 {@考核周期} 的 {@考核阶段} 已于 {@节点窗口期结束日期} 到期，目前处于逾期状态，请尽快处理。\n点击查看详情：${系统链接}'
+    },
+    'mail_urgent': {
+      title: '【紧急任务】请尽快处理您的绩效考核待办',
+      content: '紧急通知：您在 {@考核周期} 中的考核任务即将关闭。请务必在 {@阶段窗口期结束日期} 之前登录系统完成。'
+    },
+    '': {
+      title: '（未选择模板）',
+      content: '请在上方选择消息模板以预览具体内容'
+    }
+  };
+
+  const toggleMethod = (method: string) => {
+    setFormData(prev => {
+      const isRemoving = prev.methods.includes(method);
+      const newMethods = isRemoving 
+        ? prev.methods.filter(m => m !== method) 
+        : [...prev.methods, method];
+      
+      // Keep at least one method
+      if (newMethods.length === 0) return prev;
+
+      // Update active tab if removing active one
+      if (isRemoving && activeMethodTab === method) {
+        setActiveMethodTab(newMethods[0]);
+      } else if (!isRemoving && prev.methods.length === 0) {
+        setActiveMethodTab(method);
+      }
+
+      return {
+        ...prev,
+        methods: newMethods,
+        methodTemplates: {
+          ...prev.methodTemplates,
+          [method]: isRemoving ? '' : prev.methodTemplates[method]
+        }
+      };
+    });
+  };
+
+  const updateMethodTemplate = (method: string, template: string) => {
+    setFormData(prev => ({
+      ...prev,
+      methodTemplates: {
+        ...prev.methodTemplates,
+        [method]: template
+      }
+    }));
+  };
+
+  const templateOptions = [
+    { value: 'default', label: '默认催办模板' },
+    { value: 'timeout', label: '超时提醒模板' },
+    { value: 'mail_urgent', label: '紧急通知模板' }
+  ];
+
+  const [searchTerms, setSearchTerms] = useState<{ [key: string]: string }>({
+    '企微消息': ''
+  });
+
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+
+  const getFilteredOptions = (methodId: string) => {
+    const term = searchTerms[methodId].toLowerCase();
+    const options = templateOptions.filter(o => o.value !== 'mail_urgent');
+    return options.filter(o => o.label.toLowerCase().includes(term));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[500] flex justify-end overflow-hidden">
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <motion.div 
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="relative bg-white w-full max-w-[800px] shadow-2xl flex flex-col h-full"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h2 className="text-[17px] font-bold text-gray-900">发送消息提醒</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+          {/* Section: Configuration Hub */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-5 bg-[#2f54eb] rounded-full"></div>
+                <h3 className="text-[16px] font-bold text-gray-900">发送配置</h3>
+              </div>
+              <div className="px-3 py-1 bg-blue-50 border border-blue-100 rounded-lg">
+                <div className="flex items-center gap-2 text-[#2f54eb] text-[12px] font-medium">
+                  <MessageCircle size={14} />
+                  <span>当前发送方式：固定为企微消息</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50/50 border border-gray-100 rounded-xl p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white border border-blue-100 flex items-center justify-center text-[#2f54eb] shadow-sm">
+                  <MessageCircle size={22} />
+                </div>
+                <div>
+                  <div className="text-[14px] font-bold text-gray-900">企微消息通知</div>
+                  <div className="text-[12px] text-gray-500">将通过企业微信工作通知发送给相关人员</div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <div className="text-[13px] font-medium text-gray-700 mb-2">选择消息模板</div>
+                <div className="relative max-w-md">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenDropdown(openDropdown === '企微消息' ? null : '企微消息');
+                    }}
+                    className={`w-full h-10 px-3 flex items-center justify-between text-[13px] bg-white border rounded-lg shadow-sm hover:border-[#2f54eb] transition-all
+                      ${openDropdown === '企微消息' ? 'border-[#2f54eb] ring-2 ring-blue-50' : 'border-gray-200'}
+                      ${!formData.methodTemplates['企微消息'] ? 'text-gray-400 italic' : 'text-gray-700'}
+                    `}
+                  >
+                    <span className="truncate">
+                      {templateOptions.find(t => t.value === formData.methodTemplates['企微消息'])?.label || '点击选择消息通知模板...'}
+                    </span>
+                    <ChevronDown size={14} className={`transition-transform duration-200 ${openDropdown === '企微消息' ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {openDropdown === '企微消息' && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 4, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                        className="absolute top-full left-0 right-0 bg-white border border-gray-100 shadow-xl rounded-xl overflow-hidden flex flex-col z-[100]"
+                      >
+                        <div className="p-2.5 border-b border-gray-50 flex items-center gap-2 bg-gray-50">
+                          <Search size={14} className="text-gray-400 shrink-0" />
+                          <input 
+                            autoFocus
+                            placeholder="搜索模板名称..."
+                            className="bg-transparent text-[12px] outline-none w-full py-1"
+                            value={searchTerms['企微消息']}
+                            onChange={(e) => setSearchTerms(p => ({ ...p, ['企微消息']: e.target.value }))}
+                          />
+                        </div>
+                        <div className="max-h-60 overflow-y-auto py-1">
+                          {getFilteredOptions('企微消息').map(tmpl => (
+                            <div
+                              key={tmpl.value}
+                              onClick={() => {
+                                updateMethodTemplate('企微消息', tmpl.value);
+                                setOpenDropdown(null);
+                              }}
+                              className={`px-4 py-2.5 text-[13px] cursor-pointer flex items-center justify-between transition-colors
+                                ${formData.methodTemplates['企微消息'] === tmpl.value ? 'bg-blue-50 text-[#2f54eb] font-medium' : 'text-gray-600 hover:bg-gray-50'}
+                              `}
+                            >
+                              <span>{tmpl.label}</span>
+                              {formData.methodTemplates['企微消息'] === tmpl.value && <FileCheck size={14} />}
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </div>
+          </div>
+
+
+          {/* Section: Template Information */}
+          <div className="space-y-6 pt-6 border-t border-gray-100 pb-10">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-4 bg-[#2f54eb] rounded-full"></div>
+                <h3 className="text-[15px] font-bold text-gray-900">模板信息内容预监</h3>
+              </div>
+              <div className="text-[12px] text-gray-400 bg-gray-50 px-3 py-1 rounded-full flex items-center gap-1.5 border border-gray-100">
+                <Info size={12} />
+                <span>下方内容仅用于内容预览，由所选模板生成，不可编辑</span>
+              </div>
+            </div>
+
+            {/* Tabs for Methods */}
+            <div className="border-b border-gray-100 flex gap-8">
+              {formData.methods.map(method => (
+                <button
+                  key={method}
+                  onClick={() => setActiveMethodTab(method)}
+                  className={`pb-3 text-[14px] relative transition-all duration-300 ${
+                    activeMethodTab === method 
+                      ? 'text-[#2f54eb] font-bold' 
+                      : 'text-gray-400 hover:text-gray-600 font-medium'
+                  }`}
+                >
+                  {method}
+                  {activeMethodTab === method && (
+                    <motion.div 
+                      layoutId="activeTabUnderline"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#2f54eb] rounded-full"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Preview Content */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeMethodTab + (formData.methodTemplates[activeMethodTab] || '')}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-6 p-6 bg-gray-50/50 rounded-xl border border-gray-100"
+              >
+                <div className="space-y-2">
+                  <label className="text-[13px] text-gray-400 font-medium ml-1">消息标题</label>
+                  <div className="px-4 py-3 bg-white border border-gray-100 rounded-lg text-[14px] text-gray-700 font-medium shadow-sm">
+                    {templateMockData[formData.methodTemplates[activeMethodTab] || ''].title || '（未配置标题）'}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[13px] text-gray-400 font-medium ml-1">
+                    消息详细内容 <span className="text-[11px] bg-blue-50 text-blue-400 px-1.5 py-0.5 rounded ml-2 font-normal">内容已根据参数自动填充</span>
+                  </label>
+                  <div className="px-4 py-4 bg-white border border-gray-100 rounded-lg text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap min-h-[120px] shadow-sm">
+                    {templateMockData[formData.methodTemplates[activeMethodTab] || ''].content}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <span className="text-[11px] text-gray-400 w-full mb-1 ml-1">关联参数标识：</span>
+                  {availableParams.filter(p => templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`@${p}`) || templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`{${p}}`)).map(p => (
+                    <span key={p} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px] border border-gray-200/50">
+                      @{p}
+                    </span>
+                  ))}
+                  {availableParams.filter(p => templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`@${p}`) || templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`{${p}}`)).length === 0 && (
+                    <span className="text-[11px] text-gray-300 italic ml-1">无关联参数</span>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+          <button onClick={onClose} className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50">
+            取消
+          </button>
+          <button className="px-6 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8] shadow-sm shadow-blue-200">
+            确定
+          </button>
+        </div>
+
+        <button className="absolute right-[-48px] bottom-32 w-12 h-12 bg-white rounded-l-xl shadow-[-4px_0_12px_rgba(0,0,0,0.05)] border border-gray-100 border-r-0 flex items-center justify-center text-gray-400 group">
+          <Share2 size={24} className="-rotate-45 group-hover:text-blue-500 transition-colors" />
+        </button>
+      </motion.div>
+    </div>
+  );
+};
+
+/** 通知规则「消息模板」下拉项对应的预览正文（占位符展示为字面量） */
+const NOTIFICATION_TEMPLATE_PREVIEW_BODIES: Record<string, string> = {
+  绩效目标制定通知:
+    '您好，${employeeName}：当前已进入绩效计划制定阶段，请于 ${deadlineDate} 前在系统中完成本周期绩效目标的制定与提交。如有疑问请联系您的直属上级或 HR。',
+  默认通知模板:
+    '回首过去，拼搏与汗水，换来今天的喜悦与收获，总结过去，勤奋加努力，得来今天的幸福与成功；亲爱的${hhrEmpName}，今天是您入司${number}周年纪念日，宇通愿您扬帆起航，创造更加精彩的明天！',
+  绩效方案启动通知:
+    '各位同事：${cycleName} 绩效方案已正式启动，请登录绩效系统查看方案说明与时间安排。启动时间：${startDate}。',
+  绩效考核提醒:
+    '您好，${employeeName}：${cycleName} 绩效考核正在进行中，请于 ${deadlineDate} 前完成自评/提交相关材料，逾期可能影响考核进度。',
+};
+
+// --- 通知规则方案抽屉组件 ---
+const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
+  const [activePhase, setActivePhase] = useState('绩效计划制定');
+  const [openRecipientDropdownId, setOpenRecipientDropdownId] = useState<string | null>(null);
+  const [openMethodsDropdownId, setOpenMethodsDropdownId] = useState<string | null>(null);
+  const [templatePreview, setTemplatePreview] = useState<{ title: string; body: string } | null>(null);
+
+  const createDefaultRule = (id: string, template: string) => ({
+    id,
+    baseDay: '阶段开始日',
+    direction: '向后',
+    days: 1,
+    isWorkDay: true,
+    frequency: '仅发送一次',
+    time: '09:00',
+    interval: '-',
+    recipients: ['员工'],
+    methods: ['企微'],
+    template,
+    deadline: ''
+  });
+
+  const [formData, setFormData] = useState<any>({
+    name: '',
+    description: '',
+    phases: {
+      '绩效计划制定': [createDefaultRule('init-1', '绩效目标制定通知')],
+      '绩效中期回顾': [createDefaultRule('init-2', '绩效中期回顾通知')],
+      '绩效考核': [createDefaultRule('init-3', '绩效考核启动通知')]
+    }
+  });
+
+  const phases = ['绩效计划制定', '绩效中期回顾', '绩效考核'];
+
+  useEffect(() => {
+    const ensureMethods = (rules: any[]) =>
+      rules.map((r: any) => ({
+        ...r,
+        methods: Array.isArray(r.methods) && r.methods.length > 0 ? r.methods : ['企微'],
+      }));
+    if (data) {
+      const rawPhases = data.phases || {
+        '绩效计划制定': [createDefaultRule('init-1', '绩效目标制定通知')],
+        '绩效中期回顾': [createDefaultRule('init-2', '绩效中期回顾通知')],
+        '绩效考核': [createDefaultRule('init-3', '绩效考核启动通知')]
+      };
+      setFormData({
+        name: data.name || '',
+        description: data.description || '',
+        phases: Object.fromEntries(
+          Object.entries(rawPhases).map(([k, rules]) => [k, ensureMethods(rules as any[])])
+        ),
+      });
+    } else {
+      const now = Date.now().toString();
+      setFormData({
+        name: '',
+        description: '',
+        phases: {
+          '绩效计划制定': [createDefaultRule(now + '1', '绩效目标制定通知')],
+          '绩效中期回顾': [createDefaultRule(now + '2', '绩效中期回顾通知')],
+          '绩效考核': [createDefaultRule(now + '3', '绩效考核启动通知')]
+        }
+      });
+    }
+  }, [data, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) setTemplatePreview(null);
+  }, [isOpen]);
+
+  const handleRemoveRule = (id: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      phases: {
+        ...prev.phases,
+        [activePhase]: prev.phases[activePhase].filter((r: any) => r.id !== id)
+      }
+    }));
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/20 z-[100]" onClick={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        className="fixed top-0 right-0 h-full w-[1200px] bg-[#f8f9fa] shadow-2xl z-[101] flex flex-col"
+      >
+        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100">
+          <h2 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}通知规则</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
+            <X size={20} className="text-gray-400" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8 space-y-10 pb-32">
+          {/* 基本信息 */}
+          <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-6">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+              <h3 className="text-[14px] font-bold text-gray-900">基本信息</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-2">
+                <label className="text-[13px] text-gray-600 flex items-center gap-1">
+                  规则名称 <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  placeholder="请输入规则名称"
+                  className="w-full border border-gray-200 rounded px-4 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[13px] text-gray-600">规则说明</label>
+                <textarea 
+                  placeholder="请输入规则说明"
+                  rows={3}
+                  className="w-full border border-gray-200 rounded px-4 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white resize-none"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* 阶段通知配置 */}
+          <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                <h3 className="text-[14px] font-bold text-gray-900">阶段通知配置</h3>
+              </div>
+            </div>
+
+            {/* 页签交互 */}
+            <div className="flex border-b border-gray-100 mb-6">
+              {phases.map(phase => (
+                <button
+                  key={phase}
+                  onClick={() => {
+                    setOpenRecipientDropdownId(null);
+                    setOpenMethodsDropdownId(null);
+                    setActivePhase(phase);
+                  }}
+                  className={`px-6 py-3 text-[13px] font-medium transition-all relative ${
+                    activePhase === phase ? 'text-[#2f54eb]' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {phase}
+                  {activePhase === phase && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border border-blue-100 bg-blue-50/40 px-4 py-3 text-[12px] text-gray-600 leading-relaxed mb-4">
+              <Info size={14} className="text-[#2f54eb] shrink-0 mt-0.5" />
+              <span>本规则中的通知统一通过<strong className="text-gray-800">企业微信（企微）</strong>发送。</span>
+            </div>
+
+            <div className="overflow-x-auto border border-gray-100 rounded-lg">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50">
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 min-w-[100px]">通知基准日</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 w-[100px]">偏移方向</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 w-[80px]">天数</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 w-[120px]">提醒频率</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 w-[120px]">发送时间</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 w-[80px]">每隔天数</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 min-w-[150px]">接收对象</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 min-w-[130px]">接收方式</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 min-w-[150px]">消息模板</th>
+                    <th className="px-3 py-4 text-[12px] font-bold text-gray-500 text-center w-[80px]">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {(formData.phases[activePhase] || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="px-6 py-12 text-center text-[13px] text-gray-400">暂无配置规则</td>
+                    </tr>
+                  ) : (
+                    formData.phases[activePhase].map((rule: any) => (
+                      <tr key={rule.id} className="hover:bg-gray-50/30 transition-colors">
+                        <td className="px-3 py-4">
+                          <select 
+                            className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] outline-none bg-white focus:border-[#2f54eb]"
+                            defaultValue={rule.baseDay || "阶段开始日"}
+                            onChange={(e) => {
+                              const newPhases = { ...formData.phases };
+                              newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                r2.id === rule.id ? { ...r2, baseDay: e.target.value } : r2
+                              );
+                              setFormData({ ...formData, phases: newPhases });
+                            }}
+                          >
+                            <option>阶段开始日</option>
+                            <option>阶段结束日</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-4">
+                          <select className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] outline-none bg-white focus:border-[#2f54eb]">
+                            <option>向后</option>
+                            <option>向前</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-4">
+                          <input 
+                            type="text" 
+                            className="w-full border border-gray-200 rounded px-2 py-1.5 text-[13px] outline-none bg-white text-center focus:border-[#2f54eb]" 
+                            defaultValue="1" 
+                          />
+                        </td>
+                        <td className="px-3 py-4">
+                          <select 
+                            className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] outline-none bg-white focus:border-[#2f54eb]"
+                            defaultValue={rule.frequency}
+                            onChange={(e) => {
+                              const newPhases = { ...formData.phases };
+                              newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                r2.id === rule.id ? { ...r2, frequency: e.target.value } : r2
+                              );
+                              setFormData({ ...formData, phases: newPhases });
+                            }}
+                          >
+                            <option>仅发送一次</option>
+                            <option>每天发送</option>
+                            <option>按间隔天数</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-4">
+                          <input 
+                            type="text" 
+                            className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] outline-none bg-white font-mono focus:border-[#2f54eb]" 
+                            defaultValue={rule.time || "09:00"} 
+                          />
+                        </td>
+                        <td className="px-3 py-4 text-center">
+                          {rule.frequency === '按间隔天数' ? (
+                            <input 
+                              type="text" 
+                              className="w-[60px] border border-gray-200 rounded px-2 py-1.5 text-[13px] outline-none bg-white text-center focus:border-[#2f54eb]" 
+                              defaultValue={rule.interval === '-' ? '1' : rule.interval}
+                              onChange={(e) => {
+                                const newPhases = { ...formData.phases };
+                                newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                  r2.id === rule.id ? { ...r2, interval: e.target.value } : r2
+                                );
+                                setFormData({ ...formData, phases: newPhases });
+                              }}
+                            />
+                          ) : (
+                            <span className="text-gray-400 text-[13px]">-</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-4">
+                          <div className="relative">
+                            <div 
+                              onClick={() => {
+                                setOpenMethodsDropdownId(null);
+                                setOpenRecipientDropdownId(openRecipientDropdownId === rule.id ? null : rule.id);
+                              }}
+                              className="w-full border border-gray-200 rounded px-2 py-1 min-h-[32px] flex items-center gap-1.5 bg-white cursor-pointer hover:border-blue-300"
+                            >
+                              {rule.recipients.map((r: string) => (
+                                <span key={r} className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] text-[12px] rounded border border-blue-100 font-medium whitespace-nowrap flex items-center gap-1">
+                                  {r === '员工' ? '员工本人' : r}
+                                  <X 
+                                    size={10} 
+                                    className="cursor-pointer hover:text-red-500" 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const newPhases = { ...formData.phases };
+                                      newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                        r2.id === rule.id ? { ...r2, recipients: r2.recipients.filter((item: string) => item !== r) } : r2
+                                      );
+                                      setFormData({ ...formData, phases: newPhases });
+                                    }}
+                                  />
+                                </span>
+                              ))}
+                              {rule.recipients.length === 0 && <span className="text-gray-300 text-[13px]">请选择</span>}
+                              <ChevronDown size={14} className="ml-auto text-gray-400" />
+                            </div>
+
+                            {/* 接收对象下拉框 */}
+                            {openRecipientDropdownId === rule.id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={() => setOpenRecipientDropdownId(null)} />
+                                <div className="absolute top-full left-0 mt-1 w-[220px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200">
+                                  <div className="flex border-b border-gray-100 pb-2 mb-2 gap-3 px-1">
+                                    <button 
+                                      onClick={() => {
+                                        const newPhases = { ...formData.phases };
+                                        newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                          r2.id === rule.id ? { ...r2, recipients: ['员工', '直接上级', '隔级上级'] } : r2
+                                        );
+                                        setFormData({ ...formData, phases: newPhases });
+                                      }}
+                                      className="text-[12px] text-[#2f54eb] hover:opacity-80"
+                                    >
+                                      全选
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        const newPhases = { ...formData.phases };
+                                        const all = ['员工', '直接上级', '隔级上级'];
+                                        newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                          r2.id === rule.id ? { ...r2, recipients: all.filter(a => !r2.recipients.includes(a)) } : r2
+                                        );
+                                        setFormData({ ...formData, phases: newPhases });
+                                      }}
+                                      className="text-[12px] text-[#2f54eb] hover:opacity-80"
+                                    >
+                                      反选
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        const newPhases = { ...formData.phases };
+                                        newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                          r2.id === rule.id ? { ...r2, recipients: [] } : r2
+                                        );
+                                        setFormData({ ...formData, phases: newPhases });
+                                      }}
+                                      className="text-[12px] text-[#2f54eb] hover:opacity-80"
+                                    >
+                                      无
+                                    </button>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {['员工', '直接上级', '隔级上级'].map(opt => (
+                                      <label key={opt} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer group">
+                                        <input 
+                                          type="checkbox" 
+                                          checked={rule.recipients.includes(opt)}
+                                          onChange={(e) => {
+                                            const newPhases = { ...formData.phases };
+                                            const currentRecipients = rule.recipients;
+                                            const updated = e.target.checked 
+                                              ? [...currentRecipients, opt]
+                                              : currentRecipients.filter((i: string) => i !== opt);
+                                            newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
+                                              r2.id === rule.id ? { ...r2, recipients: updated } : r2
+                                            );
+                                            setFormData({ ...formData, phases: newPhases });
+                                          }}
+                                          className="w-3.5 h-3.5 accent-[#2f54eb]" 
+                                        />
+                                        <span className="text-[13px] text-gray-600 group-hover:text-[#2f54eb]">{opt === '员工' ? '员工本人' : opt}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4">
+                          <div className="relative">
+                            <div
+                              onClick={() => {
+                                setOpenRecipientDropdownId(null);
+                                setOpenMethodsDropdownId(openMethodsDropdownId === rule.id ? null : rule.id);
+                              }}
+                              className="w-full border border-gray-200 rounded px-2 py-1 min-h-[32px] flex items-center gap-1.5 bg-white cursor-pointer hover:border-blue-300"
+                            >
+                              {(() => {
+                                const methodList = Array.isArray(rule.methods) && rule.methods.length > 0 ? rule.methods : [];
+                                if (methodList.length === 0) {
+                                  return <span className="text-gray-300 text-[13px]">请选择</span>;
+                                }
+                                return methodList.map((m: string) => (
+                                <span
+                                  key={m}
+                                  className="px-2 py-0.5 bg-green-50 text-green-700 text-[12px] rounded border border-green-100 font-medium whitespace-nowrap flex items-center gap-1"
+                                >
+                                  {m}
+                                  <X
+                                    size={10}
+                                    className="cursor-pointer hover:text-red-500"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const newPhases = { ...formData.phases };
+                                      newPhases[activePhase] = newPhases[activePhase].map((r2: any) =>
+                                        r2.id === rule.id
+                                          ? { ...r2, methods: (r2.methods || []).filter((item: string) => item !== m) }
+                                          : r2
+                                      );
+                                      setFormData({ ...formData, phases: newPhases });
+                                    }}
+                                  />
+                                </span>
+                                ));
+                              })()}
+                              <ChevronDown size={14} className="ml-auto text-gray-400" />
+                            </div>
+                            {openMethodsDropdownId === rule.id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={() => setOpenMethodsDropdownId(null)} />
+                                <div className="absolute top-full left-0 mt-1 w-[200px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200">
+                                  <div className="space-y-1">
+                                    {['企微'].map((opt) => (
+                                      <label
+                                        key={opt}
+                                        className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer group"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={Array.isArray(rule.methods) && rule.methods.includes(opt)}
+                                          onChange={(e) => {
+                                            const newPhases = { ...formData.phases };
+                                            const current = Array.isArray(rule.methods) ? rule.methods : [];
+                                            const updated = e.target.checked
+                                              ? [...current, opt].filter((v, i, a) => a.indexOf(v) === i)
+                                              : current.filter((i: string) => i !== opt);
+                                            newPhases[activePhase] = newPhases[activePhase].map((r2: any) =>
+                                              r2.id === rule.id ? { ...r2, methods: updated } : r2
+                                            );
+                                            setFormData({ ...formData, phases: newPhases });
+                                          }}
+                                          className="w-3.5 h-3.5 accent-[#2f54eb]"
+                                        />
+                                        <span className="text-[13px] text-gray-600 group-hover:text-[#2f54eb]">{opt}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4">
+                          <select 
+                            className="w-full border border-gray-200 rounded px-3 py-1.5 text-[13px] outline-none bg-white focus:border-[#2f54eb]"
+                            value={rule.template || '绩效目标制定通知'}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              const newPhases = { ...formData.phases };
+                              newPhases[activePhase] = newPhases[activePhase].map((r2: any) =>
+                                r2.id === rule.id ? { ...r2, template: v } : r2
+                              );
+                              setFormData({ ...formData, phases: newPhases });
+                            }}
+                          >
+                            <option>绩效目标制定通知</option>
+                            <option>默认通知模板</option>
+                            <option>绩效方案启动通知</option>
+                            <option>绩效考核提醒</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-4">
+                          <div className="flex items-center justify-center gap-3">
+                             <button
+                               type="button"
+                               className="flex items-center gap-1 text-[#2f54eb] hover:opacity-80 transition-all cursor-pointer"
+                               onClick={() => {
+                                 const name = rule.template || '绩效目标制定通知';
+                                 const body =
+                                   NOTIFICATION_TEMPLATE_PREVIEW_BODIES[name] ||
+                                   NOTIFICATION_TEMPLATE_PREVIEW_BODIES['绩效目标制定通知'];
+                                 setTemplatePreview({
+                                   title: `模板预览 - ${name}`,
+                                   body,
+                                 });
+                               }}
+                             >
+                               <Eye size={14} />
+                               <span className="text-[12px]">预览</span>
+                             </button>
+                             <button 
+                               onClick={() => {
+                                 const newPhases = { ...formData.phases };
+                                 newPhases[activePhase] = newPhases[activePhase].filter((r: any) => r.id !== rule.id);
+                                 setFormData({ ...formData, phases: newPhases });
+                               }}
+                               className="flex items-center gap-1 text-red-300 hover:text-red-500 transition-all cursor-pointer"
+                             >
+                               <Trash2 size={14} />
+                             </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 添加按钮 - 对应红框位置 */}
+            <div className="mt-4 px-1">
+              <button 
+                onClick={() => {
+                  const newPhases = { ...formData.phases };
+                  newPhases[activePhase] = [
+                    ...(newPhases[activePhase] || []),
+                    {
+                      id: Date.now().toString(),
+                      frequency: '仅发送一次',
+                      time: '09:00',
+                      recipients: ['员工'],
+                      methods: ['企微'],
+                      template: '绩效目标制定通知'
+                    }
+                  ];
+                  setFormData({ ...formData, phases: newPhases });
+                }}
+                className="w-full py-2 border border-dashed border-gray-200 rounded text-gray-400 hover:border-[#2f54eb] hover:text-[#2f54eb] hover:bg-blue-50/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Plus size={16} />
+                <span className="text-[13px]">添加规则</span>
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {/* 底部按钮吸底 - 靠左对齐 */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex items-center justify-start gap-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <button 
+            onClick={() => onSave(formData)}
+            className="px-8 py-2 bg-[#2f54eb] text-white rounded text-[14px] font-medium hover:bg-blue-600 transition-all cursor-pointer shadow-sm shadow-blue-100"
+          >
+            确定
+          </button>
+          <button 
+            onClick={onClose}
+            className="px-8 py-2 border border-gray-200 text-gray-600 rounded text-[14px] font-medium hover:bg-gray-50 transition-all cursor-pointer"
+          >
+            取消
+          </button>
+        </div>
+      </motion.div>
+
+      {templatePreview && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50 border-0 cursor-default"
+            aria-label="关闭预览"
+            onClick={() => setTemplatePreview(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-[221] w-full max-w-lg rounded-xl bg-white shadow-2xl border border-gray-100 overflow-hidden"
+          >
+            <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100 bg-white">
+              <h3 className="text-[15px] font-bold text-gray-900 truncate pr-2">{templatePreview.title}</h3>
+              <button
+                type="button"
+                onClick={() => setTemplatePreview(null)}
+                className="p-1.5 shrink-0 rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors cursor-pointer"
+                aria-label="关闭"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[min(70vh,520px)] overflow-y-auto px-5 py-5 text-[14px] text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {templatePreview.body}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+const GradeRangeDrawer = ({ isOpen, onClose, data, onSave }: any) => {
+  const [formData, setFormData] = useState<any>({
+    name: '',
+    description: '',
+    ranges: [
+      { id: '1', grade: 'S', min: '4.75', max: '5.00' }
+    ],
+    roundingRule: 'round' // round, up, floor
+  });
+
+  useEffect(() => {
+    if (data) {
+      setFormData({
+        name: data.name || '',
+        description: data.description || '',
+        ranges: data.ranges && data.ranges.length > 0 ? data.ranges : [{ id: Date.now().toString(), grade: 'S', min: '', max: '' }],
+        roundingRule: data.roundingRule || 'round'
+      });
+    } else {
+      setFormData({
+        name: '',
+        description: '',
+        ranges: [{ id: Date.now().toString(), grade: 'S', min: '', max: '' }],
+        roundingRule: 'round'
+      });
+    }
+  }, [data, isOpen]);
+
+  const handleAddRow = () => {
+    setFormData((prev: any) => ({
+      ...prev,
+      ranges: [...prev.ranges, { id: Date.now().toString(), grade: '', min: '', max: '' }]
+    }));
+  };
+
+  const handleRemoveRow = (id: string) => {
+    if (formData.ranges.length <= 1) return;
+    setFormData((prev: any) => ({
+      ...prev,
+      ranges: prev.ranges.filter((r: any) => r.id !== id)
+    }));
+  };
+
+  const handleUpdateRow = (id: string, field: string, value: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      ranges: prev.ranges.map((r: any) => r.id === id ? { ...r, [field]: value } : r)
+    }));
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/20 z-[100]" onClick={onClose} />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        className="fixed top-0 right-0 h-full w-[800px] bg-[#f8f9fa] shadow-2xl z-[101] flex flex-col"
+      >
+        <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100">
+          <h2 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}等级分数区间规则</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
+            <X size={20} className="text-gray-400" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8 space-y-10 pb-32">
+          {/* 基本信息 */}
+          <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-6">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+              <h3 className="text-[14px] font-bold text-gray-900">基本信息</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-2">
+                <label className="text-[13px] text-gray-600 flex items-center gap-1">
+                  规则名称 <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  placeholder="请输入规则名称"
+                  className="w-full border border-gray-200 rounded px-4 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[13px] text-gray-600">规则说明</label>
+                <textarea 
+                  placeholder="请输入规则说明"
+                  rows={4}
+                  className="w-full border border-gray-200 rounded px-4 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white resize-none"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* 等级分数区间 */}
+          <section className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm space-y-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                <h3 className="text-[14px] font-bold text-gray-900">等级分数区间</h3>
+              </div>
+              <button 
+                onClick={handleAddRow}
+                className="flex items-center gap-1.5 px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>添加行</span>
+              </button>
+            </div>
+
+            <div className="border border-gray-100 rounded-lg overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50">
+                    <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">组织绩效等级</th>
+                    <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">最小值 (X≥最小值)</th>
+                    <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">最大值</th>
+                    <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[80px] text-center">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {formData.ranges.map((row: any) => (
+                    <tr key={row.id} className="hover:bg-gray-50/30 transition-colors">
+                      <td className="px-6 py-4">
+                        <select 
+                          className="w-full border border-gray-200 rounded px-3 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                          value={row.grade}
+                          onChange={(e) => handleUpdateRow(row.id, 'grade', e.target.value)}
+                        >
+                          <option value="S">S</option>
+                          <option value="A">A</option>
+                          <option value="B+">B+</option>
+                          <option value="B">B</option>
+                          <option value="C">C</option>
+                          <option value="D">D</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4">
+                        <input 
+                          type="text"
+                          placeholder="例如 4.75"
+                          className="w-full border border-gray-200 rounded px-3 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white font-mono"
+                          value={row.min}
+                          onChange={(e) => handleUpdateRow(row.id, 'min', e.target.value)}
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        <input 
+                          type="text"
+                          placeholder="例如 5.00"
+                          className="w-full border border-gray-200 rounded px-3 py-2 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white font-mono"
+                          value={row.max}
+                          onChange={(e) => handleUpdateRow(row.id, 'max', e.target.value)}
+                        />
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <button 
+                          onClick={() => handleRemoveRow(row.id)}
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-all cursor-pointer"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pt-6 border-t border-gray-50">
+              <h4 className="text-[13px] font-bold text-gray-800 mb-4">绩效分数取整规则</h4>
+              <div className="flex flex-col gap-4">
+                <label className="flex items-center gap-3 cursor-pointer group" onClick={() => setFormData({ ...formData, roundingRule: 'round' })}>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${formData.roundingRule === 'round' ? 'border-[#2f54eb] bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                    {formData.roundingRule === 'round' && <div className="w-2 h-2 rounded-full bg-[#2f54eb]" />}
+                  </div>
+                  <span className="text-[13px] text-gray-600 group-hover:text-gray-900">四舍五入保留2位小数 <span className="text-gray-400 ml-1">(例: 3.745 ≈ 3.75)</span></span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group" onClick={() => setFormData({ ...formData, roundingRule: 'up' })}>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${formData.roundingRule === 'up' ? 'border-[#2f54eb] bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                    {formData.roundingRule === 'up' && <div className="w-2 h-2 rounded-full bg-[#2f54eb]" />}
+                  </div>
+                  <span className="text-[13px] text-gray-600 group-hover:text-gray-900">向上取整保留2位小数 <span className="text-gray-400 ml-1">(例: 3.741 ≈ 3.75)</span></span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group" onClick={() => setFormData({ ...formData, roundingRule: 'floor' })}>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${formData.roundingRule === 'floor' ? 'border-[#2f54eb] bg-blue-50' : 'border-gray-300 bg-white'}`}>
+                    {formData.roundingRule === 'floor' && <div className="w-2 h-2 rounded-full bg-[#2f54eb]" />}
+                  </div>
+                  <span className="text-[13px] text-gray-600 group-hover:text-gray-900">向下取整保留2位小数 <span className="text-gray-400 ml-1">(例: 3.749 ≈ 3.74)</span></span>
+                </label>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* 底部按钮吸底 */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex items-center gap-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <button 
+            onClick={() => onSave(formData)}
+            className="px-8 py-2 bg-[#2f54eb] text-white rounded text-[14px] font-medium hover:bg-blue-600 transition-all cursor-pointer shadow-sm shadow-blue-100"
+          >
+            确定
+          </button>
+          <button 
+            onClick={onClose}
+            className="px-8 py-2 border border-gray-200 text-gray-600 rounded text-[14px] font-medium hover:bg-gray-50 transition-all cursor-pointer"
+          >
+            取消
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+};
+
+/** 组织绩效流程规则抽屉：大阶段顺序（与 DEFAULT_PERFORMANCE_PROCESS_NODES 的 title 一致） */
+const PERFORMANCE_PROCESS_DRAWER_PHASE_ORDER = [
+  '绩效计划制定',
+  '绩效中期回顾',
+  '绩效考核',
+  '绩效计划变更',
+] as const;
+
+const DEFAULT_PERFORMANCE_PROCESS_NODES = [
+  {
+    id: '1',
+    title: '绩效计划制定',
+    subNodes: [
+      { id: '1-1', title: '填写绩效计划' },
+      { id: '1-2', title: '填写绩效计划' },
+      { id: '1-3', title: '相关方审批绩效计划' },
+      { id: '1-4', title: '能力中心负责人审批绩效计划' },
+      { id: '1-5', title: '分管执委/常委审核' },
+    ],
+  },
+  { id: '2', title: '绩效中期回顾', subNodes: [
+    { id: '2-1', title: '数据提供人填报中期回顾结果' },
+    { id: '2-2', title: 'HRBP审核' },
+    { id: '2-3', title: '一级部门负责人审批中期回顾' },
+  ] as { id: string; title: string }[] },
+  {
+    id: '3',
+    title: '绩效考核',
+    subNodes: [
+      { id: '3-1', title: '数据评分人评分' },
+      { id: '3-2', title: 'HRBP审批' },
+      { id: '3-3', title: '一级部门负责人自评' },
+      { id: '3-4', title: '相关方评分定级' },
+      { id: '3-5', title: '分管执委/常委评分定级' },
+    ],
+  },
+  {
+    id: '4',
+    title: '绩效计划变更',
+    subNodes: [
+      { id: '4-1', title: '提交计划变更' },
+      { id: '4-2', title: '计划变更审批' },
+    ],
+  },
+];
+
+function cloneDefaultPerformanceProcessNodes() {
+  return DEFAULT_PERFORMANCE_PROCESS_NODES.map((n) => ({
+    ...n,
+    subNodes: n.subNodes.map((s) => ({ ...s })),
+  }));
+}
+
+/** 将已保存的 nodes 与当前默认大阶段对齐（补全新增阶段，避免旧数据缺少「绩效计划变更」） */
+function mergeSavedProcessNodesWithDefaults(saved: any[]) {
+  const defaults = cloneDefaultPerformanceProcessNodes();
+  return defaults.map((def) => {
+    const hit = saved.find((n: any) => n.title === def.title);
+    if (!hit) return def;
+    return {
+      id: hit.id ?? def.id,
+      title: def.title,
+      subNodes: Array.isArray(hit.subNodes) ? hit.subNodes : def.subNodes,
+    };
+  });
+}
+
+function getPhaseSubNodes(nodes: any[], phaseTitle: string): { id: string; title: string }[] {
+  const node = nodes.find((n: any) => n.title === phaseTitle);
+  return node?.subNodes ?? [];
+}
+
+/** 同阶段下是否已有相同节点名称（trim 后比较，可排除当前子节点 id） */
+function titleExistsInPhase(
+  nodes: any[],
+  phaseTitle: string,
+  title: string,
+  excludeSubId?: string
+): boolean {
+  const t = title.trim();
+  if (!t) return false;
+  return getPhaseSubNodes(nodes, phaseTitle).some(
+    (s) => s.id !== excludeSubId && (s.title || '').trim() === t
+  );
+}
+
+/** 新增子节点时的默认名称：在当前大阶段内不重复 */
+function nextUniqueDefaultSubNodeTitle(nodes: any[], phaseTitle: string): string {
+  const titles = new Set(
+    getPhaseSubNodes(nodes, phaseTitle)
+      .map((s) => (s.title || '').trim())
+      .filter(Boolean)
+  );
+  const base = '新节点';
+  if (!titles.has(base)) return base;
+  let n = 2;
+  while (titles.has(`${base}${n}`)) n += 1;
+  return `${base}${n}`;
+}
+
+const PerformanceProcessDrawer = ({ 
+  isOpen, 
+  onClose, 
+  data,
+  onSave
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  data: any;
+  onSave: (data: any) => void; 
+}) => {
+  const [activeMainNode, setActiveMainNode] = useState('绩效计划制定');
+  const [activeSubNodeId, setActiveSubNodeId] = useState('1-1');
+  const [formData, setFormData] = useState<any>(() => ({
+    name: '',
+    description: '',
+    nodes: cloneDefaultPerformanceProcessNodes(),
+  }));
+
+  // 执行人/抄送人规则相关状态
+  const [executorType, setExecutorType] = useState<'rule' | 'person'>('rule');
+  const [selectedExecutor, setSelectedExecutor] = useState('');
+  const [ccType, setCCType] = useState<'rule' | 'person'>('rule');
+  const [selectedCC, setSelectedCC] = useState('');
+  const [pickerContext, setPickerContext] = useState<'executor' | 'cc'>('executor');
+  const [showRulePicker, setShowRulePicker] = useState(false);
+  const [showPersonPicker, setShowPersonPicker] = useState(false);
+  /** 退回：系统默认可退至已发生任意节点；此处配置「再次提交」策略与意见是否必填 */
+  const [returnResubmitMode, setReturnResubmitMode] = useState<'reapprove' | 'jumpToReturned'>('reapprove');
+  const [returnCommentRequired, setReturnCommentRequired] = useState(false);
+
+  const rules = [
+    '被考核人', 'HRBP',
+    '能力中心负责人', '相关方', '数据提供人', '分管执委/常委'
+  ];
+
+  // 模拟人员数据
+  const mockPeople = [
+    { id: '1', name: '张三', empId: 'A001', deptPath: 'XXX集团/研发中心/移动端开发部' },
+    { id: '2', name: '李四', empId: 'A002', deptPath: 'XXX集团/产品中心/绩效产品组' },
+    { id: '3', name: '王五', empId: 'A003', deptPath: 'XXX集团/设计中心/体验设计部' },
+    { id: '4', name: '赵六', empId: 'A004', deptPath: 'XXX集团/市场中心/华北区销售部' },
+  ];
+
+  // 编辑与删除状态项
+  const [editingSubNode, setEditingSubNode] = useState<any>(null);
+  const [tempNodeName, setTempNodeName] = useState('');
+  const [deletingSubNode, setDeletingSubNode] = useState<any>(null);
+  const [draggingSubId, setDraggingSubId] = useState<string | null>(null);
+  const [dropBeforeSubId, setDropBeforeSubId] = useState<string | null>(null);
+  const dragSubSourceRef = useRef<string | null>(null);
+  const [drawerToast, setDrawerToast] = useState<{ message: string; type: 'error' | 'warning' } | null>(null);
+  const drawerToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showDrawerToast = (message: string, type: 'error' | 'warning' = 'warning') => {
+    if (drawerToastTimerRef.current) clearTimeout(drawerToastTimerRef.current);
+    setDrawerToast({ message, type });
+    drawerToastTimerRef.current = setTimeout(() => {
+      setDrawerToast(null);
+      drawerToastTimerRef.current = null;
+    }, 3200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (drawerToastTimerRef.current) clearTimeout(drawerToastTimerRef.current);
+    };
+  }, []);
+
+  const handleAddSubNode = () => {
+    const title = nextUniqueDefaultSubNodeTitle(formData.nodes, activeMainNode);
+    const newSubNode = { id: Date.now().toString(), title };
+    const updatedNodes = formData.nodes.map((node: any) => {
+      if (node.title === activeMainNode) {
+        return { ...node, subNodes: [...(node.subNodes || []), newSubNode] };
+      }
+      return node;
+    });
+    setFormData({ ...formData, nodes: updatedNodes });
+    setActiveSubNodeId(newSubNode.id);
+  };
+
+  const moveSubNodeBefore = (phaseTitle: string, draggedId: string, insertBeforeId: string) => {
+    if (draggedId === insertBeforeId) return;
+    setFormData((prev: any) => ({
+      ...prev,
+      nodes: prev.nodes.map((node: any) => {
+        if (node.title !== phaseTitle) return node;
+        const list = [...(node.subNodes || [])] as { id: string; title: string }[];
+        const dragged = list.find((s) => s.id === draggedId);
+        if (!dragged) return node;
+        const rest = list.filter((s) => s.id !== draggedId);
+        const insertIdx = rest.findIndex((s) => s.id === insertBeforeId);
+        if (insertIdx < 0) return node;
+        const newList = [...rest.slice(0, insertIdx), dragged, ...rest.slice(insertIdx)];
+        return { ...node, subNodes: newList };
+      }),
+    }));
+  };
+
+  const moveSubNodeToEnd = (phaseTitle: string, draggedId: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      nodes: prev.nodes.map((node: any) => {
+        if (node.title !== phaseTitle) return node;
+        const list = [...(node.subNodes || [])] as { id: string; title: string }[];
+        const di = list.findIndex((s) => s.id === draggedId);
+        if (di < 0) return node;
+        const [item] = list.splice(di, 1);
+        list.push(item);
+        return { ...node, subNodes: list };
+      }),
+    }));
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (data) {
+      setFormData({
+        name: data.name || '',
+        description: data.description || '',
+        nodes:
+          Array.isArray(data.nodes) && data.nodes.length > 0
+            ? mergeSavedProcessNodesWithDefaults(data.nodes)
+            : cloneDefaultPerformanceProcessNodes(),
+      });
+    } else {
+      setFormData({
+        name: '',
+        description: '',
+        nodes: cloneDefaultPerformanceProcessNodes(),
+      });
+    }
+    if (data?.workflowReturnRule) {
+      const wr = data.workflowReturnRule;
+      if (wr.returnResubmitMode === 'reapprove' || wr.returnResubmitMode === 'jumpToReturned') {
+        setReturnResubmitMode(wr.returnResubmitMode);
+      } else {
+        setReturnResubmitMode('reapprove');
+      }
+      setReturnCommentRequired(Boolean(wr.returnCommentRequired));
+    } else {
+      setReturnResubmitMode('reapprove');
+      setReturnCommentRequired(false);
+    }
+    setActiveMainNode('绩效计划制定');
+    setActiveSubNodeId('1-1');
+  }, [data, isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-black/20 z-[100] backdrop-blur-sm"
+      />
+      <motion.div 
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="fixed top-0 right-0 w-full max-w-[750px] h-full bg-[#f8fafc] z-[101] shadow-2xl flex flex-col"
+      >
+        <div className="bg-white px-6 py-4 flex items-center justify-between border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}组织绩效流程规则</h3>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer text-gray-400">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-24">
+          {/* 基本信息 */}
+          <section className="bg-white p-6 rounded-lg border border-gray-100 space-y-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+              <span className="text-[15px] font-bold text-gray-900">基本信息</span>
+            </div>
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-[13px] text-gray-600 font-medium">规则名称 <span className="text-red-500">*</span></label>
+                <input 
+                  type="text" 
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="请输入规则名称"
+                  className="w-full border border-gray-200 rounded px-4 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] text-gray-600 font-medium">规则说明</label>
+                <textarea 
+                  rows={3}
+                  value={formData.description}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="请输入规则说明"
+                  className="w-full border border-gray-200 rounded px-4 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all resize-none"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* 流程子节点配置 */}
+          <section className="bg-white rounded-lg border border-gray-100 shadow-sm flex flex-col h-[650px] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
+              <div className="flex items-center gap-2">
+                <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
+                <span className="text-[15px] font-bold text-gray-900">流程子节点配置</span>
+              </div>
+            </div>
+
+            {/* 阶段页签 - 水平排列 */}
+            <div className="px-6 border-b border-gray-100 bg-white flex items-center gap-8 flex-wrap">
+              {PERFORMANCE_PROCESS_DRAWER_PHASE_ORDER.map((phase) => (
+                <div 
+                  key={phase}
+                  title={phase === '绩效计划变更' ? '绩效计划制定完成后，用于处理计划变更相关业务' : undefined}
+                  onClick={() => {
+                    setDraggingSubId(null);
+                    setDropBeforeSubId(null);
+                    dragSubSourceRef.current = null;
+                    setActiveMainNode(phase);
+                    const currentNode = formData.nodes.find((n: { title: string }) => n.title === phase);
+                    if (currentNode && currentNode.subNodes.length > 0) {
+                      setActiveSubNodeId(currentNode.subNodes[0].id);
+                    } else {
+                      setActiveSubNodeId('');
+                    }
+                  }}
+                  className={`py-4 text-[14px] font-medium cursor-pointer relative transition-all ${
+                    activeMainNode === phase ? 'text-[#2f54eb]' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {phase}
+                  {activeMainNode === phase && (
+                    <motion.div layoutId="phaseTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]" />
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex-1 flex overflow-hidden">
+              {/* 左侧节点列表 */}
+              <div className="w-56 bg-gray-50/50 border-r border-gray-100 flex flex-col">
+                <div className="p-4 flex items-center justify-between border-b border-gray-100 bg-white/50">
+                  <span className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">节点列表</span>
+                  <div className="flex items-center gap-2">
+                    <Plus 
+                      size={14} 
+                      className="text-[#2f54eb] cursor-pointer hover:scale-110 transition-transform" 
+                      onClick={handleAddSubNode}
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto py-2">
+                  {formData.nodes.find(n => n.title === activeMainNode)?.subNodes.map(sub => (
+                    <div
+                      key={sub.id}
+                      onDragOver={(e) => {
+                        const src = dragSubSourceRef.current;
+                        if (!src || src === sub.id) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDropBeforeSubId(sub.id);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const fromId =
+                          e.dataTransfer.getData('text/plain') || dragSubSourceRef.current || draggingSubId;
+                        if (fromId && fromId !== sub.id) {
+                          moveSubNodeBefore(activeMainNode, fromId, sub.id);
+                        }
+                        dragSubSourceRef.current = null;
+                        setDraggingSubId(null);
+                        setDropBeforeSubId(null);
+                      }}
+                      className={`mx-2 my-1 rounded-md text-[13px] flex items-stretch gap-0.5 group transition-all border border-transparent ${
+                        activeSubNodeId === sub.id ? 'bg-[#2f54eb] text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
+                      } ${dropBeforeSubId === sub.id && draggingSubId && draggingSubId !== sub.id ? 'ring-2 ring-[#2f54eb] ring-offset-1 border-blue-200' : ''} ${
+                        draggingSubId === sub.id ? 'opacity-60' : ''
+                      }`}
+                    >
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label="拖拽排序"
+                        title="拖拽调整顺序"
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          dragSubSourceRef.current = sub.id;
+                          e.dataTransfer.setData('text/plain', sub.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDraggingSubId(sub.id);
+                        }}
+                        onDragEnd={() => {
+                          dragSubSourceRef.current = null;
+                          setDraggingSubId(null);
+                          setDropBeforeSubId(null);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`shrink-0 flex items-center px-1 py-2.5 cursor-grab active:cursor-grabbing rounded-l-md ${
+                          activeSubNodeId === sub.id ? 'text-white/90 hover:text-white' : 'text-gray-400 hover:text-gray-600'
+                        }`}
+                      >
+                        <GripVertical size={14} />
+                      </span>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="flex-1 min-w-0 flex items-center justify-between py-2.5 pr-2 pl-0 cursor-pointer"
+                        onClick={() => setActiveSubNodeId(sub.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setActiveSubNodeId(sub.id);
+                          }
+                        }}
+                      >
+                        <span className={`truncate ${activeSubNodeId === sub.id ? 'font-bold' : ''}`}>{sub.title}</span>
+                        <div
+                          className={`flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${
+                            activeSubNodeId === sub.id ? 'text-white' : 'text-gray-400'
+                          }`}
+                        >
+                          <Edit2
+                            size={12}
+                            className="hover:scale-110"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingSubNode(sub);
+                              setTempNodeName(sub.title);
+                            }}
+                          />
+                          <Trash2
+                            size={12}
+                            className="hover:scale-110"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingSubNode(sub);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {((formData.nodes.find(n => n.title === activeMainNode)?.subNodes.length ?? 0) > 1) && (
+                    <div
+                      onDragOver={(e) => {
+                        if (!dragSubSourceRef.current) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDropBeforeSubId('__end__');
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const fromId =
+                          e.dataTransfer.getData('text/plain') || dragSubSourceRef.current || draggingSubId;
+                        if (fromId) moveSubNodeToEnd(activeMainNode, fromId);
+                        dragSubSourceRef.current = null;
+                        setDraggingSubId(null);
+                        setDropBeforeSubId(null);
+                      }}
+                      className={`mx-2 my-1 py-2 text-center text-[11px] rounded border border-dashed transition-colors select-none ${
+                        dropBeforeSubId === '__end__' && draggingSubId
+                          ? 'border-[#2f54eb] bg-blue-50 text-[#2f54eb]'
+                          : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                      }`}
+                    >
+                      拖至末尾
+                    </div>
+                  )}
+                  {(formData.nodes.find(n => n.title === activeMainNode)?.subNodes.length ?? 0) === 0 && (
+                    <div className="px-4 py-12 text-center">
+                      <div className="text-[12px] text-gray-400 italic">暂无子节点</div>
+                      <button 
+                        type="button"
+                        className="mt-2 text-[12px] text-[#2f54eb] hover:underline"
+                        onClick={handleAddSubNode}
+                      >点击添加</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 右侧详细配置 */}
+              <div className="flex-1 p-8 space-y-6 overflow-y-auto bg-white">
+                {activeSubNodeId ? (
+                  <>
+                {/* 执行人规则 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-[3px] h-3 bg-[#2f54eb] rounded-full" />
+                    <span className="text-[14px] font-bold text-gray-900">执行人规则</span>
+                  </div>
+                  <div className="flex items-center gap-8 pl-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="approver" 
+                        checked={executorType === 'rule'} 
+                        onChange={() => {
+                          setExecutorType('rule');
+                          setSelectedExecutor('');
+                        }}
+                        className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                      />
+                      <span className="text-[13px] text-gray-700">指定规则</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="approver" 
+                        checked={executorType === 'person'} 
+                        onChange={() => {
+                          setExecutorType('person');
+                          setSelectedExecutor('');
+                        }}
+                        className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                      />
+                      <span className="text-[13px] text-gray-700">指定人</span>
+                    </label>
+                  </div>
+                  <div className="relative pl-6">
+                    <input 
+                      type="text" 
+                      readOnly
+                      placeholder={executorType === 'rule' ? "请选择执行规则" : "请选择执行人"}
+                      value={selectedExecutor}
+                      onClick={() => {
+                        setPickerContext('executor');
+                        if (executorType === 'rule') setShowRulePicker(true);
+                        else setShowPersonPicker(true);
+                      }}
+                      className="w-full max-w-md border border-gray-200 rounded px-10 py-2 text-[13px] outline-none focus:border-[#2f54eb] cursor-pointer hover:border-gray-300 transition-colors" 
+                    />
+                    <Search size={14} className="absolute left-9 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
+                  <div className="pl-6 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        defaultChecked={false}
+                        className="w-4 h-4 text-[#2f54eb] rounded border-gray-300 focus:ring-[#2f54eb]" 
+                      />
+                      <span className="text-[13px] text-gray-700">允许编辑</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="w-full h-[1px] bg-gray-50/50" />
+
+                {/* 2、审批通过 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-[3px] h-3 bg-[#2f54eb] rounded-full" />
+                    <span className="text-[14px] font-bold text-gray-900">审批通过</span>
+                  </div>
+                  <div className="pl-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 text-[#2f54eb] rounded border-gray-300 focus:ring-[#2f54eb]" />
+                      <span className="text-[13px] text-gray-700">审批意见必填</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="w-full h-[1px] bg-gray-50/50" />
+
+                {/* 3、退回规则（默认可退至已发生任意节点，仅配置再次提交策略与意见必填） */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-[3px] h-3 bg-[#2f54eb] rounded-full" />
+                    <span className="text-[14px] font-bold text-gray-900">退回规则</span>
+                  </div>
+                  <div className="pl-6 space-y-4">
+                    <p className="text-[12px] text-gray-600 leading-relaxed rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2.5">
+                      <span className="font-medium text-[#2f54eb]">提示：</span>
+                      退回时可将流程退回到<strong className="text-gray-800">已发生的任意节点</strong>
+                      （含发起节点及流程中已执行过的节点），请在实际操作中确认退回目标是否符合业务要求。
+                    </p>
+                    <div className="space-y-2">
+                      <div className="text-[13px] text-gray-700 font-medium">
+                        退回后重新提交 <span className="text-gray-400 font-normal text-[12px]">（单选）</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-10 gap-y-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="returnResubmitMode"
+                            checked={returnResubmitMode === 'reapprove'}
+                            onChange={() => setReturnResubmitMode('reapprove')}
+                            className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]"
+                          />
+                          <span className="text-[13px] text-gray-700">按流程重新审批</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="returnResubmitMode"
+                            checked={returnResubmitMode === 'jumpToReturned'}
+                            onChange={() => setReturnResubmitMode('jumpToReturned')}
+                            className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]"
+                          />
+                          <span className="text-[13px] text-gray-700">直接跳转至被退回节点</span>
+                        </label>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={returnCommentRequired}
+                        onChange={(e) => setReturnCommentRequired(e.target.checked)}
+                        className="w-4 h-4 text-[#2f54eb] rounded border-gray-300 focus:ring-[#2f54eb]"
+                      />
+                      <span className="text-[13px] text-gray-700">退回意见必填</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="w-full h-[1px] bg-gray-50/50" />
+
+                {/* 4、抄送人规则 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-[3px] h-3 bg-[#2f54eb] rounded-full" />
+                    <span className="text-[14px] font-bold text-gray-900">抄送人规则</span>
+                  </div>
+                  <div className="pl-6 space-y-4">
+                    <div className="flex items-center gap-8">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="ccRule" 
+                          checked={ccType === 'rule'} 
+                          onChange={() => {
+                            setCCType('rule');
+                            setSelectedCC('');
+                          }}
+                          className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                        />
+                        <span className="text-[13px] text-gray-700">指定规则</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="ccRule" 
+                          checked={ccType === 'person'} 
+                          onChange={() => {
+                            setCCType('person');
+                            setSelectedCC('');
+                          }}
+                          className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" 
+                        />
+                        <span className="text-[13px] text-gray-700">指定人</span>
+                      </label>
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        readOnly
+                        placeholder={ccType === 'rule' ? "请选择抄送规则" : "请选择抄送人"}
+                        value={selectedCC}
+                        onClick={() => {
+                          setPickerContext('cc');
+                          if (ccType === 'rule') setShowRulePicker(true);
+                          else setShowPersonPicker(true);
+                        }}
+                        className="w-full max-w-md border border-gray-200 rounded px-10 py-2 text-[13px] outline-none focus:border-[#2f54eb] cursor-pointer hover:border-gray-300 transition-colors" 
+                      />
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <span className="text-[12px] text-gray-400 font-bold uppercase tracking-wider">抄送时机:</span>
+                      <div className="flex gap-6">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="ccTiming" defaultChecked className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
+                          <span className="text-[13px] text-gray-700">节点到达时</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="ccTiming" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
+                          <span className="text-[13px] text-gray-700">节点完成时</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
+                      <Search size={24} className="text-gray-200" />
+                    </div>
+                    <div className="text-[14px]">请在左侧选择一个子节点进行配置</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* 底部按钮吸底 - 靠左对齐 */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex items-center justify-start gap-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+          <button 
+            onClick={() =>
+              onSave({
+                ...formData,
+                workflowReturnRule: {
+                  returnScope: 'any_executed_node' as const,
+                  returnResubmitMode,
+                  returnCommentRequired,
+                },
+              })
+            }
+            className="px-10 py-2 bg-[#2f54eb] text-white rounded-lg text-[14px] font-bold hover:bg-blue-600 transition-all cursor-pointer shadow-md shadow-blue-100 hover:-translate-y-0.5 active:translate-y-0"
+          >
+            确定
+          </button>
+          <button 
+            onClick={onClose}
+            className="px-10 py-2 border border-gray-200 text-gray-600 rounded-lg text-[14px] font-bold hover:bg-gray-50 transition-all cursor-pointer"
+          >
+            取消
+          </button>
+        </div>
+
+        {/* 编辑子节点名称弹窗 */}
+        {editingSubNode && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setEditingSubNode(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden"
+            >
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <span className="font-bold text-gray-900">编辑节点名称</span>
+                <X size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingSubNode(null)} />
+              </div>
+              <div className="p-6">
+                <input 
+                  type="text"
+                  autoFocus
+                  value={tempNodeName}
+                  onChange={(e) => setTempNodeName(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-2 focus:ring-blue-50 transition-all font-medium"
+                />
+              </div>
+              <div className="p-4 bg-gray-50 flex justify-end gap-3">
+                <button 
+                  onClick={() => setEditingSubNode(null)}
+                  className="px-5 py-2 text-[14px] text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                >取消</button>
+                <button 
+                  onClick={() => {
+                    const trimmed = tempNodeName.trim();
+                    if (!trimmed) {
+                      showDrawerToast('请输入节点名称', 'error');
+                      return;
+                    }
+                    if (titleExistsInPhase(formData.nodes, activeMainNode, trimmed, editingSubNode.id)) {
+                      showDrawerToast('当前阶段下已存在同名节点，请修改名称', 'warning');
+                      return;
+                    }
+                    const updatedNodes = formData.nodes.map((node: any) => {
+                      if (node.title === activeMainNode) {
+                        return { 
+                          ...node, 
+                          subNodes: node.subNodes.map((sn: any) => 
+                            sn.id === editingSubNode.id ? { ...sn, title: trimmed } : sn
+                          ) 
+                        };
+                      }
+                      return node;
+                    });
+                    setFormData({ ...formData, nodes: updatedNodes });
+                    setEditingSubNode(null);
+                  }}
+                  className="px-6 py-2 text-[14px] bg-[#2f54eb] text-white font-bold rounded-lg hover:shadow-lg hover:shadow-blue-200 transition-all cursor-pointer"
+                >确定</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 删除确认弹窗 */}
+        {deletingSubNode && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setDeletingSubNode(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden"
+            >
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Trash2 size={28} className="text-red-500" />
+                </div>
+                <h4 className="text-[16px] font-bold text-gray-900 mb-2">确认删除节点</h4>
+                <p className="text-[14px] text-gray-500 leading-relaxed">
+                  确认删除当前选中的 <span className="text-[#2f54eb] font-bold">【{deletingSubNode.title}】</span> 节点吗？删除后不可恢复
+                </p>
+              </div>
+              <div className="p-4 bg-gray-50 flex gap-3">
+                <button 
+                  onClick={() => setDeletingSubNode(null)}
+                  className="flex-1 py-3 text-[14px] text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                >取消</button>
+                <button 
+                  onClick={() => {
+                    const updatedNodes = formData.nodes.map((node: any) => {
+                      if (node.title === activeMainNode) {
+                        return { 
+                          ...node, 
+                          subNodes: node.subNodes.filter((sn: any) => sn.id !== deletingSubNode.id) 
+                        };
+                      }
+                      return node;
+                    });
+                    setFormData({ ...formData, nodes: updatedNodes });
+                    const nextList = updatedNodes.find((n: any) => n.title === activeMainNode)?.subNodes || [];
+                    if (activeSubNodeId === deletingSubNode.id) {
+                      setActiveSubNodeId(nextList[0]?.id ?? '');
+                    }
+                    setDeletingSubNode(null);
+                  }}
+                  className="flex-1 py-3 text-[14px] bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 shadow-lg shadow-red-100 transition-all cursor-pointer"
+                >删除</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 规则选择弹窗 */}
+        {showRulePicker && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setShowRulePicker(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              className="relative bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                <span className="font-bold text-gray-900">选择{pickerContext === 'executor' ? '执行' : '抄送'}规则</span>
+                <X size={18} className="text-gray-400 cursor-pointer hover:text-gray-600" onClick={() => setShowRulePicker(false)} />
+              </div>
+              <div className="max-h-[400px] overflow-y-auto p-2">
+                {rules.map((rule) => {
+                  const isSelected = (pickerContext === 'executor' ? selectedExecutor : selectedCC) === rule;
+                  return (
+                    <div 
+                      key={rule}
+                      onClick={() => {
+                        if (pickerContext === 'executor') setSelectedExecutor(rule);
+                        else setSelectedCC(rule);
+                        setShowRulePicker(false);
+                      }}
+                      className={`flex items-center justify-between px-4 py-3 rounded-lg cursor-pointer transition-all mb-1 ${isSelected ? 'bg-blue-50 text-[#2f54eb]' : 'hover:bg-gray-100 text-gray-700'}`}
+                    >
+                      <span className="text-[14px] font-medium">{rule}</span>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${isSelected ? 'border-[#2f54eb] bg-[#2f54eb]' : 'border-gray-200'}`}>
+                        {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 指定人选择弹窗 (单选) */}
+        {showPersonPicker && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setShowPersonPicker(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              className="relative bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                <span className="font-bold text-gray-900">选择{pickerContext === 'executor' ? '执行人' : '抄送人'}</span>
+                <X size={18} className="text-gray-400 cursor-pointer hover:text-gray-600" onClick={() => setShowPersonPicker(false)} />
+              </div>
+              <div className="p-4 border-b border-gray-100">
+                <div className="relative">
+                  <input type="text" placeholder="搜索姓名/工号" className="w-full bg-gray-100 border-none rounded-lg pl-10 pr-4 py-2 text-[14px] outline-none" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+              </div>
+              <div className="max-h-[400px] overflow-y-auto p-2">
+                {mockPeople.map((person) => {
+                  const isSelected = (pickerContext === 'executor' ? selectedExecutor : selectedCC) === person.name;
+                  return (
+                    <div 
+                      key={person.id}
+                      onClick={() => {
+                        if (pickerContext === 'executor') setSelectedExecutor(person.name);
+                        else setSelectedCC(person.name);
+                        setShowPersonPicker(false);
+                      }}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all mb-1 ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                    >
+                      <div className="w-10 h-10 rounded-full bg-[#2f54eb]/10 text-[#2f54eb] flex items-center justify-center font-bold text-sm">
+                        {person.name.charAt(0)}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[14px] font-bold text-gray-900">{person.name}</span>
+                          <span className="text-[12px] text-gray-400 font-normal">({person.empId})</span>
+                        </div>
+                        <div className="text-[12px] text-gray-500 mt-0.5">{person.deptPath}</div>
+                      </div>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-[#2f54eb] bg-[#2f54eb]' : 'border-gray-200'}`}>
+                        {isSelected && <div className="w-2 h-2 bg-white rounded-full" />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </motion.div>
+
+      <AnimatePresence>
+        {drawerToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -10, x: '-50%' }}
+            className={`fixed top-4 left-1/2 z-[20050] px-4 py-2.5 rounded-lg shadow-xl flex items-start gap-2 min-w-[260px] max-w-[min(92vw,420px)] pointer-events-none border ${
+              drawerToast.type === 'error' ? 'bg-white border-red-200' : 'bg-white border-orange-200'
+            }`}
+          >
+            {drawerToast.type === 'warning' && <AlertCircle size={16} className="text-orange-500 shrink-0 mt-0.5" />}
+            {drawerToast.type === 'error' && <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />}
+            <span className="text-[13px] text-gray-800 leading-snug">{drawerToast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+};
+
+const employeeTableData = [
+  { id: '90000001', name: '执委测试', dept: '执委会', postCode: '20010275', postName: '董事长', company: '鼎' },
+  { id: '90000002', name: '测试2', dept: '执委会', postCode: '20000959', postName: '总裁', company: '纳' },
+  { id: '90000003', name: '华忠润', dept: '产品开发部', postCode: '20010283', postName: '负责人', company: '纳' },
+  { id: '90000004', name: '史雨嘉', dept: '亚太业务大区', postCode: '20002027', postName: '海外销售高级主管', company: '九' },
+  { id: '90000005', name: '陶冰轩', dept: '基础服务和平台组', postCode: '20000891', postName: '前端开发工程师', company: '九' },
+  { id: '90000006', name: '陆晓龙', dept: '执委会', postCode: '20000954', postName: 'CTO', company: '纳' },
+  { id: '90000007', name: '王雪薇', dept: '执委会', postCode: '20000956', postName: 'VP', company: '纳' },
+];
+
+const deptTableData = [
+  { name: '九号公司', code: '10000000', level: '根组织', path: '九号公司' },
+  { name: '未岚大陆', code: '10010267', level: '根组织', path: '未岚大陆' },
+  { name: '66 Studios', code: '10000766', level: '一级组织', path: '66 Studios' },
+  { name: '系统测试2', code: '10010002', level: '一级组织', path: '系统测试2' },
+  { name: 'GSC测试', code: '10010150', level: '一级组织', path: 'GSC测试' },
+  { name: '测试组织22222', code: '10010158', level: '一级组织', path: '测试组织22222' },
+  { name: '测试组织单位新组织', code: '10010160', level: '一级组织', path: '测试组织单位新组织' },
+];
+
+const dashboardOptions = [
+  '组织绩效全景图', '中期回顾总览', '红绿灯指标汇总', '部门详细回顾', '组织绩效正式考核看板'
+];
+
+const BasicRuleSettingsPage = ({ 
+  gradeRanges, 
+  addRow, 
+  deleteRow, 
+  updateRow, 
+  roundingRule, 
+  setRoundingRule,
+  deptDimensionConfigs,
+  setDeptDimensionConfigs,
+  levelScoreConfigs,
+  setLevelScoreConfigs,
+  notificationConfigs,
+  setNotificationConfigs,
+  performanceProcessConfigs,
+  setPerformanceProcessConfigs
+}: { 
+  gradeRanges: GradeRange[],
+  addRow: () => void,
+  deleteRow: (id: string) => void,
+  updateRow: (id: string, field: keyof GradeRange, value: string) => void,
+  roundingRule: string,
+  setRoundingRule: (rule: string) => void,
+  deptDimensionConfigs: any[],
+  setDeptDimensionConfigs: React.Dispatch<React.SetStateAction<any[]>>,
+  levelScoreConfigs: any[],
+  setLevelScoreConfigs: React.Dispatch<React.SetStateAction<any[]>>,
+  notificationConfigs: any[],
+  setNotificationConfigs: React.Dispatch<React.SetStateAction<any[]>>,
+  performanceProcessConfigs: any[],
+  setPerformanceProcessConfigs: React.Dispatch<React.SetStateAction<any[]>>
+}) => {
+  const [activeTab, setActiveTab] = useState('考核指标维度规则');
+  const [activePermissionTab, setActivePermissionTab] = useState('看板权限');
+  const [activeSidebar, setActiveSidebar] = useState('通知规则');
+  const [activePhase, setActivePhase] = useState('绩效计划制定');
+  const [activeSubNode, setActiveSubNode] = useState('员工本人');
+
+  const [configSearchTerm, setConfigSearchTerm] = useState('');
+  const [processSearchTerm, setProcessSearchTerm] = useState('');
+  const [levelSearchTerm, setLevelSearchTerm] = useState('');
+  const [notificationSearchTerm, setNotificationSearchTerm] = useState('');
+  const [permissionSearchTerm, setPermissionSearchTerm] = useState('');
+
+  const dimensionOptions = ['财务指标', '运营指标', '客户指标', '组织发展指标', '能力建设指标'];
+
+  const [isIndicatorDrawerOpen, setIsIndicatorDrawerOpen] = useState(false);
+  const [currentIndicatorData, setCurrentIndicatorData] = useState<any>(null);
+
+  const [isGradeRangeDrawerOpen, setIsGradeRangeDrawerOpen] = useState(false);
+  const [currentGradeRangeData, setCurrentGradeRangeData] = useState<any>(null);
+
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
+  const [currentNotificationData, setCurrentNotificationData] = useState<any>(null);
+
+  const [isProcessDrawerOpen, setIsProcessDrawerOpen] = useState(false);
+  const [currentProcessData, setCurrentProcessData] = useState<any>(null);
+
+  const [isAuthEmployeeDrawerOpen, setIsAuthEmployeeDrawerOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEmployeeModalOpen, setIsEmployeeModalOpen] = useState(false);
+  const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
+  const [authFormData, setAuthFormData] = useState({
+    employeeName: '',
+    depts: [] as string[],
+    dashboards: [] as string[]
+  });
+
+  const [empModalSearch, setEmpModalSearch] = useState({ idOrName: '', deptName: '' });
+  const [deptModalSearch, setDeptModalSearch] = useState({ name: '', code: '' });
+  const [dashboardSearch, setDashboardSearch] = useState('');
+  const [isDashboardsOpen, setIsDashboardsOpen] = useState(false);
+  const [isPortalButtonEnabled, setIsPortalButtonEnabled] = useState(false);
+  const [showFormErrors, setShowFormErrors] = useState(false);
+
+  const handleIndicatorSave = (newData: any) => {
+    if (currentIndicatorData) {
+      // Edit
+      setDeptDimensionConfigs(deptDimensionConfigs.map(c => 
+        c.id === currentIndicatorData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
+      ));
+    } else {
+      // Add
+      const newConfig = {
+        ...newData,
+        id: Date.now().toString(),
+        status: true,
+        creator: '管理员',
+        createTime: new Date().toLocaleString(),
+        updater: '管理员',
+        updateTime: new Date().toLocaleString()
+      };
+      setDeptDimensionConfigs([...deptDimensionConfigs, newConfig]);
+    }
+    setIsIndicatorDrawerOpen(false);
+    setCurrentIndicatorData(null);
+  };
+
+  const handleGradeRangeSave = (newData: any) => {
+    if (currentGradeRangeData) {
+      // Edit
+      setLevelScoreConfigs(levelScoreConfigs.map(c => 
+        c.id === currentGradeRangeData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
+      ));
+    } else {
+      // Add
+      const newConfig = {
+        ...newData,
+        id: Date.now().toString(),
+        status: true,
+        creator: '管理员',
+        createTime: new Date().toLocaleString(),
+        updater: '管理员',
+        updateTime: new Date().toLocaleString()
+      };
+      setLevelScoreConfigs([...levelScoreConfigs, newConfig]);
+    }
+    setIsGradeRangeDrawerOpen(false);
+    setCurrentGradeRangeData(null);
+  };
+
+  const handleNotificationSave = (newData: any) => {
+    if (currentNotificationData) {
+      // Edit
+      setNotificationConfigs(notificationConfigs.map(c => 
+        c.id === currentNotificationData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
+      ));
+    } else {
+      // Add
+      const newConfig = {
+        ...newData,
+        id: Date.now().toString(),
+        status: true,
+        creator: '管理员',
+        createTime: new Date().toLocaleString(),
+        updater: '管理员',
+        updateTime: new Date().toLocaleString()
+      };
+      setNotificationConfigs([...notificationConfigs, newConfig]);
+    }
+    setIsNotificationDrawerOpen(false);
+    setCurrentNotificationData(null);
+  };
+
+  const handleProcessSave = (newData: any) => {
+    if (currentProcessData) {
+      // Edit
+      setPerformanceProcessConfigs(performanceProcessConfigs.map(c => 
+        c.id === currentProcessData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
+      ));
+    } else {
+      // Add
+      const newConfig = {
+        ...newData,
+        id: Date.now().toString(),
+        status: true,
+        creator: '管理员',
+        createTime: new Date().toLocaleString(),
+        updater: '管理员',
+        updateTime: new Date().toLocaleString()
+      };
+      setPerformanceProcessConfigs([...performanceProcessConfigs, newConfig]);
+    }
+    setIsProcessDrawerOpen(false);
+    setCurrentProcessData(null);
+  };
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ id: string | number, name: string, type: string } | null>(null);
+
+  const handleDeleteClick = (id: string | number, name: string, type: string) => {
+    setItemToDelete({ id, name, type });
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    
+    if (itemToDelete.type === 'notification') {
+      setNotificationConfigs(prev => prev.filter(p => p.id !== itemToDelete.id));
+    } else if (itemToDelete.type === 'indicator') {
+      setDeptDimensionConfigs(prev => prev.filter(p => p.id !== itemToDelete.id));
+    } else if (itemToDelete.type === 'process') {
+      setPerformanceProcessConfigs(prev => prev.filter(p => p.id !== itemToDelete.id));
+    } else if (itemToDelete.type === 'grade') {
+      setLevelScoreConfigs(prev => prev.filter(p => p.id !== itemToDelete.id));
+    } else if (itemToDelete.type === 'auth_employee') {
+      // Logic to delete auth employee would go here
+      console.log('Action: Delete auth employee', itemToDelete.id);
+    }
+    
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
+  };
+
+  const tabs = ['考核指标维度规则', '组织绩效流程规则', '等级分数区间规则', '通知规则', '权限设置'];
+  const sidebars = ['考核员工范围', '通知规则'];
+
+  const permissionData = [
+    { id: '1', empId: '10001', name: '张三', deptPath: '集团总部/信息化中心', boardPermissions: ['集团指标大盘', '实时组织计划全景图', '组织计划全景图'] },
+    { id: '2', empId: '10002', name: '李四', deptPath: '集团总部/人力行政中心', boardPermissions: ['中期回顾总览', '红灯指标汇总'] },
+    { id: '3', empId: '10003', name: '王五', deptPath: '集团总部/财务管理中心', boardPermissions: ['部门详细回顾', '组织计划全景图'] },
+    { id: '4', empId: '10004', name: '赵六', deptPath: '集团总部/战略发展部', boardPermissions: ['集团指标大盘'] },
+    { id: '5', empId: '10005', name: '孙七', deptPath: '集团总部/法务合规部', boardPermissions: ['实时组织计划全景图'] },
+    { id: '6', empId: '10006', name: '周八', deptPath: '集团总部/品牌营销部', boardPermissions: ['组织计划全景图'] },
+    { id: '7', empId: '10007', name: '吴九', deptPath: '集团总部/供应链管理中心', boardPermissions: ['中期回顾总览'] },
+    { id: '8', empId: '10008', name: '郑十', deptPath: '集团总部/审计监察部', boardPermissions: ['红灯指标汇总'] },
+    { id: '9', empId: '10009', name: '钱一', deptPath: '集团总部/公共关系部', boardPermissions: ['部门详细回顾'] },
+    { id: '10', empId: '10010', name: '陈二', deptPath: '集团总部/技术研发中心', boardPermissions: ['集团指标大盘', '组织计划全景图'] },
+  ];
+
+  const [isSaving, setIsSaving] = useState<Record<string, boolean>>({});
+  const [lastSavedTimes, setLastSavedTimes] = useState<Record<string, string>>({});
+
+  const handleTabSave = (tabName: string) => {
+    setIsSaving(prev => ({ ...prev, [tabName]: true }));
+    setTimeout(() => {
+      setIsSaving(prev => ({ ...prev, [tabName]: false }));
+      setLastSavedTimes(prev => ({ ...prev, [tabName]: new Date().toLocaleTimeString() }));
+    }, 800);
+  };
+
+  const TabFooter = ({ tabName }: { tabName: string }) => (
+    <div className="mt-6 px-6 py-4 bg-white border-t border-gray-100 flex items-center justify-between sticky bottom-0 z-10 shadow-[0_-4px_12px_rgba(0,0,0,0.03)]">
+      <div className="flex items-center gap-3">
+        <button 
+          onClick={() => handleTabSave(tabName)}
+          disabled={isSaving[tabName]}
+          className="px-8 py-2 bg-[#2f54eb] text-white rounded text-[14px] font-medium hover:bg-[#1d39c4] transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center gap-2"
+        >
+          {isSaving[tabName] ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+          <span>{isSaving[tabName] ? '正在保存...' : '提交保存'}</span>
+        </button>
+        <button className="px-8 py-2 border border-gray-200 rounded text-[14px] text-gray-600 font-medium hover:bg-gray-50 transition-colors cursor-pointer">
+          取消重置
+        </button>
+      </div>
+      {lastSavedTimes[tabName] && (
+        <span className="text-[12px] text-gray-400">上次保存于 {lastSavedTimes[tabName]}</span>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-[#f4f5f7] overflow-hidden">
+      {/* Page Header */}
+      <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-100">
+        <h1 className="text-[16px] font-medium text-gray-900">
+          组织绩效基础设置
+        </h1>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex bg-white px-6 border-b border-gray-100">
+        {tabs.map(tab => (
+          <div
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-3 text-[13px] cursor-pointer transition-colors relative ${
+              activeTab === tab ? 'text-[#2f54eb] font-medium' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            {tab}
+            {activeTab === tab && (
+              <motion.div 
+                layoutId="activeTabBasic"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]" 
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Notice for specific tabs */}
+      {['考核指标维度规则', '组织绩效流程规则', '等级分数区间规则', '通知规则'].includes(activeTab) && (
+        <div className="mx-6 mt-4 px-4 py-2 bg-blue-50/50 border border-blue-100 rounded flex items-center gap-2 text-[12px] text-[#2f54eb]">
+          <Info size={14} className="text-blue-400" />
+          <span>已生成的规则，被绩效活动引用后，活动未开启时，可修改，活动启动后，无法修改</span>
+        </div>
+      )}
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {activeTab === '考核指标维度规则' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+              {/* Top Controls */}
+              <div className="flex items-center justify-between bg-white px-6 py-4 rounded-lg border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="text" 
+                      placeholder="规则名称" 
+                      value={configSearchTerm}
+                      onChange={(e) => setConfigSearchTerm(e.target.value)}
+                      className="pl-9 pr-4 py-2 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] min-w-[320px] transition-all bg-white"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setConfigSearchTerm('')}
+                    className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
+                  >
+                    重置
+                  </button>
+                </div>
+                <button 
+                  onClick={() => {
+                    setCurrentIndicatorData(null);
+                    setIsIndicatorDrawerOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-6 py-2 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-blue-600 transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus size={16} />
+                  <span>新增</span>
+                </button>
+              </div>
+
+              {/* Data Table */}
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">规则名称</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">状态</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {deptDimensionConfigs
+                        .filter(config => config.name.toLowerCase().includes(configSearchTerm.toLowerCase()))
+                        .map(config => (
+                        <tr key={config.id} className="hover:bg-gray-50/50 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#2f54eb] transition-colors">{config.name}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div 
+                              onClick={() => setDeptDimensionConfigs(prev => prev.map(c => c.id === config.id ? { ...c, status: !c.status } : c))}
+                              className={`w-10 h-5 rounded-full relative cursor-pointer transition-all duration-300 ${config.status ? 'bg-[#2f54eb] shadow-[0_0_8px_rgba(47,84,235,0.2)]' : 'bg-gray-200'}`}
+                            >
+                              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${config.status ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.creator}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.createTime}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.updater}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.updateTime}</td>
+                          <td className="px-4 py-4 text-right">
+                            <div className="flex items-center justify-end gap-4">
+                              <button 
+                                onClick={() => {
+                                  setCurrentIndicatorData(config);
+                                  setIsIndicatorDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                编辑
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClick(config.id, config.name, 'indicator')}
+                                className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Pagination */}
+                <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between bg-white/80 backdrop-blur-sm">
+                  <span className="text-[12px] text-gray-400">共 {deptDimensionConfigs.length} 条数据</span>
+                  <div className="flex items-center gap-1.5">
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                      <ChevronLeft size={16} className="text-gray-400" />
+                    </button>
+                    <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] font-bold shadow-sm">1</button>
+                    <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors">2</button>
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors">
+                      <ChevronRight size={16} className="text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <IndicatorDimensionDrawer 
+              isOpen={isIndicatorDrawerOpen}
+              onClose={() => setIsIndicatorDrawerOpen(false)}
+              data={currentIndicatorData}
+              onSave={handleIndicatorSave}
+            />
+          </div>
+        )}
+
+        {activeTab === '组织绩效流程规则' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+              {/* Top Controls */}
+              <div className="flex items-center justify-between bg-white px-6 py-4 rounded-lg border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="text" 
+                      placeholder="搜索规则名称" 
+                      value={processSearchTerm}
+                      onChange={(e) => setProcessSearchTerm(e.target.value)}
+                      className="pl-9 pr-4 py-2 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] min-w-[320px] transition-all bg-white"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setProcessSearchTerm('')}
+                    className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
+                  >
+                    重置
+                  </button>
+                </div>
+                <button 
+                  onClick={() => {
+                    setCurrentProcessData(null);
+                    setIsProcessDrawerOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-6 py-2 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-blue-600 transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus size={16} />
+                  <span>新增</span>
+                </button>
+              </div>
+
+              {/* Data Table */}
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">规则名称</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">状态</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {performanceProcessConfigs
+                        .filter(config => config.name.toLowerCase().includes(processSearchTerm.toLowerCase()))
+                        .map(config => (
+                        <tr key={config.id} className="hover:bg-gray-50/50 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#2f54eb] transition-colors">{config.name}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div 
+                              onClick={() => setPerformanceProcessConfigs(prev => prev.map(c => c.id === config.id ? { ...c, status: !c.status } : c))}
+                              className={`w-10 h-5 rounded-full relative cursor-pointer transition-all duration-300 ${config.status ? 'bg-[#2f54eb]' : 'bg-gray-200'}`}
+                            >
+                              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${config.status ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.creator}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.createTime}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.updater}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.updateTime}</td>
+                          <td className="px-4 py-4 text-right">
+                            <div className="flex items-center justify-end gap-4">
+                              <button 
+                                onClick={() => {
+                                  setCurrentProcessData(config);
+                                  setIsProcessDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                编辑
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClick(config.id, config.name, 'process')}
+                                className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Pagination */}
+                <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between bg-white/80 backdrop-blur-sm">
+                  <span className="text-[12px] text-gray-400">共 {performanceProcessConfigs.length} 条数据</span>
+                  <div className="flex items-center gap-1.5">
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+                      <ChevronLeft size={16} className="text-gray-400" />
+                    </button>
+                    <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] font-bold shadow-sm">1</button>
+                    <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors">2</button>
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors">
+                      <ChevronRight size={16} className="text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <PerformanceProcessDrawer 
+              isOpen={isProcessDrawerOpen}
+              onClose={() => setIsProcessDrawerOpen(false)}
+              data={currentProcessData}
+              onSave={handleProcessSave}
+            />
+          </div>
+        )}
+
+        {activeTab === '等级分数区间规则' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+              {/* Top Controls */}
+              <div className="flex items-center justify-between bg-white px-6 py-4 rounded-lg border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="text" 
+                      placeholder="规则名称" 
+                      value={levelSearchTerm}
+                      onChange={(e) => setLevelSearchTerm(e.target.value)}
+                      className="pl-9 pr-4 py-2 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] min-w-[320px] transition-all bg-white"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setLevelSearchTerm('')}
+                    className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
+                  >
+                    重置
+                  </button>
+                </div>
+                <button 
+                  onClick={() => {
+                    setCurrentGradeRangeData(null);
+                    setIsGradeRangeDrawerOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-6 py-2 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-blue-600 transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus size={16} />
+                  <span>新增</span>
+                </button>
+              </div>
+
+              {/* Data Table */}
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">规则名称</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">状态</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {levelScoreConfigs
+                        .filter(config => config.name.toLowerCase().includes(levelSearchTerm.toLowerCase()))
+                        .map(config => (
+                        <tr key={config.id} className="hover:bg-gray-50/50 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#2f54eb] transition-colors">{config.name}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div 
+                              onClick={() => setLevelScoreConfigs(prev => prev.map(c => c.id === config.id ? { ...c, status: !c.status } : c))}
+                              className={`w-10 h-5 rounded-full relative cursor-pointer transition-all duration-300 ${config.status ? 'bg-[#2f54eb] shadow-[0_0_8px_rgba(47,84,235,0.2)]' : 'bg-gray-200'}`}
+                            >
+                              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${config.status ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.creator}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.createTime}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.updater}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.updateTime}</td>
+                          <td className="px-4 py-4 text-right">
+                            <div className="flex items-center justify-end gap-4">
+                              <button 
+                                onClick={() => {
+                                  setCurrentGradeRangeData(config);
+                                  setIsGradeRangeDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                编辑
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClick(config.id, config.name, 'grade')}
+                                className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Pagination */}
+                <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between bg-white/80 backdrop-blur-sm">
+                  <span className="text-[12px] text-gray-400">共 {levelScoreConfigs.length} 条数据</span>
+                  <div className="flex items-center gap-1.5">
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                      <ChevronLeft size={16} className="text-gray-400" />
+                    </button>
+                    <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] font-bold shadow-sm">1</button>
+                    <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors">2</button>
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors">
+                      <ChevronRight size={16} className="text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <GradeRangeDrawer 
+              isOpen={isGradeRangeDrawerOpen}
+              onClose={() => setIsGradeRangeDrawerOpen(false)}
+              data={currentGradeRangeData}
+              onSave={handleGradeRangeSave}
+            />
+          </div>
+        )}
+
+        {activeTab === '通知规则' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4">
+              {/* Top Controls */}
+              <div className="flex items-center justify-between bg-white px-6 py-4 rounded-lg border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input 
+                      type="text" 
+                      placeholder="规则名称" 
+                      value={notificationSearchTerm}
+                      onChange={(e) => setNotificationSearchTerm(e.target.value)}
+                      className="pl-9 pr-4 py-2 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] min-w-[320px] transition-all bg-white"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setNotificationSearchTerm('')}
+                    className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
+                  >
+                    重置
+                  </button>
+                </div>
+                <button 
+                  onClick={() => {
+                    setCurrentNotificationData(null);
+                    setIsNotificationDrawerOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-6 py-2 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-blue-600 transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus size={16} />
+                  <span>新增</span>
+                </button>
+              </div>
+
+              {/* Data Table */}
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm flex-1 flex flex-col overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur-sm shadow-sm">
+                      <tr>
+                        <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">规则名称</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">状态</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">创建时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新人</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight">更新时间</th>
+                        <th className="px-4 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {notificationConfigs
+                        .filter(config => config.name.toLowerCase().includes(notificationSearchTerm.toLowerCase()))
+                        .map(config => (
+                        <tr key={config.id} className="hover:bg-gray-50/50 transition-colors group">
+                          <td className="px-6 py-4">
+                            <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#2f54eb] transition-colors">{config.name}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div 
+                              onClick={() => setNotificationConfigs(prev => prev.map(c => c.id === config.id ? { ...c, status: !c.status } : c))}
+                              className={`w-10 h-5 rounded-full relative cursor-pointer transition-all duration-300 ${config.status ? 'bg-[#2f54eb] shadow-[0_0_8px_rgba(47,84,235,0.2)]' : 'bg-gray-200'}`}
+                            >
+                              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow-sm ${config.status ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.creator}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.createTime}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-600">{config.updater}</td>
+                          <td className="px-4 py-4 text-[13px] text-gray-400 font-mono italic">{config.updateTime}</td>
+                          <td className="px-4 py-4 text-right">
+                            <div className="flex items-center justify-end gap-4">
+                              <button 
+                                onClick={() => {
+                                  setCurrentNotificationData(config);
+                                  setIsNotificationDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                编辑
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteClick(config.id, config.name, 'notification')}
+                                className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Pagination */}
+                <div className="px-6 py-4 border-t border-gray-50 flex items-center justify-between bg-white/80 backdrop-blur-sm">
+                  <span className="text-[12px] text-gray-400">共 {notificationConfigs.length} 条数据</span>
+                  <div className="flex items-center gap-1.5">
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                      <ChevronLeft size={16} className="text-gray-400" />
+                    </button>
+                    <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] font-bold shadow-sm">1</button>
+                    <button className="w-8 h-8 flex items-center justify-center border border-gray-100 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors">2</button>
+                    <button className="p-2 border border-gray-100 rounded hover:bg-gray-50 transition-colors">
+                      <ChevronRight size={16} className="text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <NotificationDrawer 
+              isOpen={isNotificationDrawerOpen}
+              onClose={() => setIsNotificationDrawerOpen(false)}
+              data={currentNotificationData}
+              onSave={handleNotificationSave}
+            />
+          </div>
+        )}
+
+        {activeTab === '权限设置' && (
+          <div className="flex-1 flex flex-col overflow-hidden bg-[#fbfcfd]">
+            {/* 子页签切换 - 优化为胶囊式切换 */}
+            <div className="bg-white px-6 py-3 border-b border-gray-100 flex items-center justify-between shadow-sm relative z-20">
+              <div className="flex p-0.5 bg-gray-100/80 rounded-lg border border-gray-200/50">
+                {['看板权限', '按钮权限'].map(subTab => (
+                  <button
+                    key={subTab}
+                    onClick={() => setActivePermissionTab(subTab)}
+                    className={`px-8 py-1.5 text-[13px] font-medium rounded-md transition-all relative cursor-pointer ${
+                      activePermissionTab === subTab 
+                      ? 'text-[#2f54eb] shadow-sm' 
+                      : 'text-gray-500 hover:text-gray-900'
+                    }`}
+                  >
+                    {activePermissionTab === subTab && (
+                      <motion.div 
+                        layoutId="activePermissionPill"
+                        className="absolute inset-0 bg-white rounded-md shadow-sm"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                    <span className="relative z-10">{subTab}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {activePermissionTab === '看板权限' ? (
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {/* 看板权限设置的内容 */}
+                <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#2f54eb] transition-colors" size={16} />
+                        <input 
+                          type="text" 
+                          placeholder="搜索员工姓名/ID" 
+                          value={permissionSearchTerm}
+                          onChange={(e) => setPermissionSearchTerm(e.target.value)}
+                          className="pl-9 pr-4 py-2 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] min-w-[320px] transition-all bg-white"
+                        />
+                      </div>
+                      <button 
+                        onClick={() => setPermissionSearchTerm('')}
+                        className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-all cursor-pointer"
+                      >
+                        重置
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => {
+                          setIsEditMode(false);
+                          setAuthFormData({ employeeName: '', depts: [], dashboards: [] });
+                          setIsAuthEmployeeDrawerOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-6 py-2 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-blue-600 transition-all shadow-sm cursor-pointer"
+                      >
+                        <Plus size={16} />
+                        <span>添加授权员工</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 授权列表表格 */}
+                <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden min-h-[500px] flex flex-col">
+                  <div className="flex-1 overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[1000px]">
+                      <thead>
+                        <tr className="bg-gray-50/50">
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[100px] whitespace-nowrap">员工ID</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[120px] whitespace-nowrap">员工姓名</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[200px] whitespace-nowrap">部门名称</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight whitespace-nowrap">组织绩效看板权限</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[100px] whitespace-nowrap">创建人</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[150px] whitespace-nowrap">创建时间</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[100px] whitespace-nowrap">更新人</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[150px] whitespace-nowrap">更新时间</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-500 uppercase tracking-tight w-[240px] text-left sticky right-0 z-20 bg-gray-50 shadow-[-4px_0_10px_rgba(0,0,0,0.03)] whitespace-nowrap">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {[
+                          { id: '10001', name: '张三', dept: '信息化中心', permissions: ['集团指标大盘', '实时组织计划全景图', '组织计划全景图'], creator: '管理员', createTime: '2024-03-20 10:00', updater: '管理员', updateTime: '2024-03-22 14:30' },
+                          { id: '10002', name: '李四', dept: '人力行政中心', permissions: ['中期回顾总览', '红灯指标汇总'], creator: '管理员', createTime: '2024-03-21 09:00', updater: '张某某', updateTime: '2024-03-25 11:20' },
+                          { id: '10003', name: '王五', dept: '财务管理中心', permissions: ['部门详细回顾', '组织计划全景图'], creator: '管理员', createTime: '2024-03-15 14:20', updater: '管理员', updateTime: '2024-03-20 09:15' },
+                          { id: '10004', name: '赵六', dept: '战略发展部', permissions: ['集团指标大盘'], creator: '李四', createTime: '2024-02-12 11:30', updater: '李四', updateTime: '2024-02-15 16:40' },
+                          { id: '10005', name: '孙七', dept: '法务合规部', permissions: ['实时组织计划全景图'], creator: '李晓明', createTime: '2024-01-20 08:50', updater: '赵六', updateTime: '2024-01-25 10:20' },
+                          { id: '10006', name: '周八', dept: '品牌营销部', permissions: ['组织计划全景图'], creator: '周强', createTime: '2023-12-05 15:45', updater: '周强', updateTime: '2023-12-10 11:30' },
+                          { id: '10007', name: '吴九', dept: '供应链管理中心', permissions: ['中期回顾总览'], creator: '王凯', createTime: '2023-11-28 09:15', updater: '王凯', updateTime: '2023-12-01 14:00' },
+                          { id: '10008', name: '郑十', dept: '审计监察部', permissions: ['红灯指标汇总'], creator: '刘洋', createTime: '2023-11-15 13:20', updater: '刘洋', updateTime: '2023-11-20 17:50' },
+                        ]
+                        .filter(emp => emp.name.toLowerCase().includes(permissionSearchTerm.toLowerCase()) || emp.id.includes(permissionSearchTerm))
+                        .map((emp) => (
+                          <tr key={emp.id} className="hover:bg-gray-50/30 transition-colors group">
+                            <td className="px-6 py-4 text-[13px] text-gray-600 font-mono italic whitespace-nowrap">{emp.id}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-900 font-medium whitespace-nowrap">{emp.name}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500 whitespace-nowrap">{emp.dept}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex flex-nowrap gap-2">
+                                {emp.permissions.map(p => (
+                                  <span key={p} className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] text-[11px] rounded border border-blue-100 whitespace-nowrap">
+                                    {p}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-[13px] text-gray-600 whitespace-nowrap">{emp.creator}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500 font-mono italic whitespace-nowrap">{emp.createTime}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-600 whitespace-nowrap">{emp.updater}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500 font-mono italic whitespace-nowrap">{emp.updateTime}</td>
+                            <td className="px-6 py-4 text-left sticky right-0 z-10 bg-white group-hover:bg-gray-50 transition-colors shadow-[-4px_0_10px_rgba(0,0,0,0.03)] whitespace-nowrap">
+                              <div className="flex items-center justify-start gap-4">
+                                <button 
+                                  onClick={() => {
+                                    setIsEditMode(true);
+                                    setAuthFormData({
+                                      employeeName: emp.name,
+                                      depts: [emp.dept],
+                                      dashboards: emp.permissions
+                                    });
+                                    setIsAuthEmployeeDrawerOpen(true);
+                                  }}
+                                  className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer font-bold"
+                                >
+                                  权限设置
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setItemToDelete({ id: emp.id, name: emp.name, type: 'auth_employee' });
+                                    setIsDeleteModalOpen(true);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer font-bold"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-6 py-4 bg-gray-50/30 border-t border-gray-50 flex items-center justify-between">
+                    <span className="text-[12px] text-gray-400">共 {[
+                          { id: '10001', name: '张三', dept: '信息化中心', permissions: ['集团指标大盘', '实时组织计划全景图', '组织计划全景图'], creator: '管理员', createTime: '2024-03-20 10:00', updater: '管理员', updateTime: '2024-03-22 14:30' },
+                          { id: '10002', name: '李四', dept: '人力行政中心', permissions: ['中期回顾总览', '红灯指标汇总'], creator: '管理员', createTime: '2024-03-21 09:00', updater: '张某某', updateTime: '2024-03-25 11:20' },
+                          { id: '10003', name: '王五', dept: '财务管理中心', permissions: ['部门详细回顾', '组织计划全景图'], creator: '管理员', createTime: '2024-03-15 14:20', updater: '管理员', updateTime: '2024-03-20 09:15' },
+                          { id: '10004', name: '赵六', dept: '战略发展部', permissions: ['集团指标大盘'], creator: '李四', createTime: '2024-02-12 11:30', updater: '李四', updateTime: '2024-02-15 16:40' },
+                          { id: '10005', name: '孙七', dept: '法务合规部', permissions: ['实时组织计划全景图'], creator: '李晓明', createTime: '2024-01-20 08:50', updater: '赵六', updateTime: '2024-01-25 10:20' },
+                          { id: '10006', name: '周八', dept: '品牌营销部', permissions: ['组织计划全景图'], creator: '周强', createTime: '2023-12-05 15:45', updater: '周强', updateTime: '2023-12-10 11:30' },
+                          { id: '10007', name: '吴九', dept: '供应链管理中心', permissions: ['中期回顾总览'], creator: '王凯', createTime: '2023-11-28 09:15', updater: '王凯', updateTime: '2023-12-01 14:00' },
+                          { id: '10008', name: '郑十', dept: '审计监察部', permissions: ['红灯指标汇总'], creator: '刘洋', createTime: '2023-11-15 13:20', updater: '刘洋', updateTime: '2023-11-20 17:50' },
+                        ].filter(emp => emp.name.toLowerCase().includes(permissionSearchTerm.toLowerCase()) || emp.id.includes(permissionSearchTerm)).length} 条数据</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] text-gray-400 mr-2">第 1 页 / 共 1 页</span>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 disabled:opacity-30" disabled>
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] shadow-sm">1</button>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 disabled:opacity-30" disabled>
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col overflow-y-auto bg-[#f0f2f5] p-6">
+                {/* 按钮权限设置的内容 */}
+                <div className="max-w-7xl mx-auto w-full space-y-6">
+                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                    <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-5 bg-[#2f54eb] rounded-full" />
+                        <h3 className="text-[16px] font-bold text-gray-900 tracking-tight">门户按钮显示控制</h3>
+                      </div>
+                      <div className="flex items-center gap-3 bg-gray-50/50 px-4 py-2 rounded-lg">
+                        <span className="text-[13px] text-gray-600 font-medium">启用状态</span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={isPortalButtonEnabled}
+                            onChange={(e) => setIsPortalButtonEnabled(e.target.checked)}
+                          />
+                          <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2f54eb]"></div>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className={`p-8 transition-opacity duration-300 ${!isPortalButtonEnabled ? 'opacity-50 grayscale-[0.2]' : ''}`}>
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
+                        <div className="md:col-span-3 space-y-3">
+                          <label className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">功能按钮名称</label>
+                          <div className={`w-full px-4 py-2.5 bg-gray-50 text-gray-800 font-bold border border-gray-100 rounded-lg text-[14px] ${!isPortalButtonEnabled ? 'bg-gray-100/80 text-gray-400' : ''}`}>
+                            绩效计划变更
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-4 space-y-3">
+                          <label className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">显示截止参考阶段</label>
+                          <div className="relative group">
+                            <select 
+                              disabled={!isPortalButtonEnabled}
+                              className={`w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] text-gray-900 outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all ${!isPortalButtonEnabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : 'cursor-pointer'}`}
+                            >
+                              <option>绩效制定计划</option>
+                              <option>绩效中期考核</option>
+                              <option>绩效考核</option>
+                            </select>
+                            <ChevronDown size={14} className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isPortalButtonEnabled ? 'group-focus-within:text-[#2f54eb]' : ''}`} />
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-5 space-y-3">
+                          <label className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">截止时间偏移配置</label>
+                          <div className="flex items-center gap-3 w-full">
+                            <span className="text-[13px] text-gray-500 font-medium whitespace-nowrap">参考阶段开始前</span>
+                            <input 
+                              type="number" 
+                              disabled={!isPortalButtonEnabled}
+                              defaultValue={1}
+                              className={`w-16 border border-gray-200 rounded-lg px-2 py-2.5 text-[14px] text-center font-bold text-[#2f54eb] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all ${!isPortalButtonEnabled ? 'cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200' : 'bg-white'}`}
+                            />
+                            <div className="relative group flex-1">
+                              <select 
+                                disabled={!isPortalButtonEnabled}
+                                className={`w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] text-gray-900 outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all ${!isPortalButtonEnabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : 'cursor-pointer'}`}
+                              >
+                                <option>周</option>
+                                <option>天</option>
+                                <option>工作日</option>
+                              </select>
+                              <ChevronDown size={14} className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isPortalButtonEnabled ? 'group-focus-within:text-[#2f54eb]' : ''}`} />
+                            </div>
+                            <span className="text-[13px] text-gray-500 font-medium whitespace-nowrap">停止显示</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className={`mt-8 p-4 bg-blue-50/50 rounded-lg border border-blue-100 flex items-start gap-3 transition-opacity duration-300 ${!isPortalButtonEnabled ? 'opacity-50' : ''}`}>
+                        <div className="text-blue-500 mt-0.5"><Info size={16} /></div>
+                        <div className="text-[12px] text-blue-700 leading-relaxed">
+                          <p className="font-bold mb-1">规则说明：</p>
+                          <p>当系统进入“显示截止参考阶段”之前（按偏移配置计算），门户页面将自动隐藏该功能按钮，以确保流程的严谨性。</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 保持提交保存按钮在该视图 */}
+                  <div className="flex items-center justify-end gap-3 pt-4">
+                    <button className="px-6 py-2 border border-gray-200 text-gray-600 rounded-lg text-[14px] font-medium hover:bg-white transition-all cursor-pointer active:scale-95">
+                      取消重置
+                    </button>
+                    <button className="flex items-center gap-2 px-10 py-2 bg-[#2f54eb] text-white rounded-lg text-[14px] font-medium hover:bg-blue-600 transition-all cursor-pointer shadow-lg shadow-blue-200 active:scale-95">
+                      <Save size={16} />
+                      <span>提交保存</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 删除确认弹窗 */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setIsDeleteModalOpen(false)} />
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="relative bg-white rounded-xl shadow-2xl w-[440px] overflow-hidden"
+          >
+            <div className="p-8">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center flex-shrink-0">
+                  <AlertCircle size={24} className="text-red-500" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-[16px] font-bold text-gray-900">确认删除</h3>
+                  <p className="text-[14px] text-gray-500 leading-relaxed">
+                    确认删除当前选择的 <span className="text-gray-900 font-bold">[{itemToDelete?.name}]</span> 吗？删除后不可恢复。
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="px-8 py-4 bg-gray-50 flex items-center justify-end gap-3">
+              <button 
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-6 py-2 text-[14px] font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              >
+                关闭
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="px-8 py-2 text-[14px] font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-all shadow-lg shadow-red-100 cursor-pointer active:scale-95"
+              >
+                确认删除
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* 添加授权员工抽屉 */}
+      <AnimatePresence>
+        {isAuthEmployeeDrawerOpen && (
+          <div className="fixed inset-0 z-[150] overflow-hidden">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setIsAuthEmployeeDrawerOpen(false);
+                setShowFormErrors(false);
+              }}
+              className="absolute inset-0 bg-black/20 backdrop-blur-[1px]"
+            />
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute top-0 right-0 h-full w-[600px] bg-white shadow-2xl flex flex-col"
+            >
+              <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-[20px] font-bold text-gray-900 tracking-tight">{isEditMode ? '权限设置' : '添加授权员工'}</h2>
+                <button 
+                  onClick={() => {
+                    setIsAuthEmployeeDrawerOpen(false);
+                    setShowFormErrors(false);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 group cursor-pointer"
+                >
+                  <X size={20} className="group-hover:text-gray-600" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 space-y-8">
+                {/* 员工姓名 */}
+                <div className="space-y-3">
+                  <label className="text-[14px] text-gray-600 flex items-center gap-1.5 ml-1">
+                    <span className="text-red-500 font-bold">*</span> 员工姓名 :
+                  </label>
+                  <div className="relative group">
+                    <div 
+                      className={`w-full ${isEditMode ? 'bg-gray-50' : 'bg-white'} border ${
+                        !authFormData.employeeName && showFormErrors 
+                        ? 'border-red-500 ring-4 ring-red-50' 
+                        : 'border-gray-200 focus-within:border-[#2f54eb] focus-within:ring-4 focus-within:ring-blue-50'
+                      } rounded-lg flex transition-all shadow-sm h-[44px] overflow-hidden`}
+                    >
+                      <input 
+                        type="text" 
+                        readOnly
+                        value={authFormData.employeeName}
+                        placeholder="请选择员工"
+                        onClick={() => !isEditMode && setIsEmployeeModalOpen(true)}
+                        className={`flex-1 px-4 py-2.5 text-[14px] text-gray-900 outline-none placeholder:text-gray-300 ${isEditMode ? 'cursor-not-allowed text-gray-500' : 'cursor-pointer'}`}
+                      />
+                      {!isEditMode && (
+                        <button 
+                          onClick={() => setIsEmployeeModalOpen(true)}
+                          className="px-4 border-l border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#2f54eb] hover:bg-gray-50 transition-all cursor-pointer"
+                        >
+                          <Search size={18} />
+                        </button>
+                      )}
+                    </div>
+                    {!authFormData.employeeName && showFormErrors && (
+                      <p className="text-[12px] text-red-500 mt-1.5 ml-1">请选择员工姓名。</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 授权部门 */}
+                <div className="space-y-3">
+                  <label className="text-[14px] text-gray-600 flex items-center gap-1.5 ml-1">
+                    <span className="text-red-500 font-bold">*</span> 授权部门 :
+                  </label>
+                  <div className="relative group">
+                    <div 
+                      className={`w-full bg-white border ${
+                        authFormData.depts.length === 0 && showFormErrors 
+                        ? 'border-red-500 ring-4 ring-red-50' 
+                        : 'border-gray-200 focus-within:border-[#2f54eb] focus-within:ring-4 focus-within:ring-blue-50'
+                      } rounded-lg flex transition-all shadow-sm h-[44px] overflow-hidden`}
+                    >
+                      <div className="flex-1 px-4 py-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
+                        {authFormData.depts.length > 0 ? (
+                          authFormData.depts.map(d => (
+                            <span key={d} className="px-2 py-0.5 bg-gray-50 text-gray-600 border border-gray-200 rounded text-[12px] whitespace-nowrap flex items-center gap-1">
+                              {d}
+                              <X size={12} className="cursor-pointer hover:text-red-500" onClick={(e) => {
+                                e.stopPropagation();
+                                setAuthFormData({...authFormData, depts: authFormData.depts.filter(dept => dept !== d)});
+                              }} />
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-300 text-[14px] whitespace-nowrap flex-shrink-0">请选择</span>
+                        )}
+                        <input 
+                          type="text"
+                          readOnly
+                          onClick={() => setIsDeptModalOpen(true)}
+                          className="flex-1 min-w-[30px] outline-none cursor-pointer h-full"
+                        />
+                      </div>
+                      <button 
+                        onClick={() => setIsDeptModalOpen(true)}
+                        className="px-4 border-l border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#2f54eb] hover:bg-gray-50 transition-all cursor-pointer"
+                      >
+                        <Search size={18} />
+                      </button>
+                    </div>
+                    {authFormData.depts.length === 0 && showFormErrors && (
+                      <p className="text-[12px] text-red-500 mt-1.5 ml-1">请选择授权部门。</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 授权看板 */}
+                <div className="space-y-3">
+                  <label className="text-[14px] text-gray-600 flex items-center gap-1.5 ml-1">
+                    <span className="text-red-500 font-bold">*</span> 授权看板 :
+                  </label>
+                  <div className="relative">
+                    <div 
+                      onClick={() => setIsDashboardsOpen(!isDashboardsOpen)}
+                      className={`w-full bg-white border ${
+                        authFormData.dashboards.length === 0 && showFormErrors 
+                        ? 'border-red-500 ring-4 ring-red-50' 
+                        : 'border-gray-200 hover:border-[#2f54eb] focus-within:border-[#2f54eb] focus-within:ring-4 focus-within:ring-blue-50'
+                      } rounded-lg flex items-center justify-between px-4 h-[44px] transition-all shadow-sm cursor-pointer`}
+                    >
+                      <div className="flex flex-nowrap gap-2 overflow-x-auto no-scrollbar py-1">
+                        {authFormData.dashboards.length > 0 ? (
+                          authFormData.dashboards.map(d => (
+                            <span key={d} className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] border border-blue-100 rounded text-[12px] whitespace-nowrap flex items-center gap-1">
+                              {d}
+                              <X size={12} className="cursor-pointer hover:text-red-500" onClick={(e) => {
+                                e.stopPropagation();
+                                setAuthFormData({...authFormData, dashboards: authFormData.dashboards.filter(db => db !== d)});
+                              }} />
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-300 text-[14px] whitespace-nowrap">请选择</span>
+                        )}
+                      </div>
+                      <ChevronDown size={18} className={`text-gray-400 transition-transform duration-300 ${isDashboardsOpen ? 'rotate-180' : ''}`} />
+                    </div>
+
+                    {authFormData.dashboards.length === 0 && showFormErrors && (
+                      <p className="text-[12px] text-red-500 mt-1.5 ml-1">请选择授权看板。</p>
+                    )}
+
+                    {/* 授权看板下拉选择 */}
+                    <AnimatePresence>
+                      {isDashboardsOpen && (
+                        <>
+                          <div className="fixed inset-0 z-[160]" onClick={() => setIsDashboardsOpen(false)} />
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            className="absolute z-[170] top-full mt-2 w-full bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
+                          >
+                            <div className="p-4 border-b border-gray-50 bg-gray-50/30">
+                              <div className="relative group">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#2f54eb] transition-colors" />
+                                <input 
+                                  type="text" 
+                                  placeholder="搜索" 
+                                  value={dashboardSearch}
+                                  onChange={(e) => setDashboardSearch(e.target.value)}
+                                  className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                                />
+                              </div>
+                              <div className="flex items-center gap-6 mt-4 ml-1">
+                                <button 
+                                  onClick={() => setAuthFormData({...authFormData, dashboards: [...new Set([...authFormData.dashboards, ...dashboardOptions])]})}
+                                  className="text-[13px] text-[#2f54eb] font-medium hover:underline cursor-pointer"
+                                >
+                                  全选
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const reversed = dashboardOptions.filter(opt => !authFormData.dashboards.includes(opt));
+                                    setAuthFormData({...authFormData, dashboards: reversed});
+                                  }}
+                                  className="text-[13px] text-[#2f54eb] font-medium hover:underline cursor-pointer"
+                                >
+                                  反选
+                                </button>
+                                <button 
+                                  onClick={() => setAuthFormData({...authFormData, dashboards: []})}
+                                  className="text-[13px] text-[#2f54eb] font-medium hover:underline cursor-pointer"
+                                >
+                                  无
+                                </button>
+                              </div>
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto p-2 scroll-smooth">
+                              {dashboardOptions
+                                .filter(opt => opt.toLowerCase().includes(dashboardSearch.toLowerCase()))
+                                .map(opt => (
+                                <div 
+                                  key={opt}
+                                  onClick={() => {
+                                    const isSelected = authFormData.dashboards.includes(opt);
+                                    if (isSelected) {
+                                      setAuthFormData({...authFormData, dashboards: authFormData.dashboards.filter(d => d !== opt)});
+                                    } else {
+                                      setAuthFormData({...authFormData, dashboards: [...authFormData.dashboards, opt]});
+                                    }
+                                  }}
+                                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-all cursor-pointer group"
+                                >
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                                    authFormData.dashboards.includes(opt) 
+                                    ? 'bg-[#2f54eb] border-[#2f54eb]' 
+                                    : 'border-gray-300 group-hover:border-[#2f54eb]'
+                                  }`}>
+                                    {authFormData.dashboards.includes(opt) && <Check size={10} className="text-white" />}
+                                  </div>
+                                  <span className={`text-[13px] ${authFormData.dashboards.includes(opt) ? 'text-gray-900 font-bold' : 'text-gray-600'}`}>
+                                    {opt}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/30">
+                <button 
+                  onClick={() => {
+                    setIsAuthEmployeeDrawerOpen(false);
+                    setShowFormErrors(false);
+                  }}
+                  className="px-8 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-[14px] font-medium hover:bg-white transition-all cursor-pointer shadow-sm active:scale-95"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => {
+                    if (authFormData.employeeName && authFormData.depts.length > 0 && authFormData.dashboards.length > 0) {
+                      // Save logic here
+                      setIsAuthEmployeeDrawerOpen(false);
+                      setShowFormErrors(false);
+                      setAuthFormData({ employeeName: '', depts: [], dashboards: [] });
+                    } else {
+                      setShowFormErrors(true);
+                    }
+                  }}
+                  className="px-10 py-2.5 bg-[#2f54eb] text-white rounded-lg text-[14px] font-bold hover:bg-blue-600 transition-all shadow-lg shadow-blue-100 cursor-pointer active:scale-95"
+                >
+                  保存
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 员工选择弹窗 */}
+      <AnimatePresence>
+        {isEmployeeModalOpen && (
+          <div className="fixed inset-0 z-[180] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsEmployeeModalOpen(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden max-h-[90vh]"
+            >
+              <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white relative z-10">
+                <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">员工</h3>
+                <button 
+                  onClick={() => setIsEmployeeModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 group cursor-pointer"
+                >
+                  <X size={20} className="group-hover:text-gray-600" />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-6 flex-1 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="relative group">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                        <span className="text-gray-400 group-focus-within:text-[#2f54eb] transition-colors"><Search size={14} /></span>
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder="工号或姓名" 
+                        value={empModalSearch.idOrName}
+                        onChange={(e) => setEmpModalSearch({...empModalSearch, idOrName: e.target.value})}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 min-w-[200px] transition-all"
+                      />
+                    </div>
+                    <div className="relative group">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                        <span className="text-gray-400 group-focus-within:text-[#2f54eb] transition-colors"><Search size={14} /></span>
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder="部门名称" 
+                        value={empModalSearch.deptName}
+                        onChange={(e) => setEmpModalSearch({...empModalSearch, deptName: e.target.value})}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 min-w-[200px] transition-all"
+                      />
+                    </div>
+                  </div>
+                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600 cursor-pointer">
+                    <RefreshCw size={16} />
+                  </button>
+                </div>
+
+                <div className="flex-1 border border-gray-100 rounded-xl overflow-hidden flex flex-col min-h-0 bg-[#fbfcfd]">
+                  <div className="flex-1 overflow-x-auto overflow-y-auto scroll-smooth">
+                    <table className="w-full text-left border-collapse min-w-[900px]">
+                      <thead className="sticky top-0 z-10 bg-white border-b border-gray-100">
+                        <tr>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">员工工号</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">姓名</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">部门名称</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">岗位编码</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">岗位名称</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">公司</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {employeeTableData
+                          .filter(emp => (
+                            (emp.id.includes(empModalSearch.idOrName) || emp.name.includes(empModalSearch.idOrName)) &&
+                            emp.dept.includes(empModalSearch.deptName)
+                          ))
+                          .map((emp) => (
+                          <tr 
+                            key={emp.id} 
+                            onClick={() => setAuthFormData({...authFormData, employeeName: emp.name})}
+                            className={`hover:bg-blue-50/50 transition-all cursor-pointer group ${authFormData.employeeName === emp.name ? 'bg-blue-50/80 shadow-[inset_4px_0_0_#2f54eb]' : ''}`}
+                          >
+                            <td className="px-6 py-4 text-[13px] text-gray-500 font-mono italic">{emp.id}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-900 font-medium group-hover:text-[#2f54eb]">{emp.name}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-600">{emp.dept}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500">{emp.postCode}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500">{emp.postName}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500">{emp.company}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-6 py-4 bg-white border-t border-gray-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="relative group">
+                        <select className="appearance-none bg-white border border-gray-200 rounded px-3 py-1 pr-8 text-[12px] text-gray-600 outline-none focus:border-[#2f54eb] transition-all cursor-pointer">
+                          <option>10 条 / 页</option>
+                          <option>20 条 / 页</option>
+                          <option>50 条 / 页</option>
+                        </select>
+                        <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-[#2f54eb] pointer-events-none" />
+                      </div>
+                      <span className="text-[12px] text-gray-400">共 3886 条数据</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 hover:text-[#2f54eb] hover:bg-blue-50 transition-all">
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] font-bold shadow-sm">1</button>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-600 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">2</button>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-600 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">3</button>
+                      <span className="text-gray-400 mx-1">...</span>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-600 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">389</button>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/30 relative z-10">
+                <button 
+                  onClick={() => setIsEmployeeModalOpen(false)}
+                  className="px-8 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-[14px] font-medium hover:bg-white transition-all cursor-pointer shadow-sm active:scale-95"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => setIsEmployeeModalOpen(false)}
+                  className="px-10 py-2.5 bg-[#2f54eb] text-white rounded-lg text-[14px] font-bold hover:bg-blue-600 transition-all shadow-lg shadow-blue-200 cursor-pointer active:scale-95"
+                >
+                  确定
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 部门选择弹窗 */}
+      <AnimatePresence>
+        {isDeptModalOpen && (
+          <div className="fixed inset-0 z-[180] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeptModalOpen(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden max-h-[90vh]"
+            >
+              <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white relative z-10">
+                <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">请选择部门</h3>
+                <button 
+                  onClick={() => setIsDeptModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 group cursor-pointer"
+                >
+                  <X size={20} className="group-hover:text-gray-600" />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-6 flex-1 overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="relative group">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                        <span className="text-gray-400 group-focus-within:text-[#2f54eb] transition-colors"><Search size={14} /></span>
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder="部门名称" 
+                        value={deptModalSearch.name}
+                        onChange={(e) => setDeptModalSearch({...deptModalSearch, name: e.target.value})}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 min-w-[200px] transition-all"
+                      />
+                    </div>
+                    <div className="relative group">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+                        <span className="text-gray-400 group-focus-within:text-[#2f54eb] transition-colors"><Search size={14} /></span>
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder="部门编码" 
+                        value={deptModalSearch.code}
+                        onChange={(e) => setDeptModalSearch({...deptModalSearch, code: e.target.value})}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 min-w-[200px] transition-all"
+                      />
+                    </div>
+                    <button className="flex items-center gap-1 text-[13px] text-gray-500 hover:text-gray-900 font-medium transition-colors cursor-pointer ml-2">
+                      <Plus size={16} />
+                      添加筛选
+                    </button>
+                  </div>
+                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600 cursor-pointer">
+                    <RefreshCw size={16} />
+                  </button>
+                </div>
+
+                <div className="flex-1 border border-gray-100 rounded-xl overflow-hidden flex flex-col min-h-0 bg-[#fbfcfd]">
+                  <div className="flex-1 overflow-x-auto overflow-y-auto scroll-smooth">
+                    <table className="w-full text-left border-collapse min-w-[900px]">
+                      <thead className="sticky top-0 z-10 bg-white border-b border-gray-100">
+                        <tr>
+                          <th className="px-6 py-4 w-12">
+                            <div className="w-4 h-4 rounded border border-gray-300 flex items-center justify-center cursor-pointer hover:border-[#2f54eb] bg-white transition-all">
+                              {/* All selected state could be here */}
+                            </div>
+                          </th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">部门名称</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">部门编码</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">组织层级</th>
+                          <th className="px-6 py-4 text-[12px] font-bold text-gray-400 uppercase tracking-wider">组织路径名称</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {deptTableData
+                          .filter(dept => dept.name.includes(deptModalSearch.name) && dept.code.includes(deptModalSearch.code))
+                          .map((dept) => (
+                          <tr 
+                            key={dept.code} 
+                            onClick={() => {
+                              const exists = authFormData.depts.includes(dept.name);
+                              if (exists) {
+                                setAuthFormData({...authFormData, depts: authFormData.depts.filter(d => d !== dept.name)});
+                              } else {
+                                setAuthFormData({...authFormData, depts: [...authFormData.depts, dept.name]});
+                              }
+                            }}
+                            className={`hover:bg-blue-50/50 transition-all cursor-pointer group ${authFormData.depts.includes(dept.name) ? 'bg-blue-50/80' : ''}`}
+                          >
+                            <td className="px-6 py-4">
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                                authFormData.depts.includes(dept.name) 
+                                ? 'bg-[#2f54eb] border-[#2f54eb] shadow-sm shadow-blue-100' 
+                                : 'border-gray-300 group-hover:border-[#2f54eb]'
+                              }`}>
+                                {authFormData.depts.includes(dept.name) && <Check size={10} className="text-white" />}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-[13px] text-gray-900 font-medium group-hover:text-[#2f54eb]">{dept.name}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500 font-mono">{dept.code}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500">{dept.level}</td>
+                            <td className="px-6 py-4 text-[13px] text-gray-500">{dept.path}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-6 py-4 bg-white border-t border-gray-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="relative group">
+                        <select className="appearance-none bg-white border border-gray-200 rounded px-3 py-1 pr-8 text-[12px] text-gray-600 outline-none focus:border-[#2f54eb] transition-all cursor-pointer">
+                          <option>10 条 / 页</option>
+                        </select>
+                        <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                      <span className="text-[12px] text-gray-400">共 532 条数据</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 hover:text-[#2f54eb] hover:bg-blue-50 transition-all">
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] font-bold shadow-sm">1</button>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-600 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">2</button>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-600 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">3</button>
+                      <span className="text-gray-400 mx-1">...</span>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-600 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">54</button>
+                      <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 hover:text-[#2f54eb] hover:bg-blue-50 transition-all cursor-pointer">
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-end gap-3 bg-gray-50/30 relative z-10">
+                <button 
+                  onClick={() => setIsDeptModalOpen(false)}
+                  className="px-8 py-2.5 border border-gray-200 text-gray-600 rounded-lg text-[14px] font-medium hover:bg-white transition-all cursor-pointer shadow-sm active:scale-95"
+                >
+                  取消
+                </button>
+                <button 
+                  onClick={() => setIsDeptModalOpen(false)}
+                  className="px-10 py-2.5 bg-[#2f54eb] text-white rounded-lg text-[14px] font-bold hover:bg-blue-600 transition-all shadow-lg shadow-blue-200 cursor-pointer active:scale-95"
+                >
+                  确定
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const PerformanceActivityPage = ({
+  deptDimensionConfigs,
+  levelScoreConfigs,
+  notificationConfigs,
+  performanceProcessConfigs,
+  activities,
+  setActivities
+}: {
+  deptDimensionConfigs: any[],
+  levelScoreConfigs: any[],
+  notificationConfigs: any[],
+  performanceProcessConfigs: any[],
+  activities: any[],
+  setActivities: React.Dispatch<React.SetStateAction<any[]>>
+}) => {
+  const [activeTab, setActiveTab] = useState<'进行中' | '已完成'>('进行中');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<'add' | 'edit' | 'copy'>('add');
+  const [isOrgModalOpen, setIsOrgModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  const [activityToDelete, setActivityToDelete] = useState<any>(null);
+  const [activityToComplete, setActivityToComplete] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleNew = () => {
+    setSelectedActivity(null);
+    setDrawerMode('add');
+    setDrawerOpen(true);
+  };
+
+  const handleEdit = (activity: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedActivity(activity);
+    setDrawerMode('edit');
+    setDrawerOpen(true);
+  };
+
+  const handleCopy = (activity: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedActivity(activity);
+    setDrawerMode('copy');
+    setDrawerOpen(true);
+  };
+
+  const handleDeleteClick = (activity: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setActivityToDelete(activity);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    setActivities(activities.filter(a => a.id !== activityToDelete.id));
+    setIsDeleteModalOpen(false);
+    setActivityToDelete(null);
+  };
+
+  const handleCompleteClick = (activity: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setActivityToComplete(activity);
+    setIsCompleteModalOpen(true);
+  };
+
+  const confirmComplete = () => {
+    setActivities(activities.map(a => a.id === activityToComplete.id ? { ...a, status: '已完成' } : a));
+    setIsCompleteModalOpen(false);
+    setActivityToComplete(null);
+  };
+
+  const handleOrgClick = (activity: any, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSelectedActivity(activity);
+    setIsOrgModalOpen(true);
+  };
+
+  const handleActivityDrawerCreateSubmit = (payload: ActivityDrawerSubmitPayload) => {
+    setActivities((prev) => {
+      const ts = formatActivityDateTime();
+      const slash = (iso: string) => isoDateToSlash(iso);
+      const row: any = {
+        id: `act-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+        name: payload.name,
+        year: payload.year,
+        type: '年度',
+        targetList: 0,
+        status: '草稿',
+        creator: '管理员',
+        createTime: ts,
+        updater: '管理员',
+        updateTime: ts,
+        cycleStart: payload.cycleStart,
+        cycleEnd: payload.cycleEnd,
+        planStageStart: payload.planStageStart,
+        planStageEnd: payload.planStageEnd,
+        midStageStart: payload.midStageStart,
+        midStageEnd: payload.midStageEnd,
+        appraisalStageStart: payload.appraisalStageStart,
+        appraisalStageEnd: payload.appraisalStageEnd,
+        config: {
+          phases: [
+            {
+              name: '绩效计划制定',
+              date: `${slash(payload.planStageStart)} ~ ${slash(payload.planStageEnd)}`,
+              showRounds: false,
+              rounds: [],
+            },
+            {
+              name: '绩效中期回顾',
+              date: `${slash(payload.midStageStart)} ~ ${slash(payload.midStageEnd)}`,
+              showRounds: false,
+              rounds: [],
+            },
+            {
+              name: '绩效考核',
+              date: `${slash(payload.appraisalStageStart)} ~ ${slash(payload.appraisalStageEnd)}`,
+              showRounds: false,
+              rounds: [],
+            },
+          ],
+        },
+      };
+      return [...prev, row].sort(
+        (a, b) => parseActivityUpdateTime(b.updateTime) - parseActivityUpdateTime(a.updateTime)
+      );
+    });
+  };
+
+  const filteredActivities = useMemo(() => {
+    const filtered = activities.filter((item) => {
+      const tabMatch =
+        activeTab === '进行中'
+          ? item.status === '草稿' || item.status === '进行中'
+          : item.status === '已完成';
+      const searchMatch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return tabMatch && searchMatch;
+    });
+    return [...filtered].sort(
+      (a, b) => parseActivityUpdateTime(b.updateTime) - parseActivityUpdateTime(a.updateTime)
+    );
+  }, [activities, activeTab, searchQuery]);
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-[#fcfcfc] overflow-hidden">
+      {/* Page Header + Tabs */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-3">
+          <h1 className="text-[16px] font-medium text-gray-900">组织绩效活动</h1>
+        </div>
+        
+        <div className="flex px-6">
+          {(['进行中', '已完成'] as const).map((tab) => (
+            <div 
+              key={tab} 
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-2.5 text-[14px] cursor-pointer relative transition-colors ${activeTab === tab ? 'text-[#2f54eb] font-medium' : 'text-gray-500 hover:text-gray-800'}`}
+            >
+              {tab}
+              {activeTab === tab && (
+                <motion.div 
+                  layoutId="active-tab-indicator"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]" 
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Activity Drawer */}
+      <ActivityDrawer 
+        isOpen={drawerOpen} 
+        onClose={() => setDrawerOpen(false)} 
+        activity={selectedActivity}
+        mode={drawerMode}
+        deptConfigs={deptDimensionConfigs}
+        levelConfigs={levelScoreConfigs}
+        notifyConfigs={notificationConfigs}
+        processConfigs={performanceProcessConfigs}
+        onSubmit={handleActivityDrawerCreateSubmit}
+      />
+
+      {/* Org Assessment Modal */}
+      <OrgAssessmentModal 
+        isOpen={isOrgModalOpen} 
+        onClose={() => setIsOrgModalOpen(false)} 
+        activity={selectedActivity}
+        onFormalAssessmentArchived={() => {
+          const id = selectedActivity?.id;
+          if (id) {
+            setActivities((prev) => prev.map((a) => (a.id === id ? { ...a, status: '已完成' } : a)));
+          }
+          setIsOrgModalOpen(false);
+        }}
+        onEditActivity={() => {
+          setIsOrgModalOpen(false);
+          setDrawerMode('edit');
+          setDrawerOpen(true);
+        }}
+        onDeleteActivity={() => {
+          setIsOrgModalOpen(false);
+          if (selectedActivity) {
+            setActivityToDelete(selectedActivity);
+            setIsDeleteModalOpen(true);
+          }
+        }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={confirmDelete}
+        title="确认删除绩效活动"
+        content={`确定要删除“${activityToDelete?.name}”吗？此操作不可撤销，删除后将无法查看该活动的所有考核数据。`}
+      />
+
+      {/* Complete Confirmation Modal */}
+      <ConfirmModal 
+        isOpen={isCompleteModalOpen}
+        onClose={() => setIsCompleteModalOpen(false)}
+        onConfirm={confirmComplete}
+        title="确认完成绩效活动"
+        content="确认要执行完成操作吗？操作后数据不可回退"
+        confirmText="确认完成"
+        confirmColor="bg-[#2f54eb] hover:bg-[#1d39c4]"
+      />
+
+      {/* Operation Bar */}
+      <div className="px-6 py-3 flex items-center justify-between bg-white border-b border-gray-100">
+        <div className="flex items-center gap-3">
+          <div className="relative w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            <input 
+              type="text" 
+              placeholder="搜索活动名称" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full border border-gray-200 rounded py-1.5 pl-9 pr-3 text-[13px] focus:border-[#2f54eb] focus:ring-1 focus:ring-[#2f54eb] outline-none"
+            />
+          </div>
+          <button 
+            onClick={() => setSearchQuery('')}
+            className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+          >
+            重置
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          {activeTab === '进行中' && (
+            <button 
+              onClick={handleNew}
+              className="flex items-center gap-1.5 bg-[#2f54eb] text-white px-4 py-1.5 rounded text-[13px] hover:bg-[#1d39c4] transition-colors shadow-sm cursor-pointer"
+            >
+              <Plus size={16} />
+              <span>新增</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Table Area */}
+      <div className="flex-1 overflow-auto p-4 bg-[#fcfcfc]">
+        <div className="overflow-x-auto">
+          <table className="w-full border-separate border-spacing-0 bg-white shadow-sm rounded-lg border border-gray-100 min-w-max">
+            <thead>
+              <tr className="text-left text-[13px] text-gray-500 bg-gray-50/50">
+                <th className="py-3 px-4 font-medium border-b border-gray-100">活动名称</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">考核年度</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">周期类型</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">考核名单</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100 text-center">状态</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">创建人</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">创建时间</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">更新人</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">更新时间</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100 text-center sticky right-0 bg-gray-50 shadow-[-4px_0_4px_-2px_rgba(0,0,0,0.05)] z-10">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredActivities.length > 0 ? (
+                filteredActivities.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50/50 transition-colors text-[13px]">
+                    <td className="py-3.5 px-4 border-b border-gray-50">
+                      <span 
+                        onClick={(e) => handleOrgClick(item, e)}
+                        className="font-medium text-[#2f54eb] hover:underline cursor-pointer"
+                      >
+                        {item.name}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-gray-600">{item.year}</td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-gray-600">{item.type}</td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-gray-600">
+                      {item.targetList}
+                    </td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-center">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] ${
+                        item.status === '草稿'
+                          ? 'bg-gray-100 text-gray-600'
+                          : item.status === '进行中'
+                            ? 'bg-blue-50 text-[#2f54eb]'
+                            : 'bg-green-50 text-green-600'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-gray-600">{item.creator}</td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-gray-500">{item.createTime}</td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-gray-600">{item.updater}</td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-gray-500">{item.updateTime}</td>
+                    <td className="py-3.5 px-4 border-b border-gray-50 text-center sticky right-0 bg-white shadow-[-4px_0_4px_-2px_rgba(0,0,0,0.05)] z-10">
+                      <div className="flex items-center justify-center gap-3 px-2">
+                        {item.status === '草稿' ? (
+                          <>
+                            <button type="button" onClick={(e) => handleEdit(item, e)} className="text-[#2f54eb] hover:text-[#1d39c4] transition-colors font-medium whitespace-nowrap cursor-pointer">编辑</button>
+                            <button type="button" onClick={(e) => handleDeleteClick(item, e)} className="text-red-500 hover:text-red-700 transition-colors font-medium whitespace-nowrap cursor-pointer">删除</button>
+                          </>
+                        ) : (
+                          <span className="text-gray-300 select-none">—</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={10} className="py-20 text-center text-gray-400 bg-white">
+                    <div className="flex flex-col items-center gap-2">
+                      <Database size={40} className="opacity-20" />
+                      <span>暂无相关活动数据</span>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between text-[13px] text-gray-500 bg-white">
+        <div className="flex items-center gap-2">
+          <span>共 {filteredActivities.length} 条</span>
+          <div className="relative ml-2">
+            <select className="border border-gray-200 rounded pl-2 pr-6 py-1 outline-none appearance-none bg-white cursor-pointer hover:border-[#2f54eb] transition-all">
+              <option>10条/页</option>
+              <option>20条/页</option>
+              <option>50条/页</option>
+            </select>
+            <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-30 transition-colors" disabled>
+            <ChevronRight size={16} className="rotate-180" />
+          </button>
+          <button className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded shadow-sm font-medium">1</button>
+          <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50 transition-colors">2</button>
+          <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50 transition-colors">3</button>
+          <button className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50 transition-colors">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function App() {
+  const [activities, setActivities] = useState([
+    { 
+      id: '1', 
+      name: '2023年年度绩效考核活动', 
+      year: '2023', 
+      type: '年度', 
+      targetList: 125, 
+      status: '进行中', 
+      creator: '张三', 
+      createTime: '2025-01-10 10:00:00',
+      updater: '张三',
+      updateTime: '2026-02-01 09:00:00',
+      config: {
+        phases: [
+          { name: '绩效计划制定', date: '2023/01/10 ~ 2023/01/15', showRounds: false, rounds: [] },
+          { name: '绩效中期回顾', date: '2023/02/15 ~ 2023/02/20', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
+          { name: '绩效考核', date: '2023/03/30 ~ 2023/04/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
+        ]
+      }
+    },
+    { 
+      id: '2', 
+      name: '2024年年度绩效考核活动', 
+      year: '2024', 
+      type: '年度', 
+      targetList: 48, 
+      status: '进行中', 
+      creator: '李四', 
+      createTime: '2025-02-01 09:00:00',
+      updater: '李四',
+      updateTime: '2026-03-01 10:00:00',
+      config: {
+        phases: [
+          { name: '绩效计划制定', date: '2024/01/01 ~ 2024/01/31', showRounds: false, rounds: [] },
+          { name: '绩效中期回顾', date: '2024/07/01 ~ 2024/07/31', showRounds: false, rounds: [] },
+          { name: '绩效考核', date: '2024/12/01 ~ 2024/12/31', showRounds: true, rounds: [{ id: '1', name: '年度评估轮' }] }
+        ]
+      }
+    },
+    { 
+      id: '3', 
+      name: '2024年年度综合绩效评估', 
+      year: '2024', 
+      type: '年度', 
+      targetList: 560, 
+      status: '已完成', 
+      creator: '王五', 
+      createTime: '2024-12-01 08:30:00',
+      updater: '系统管理员',
+      updateTime: '2025-01-15 17:00:00'
+    },
+    { 
+      id: '4', 
+      name: '2024年市场部专项考核', 
+      year: '2024', 
+      type: '专项', 
+      targetList: 32, 
+      status: '已完成', 
+      creator: '赵六', 
+      createTime: '2024-11-15 10:00:00',
+      updater: '张三',
+      updateTime: '2024-12-10 16:45:00'
+    },
+    { 
+      id: '5', 
+      name: '2025年年度绩效考核活动', 
+      year: '2025', 
+      type: '年度', 
+      targetList: 15, 
+      status: '进行中', 
+      creator: '李四', 
+      createTime: '2025-03-01 14:00:00',
+      updater: '李四',
+      updateTime: '2026-04-15 11:00:00',
+      config: {
+        phases: [
+          { name: '绩效计划制定', date: '2025/03/01', showRounds: false, rounds: [] },
+          { name: '绩效中期回顾', date: '2025/04/15', showRounds: true, rounds: [{ id: '1', name: '中期提报轮' }] },
+          { name: '绩效考核', date: '2025/05/30', showRounds: true, rounds: [{ id: '1', name: '最终考核轮' }] }
+        ]
+      }
+    },
+    {
+      id: '6',
+      name: '2026年年度绩效考核活动',
+      year: '2026',
+      type: '年度',
+      targetList: 0,
+      status: '草稿',
+      creator: '张三',
+      createTime: '2025-04-01 09:00:00',
+      updater: '张三',
+      updateTime: '2026-05-10 14:00:00',
+      config: {
+        phases: [
+          { name: '绩效计划制定', date: '', showRounds: false, rounds: [] },
+          { name: '绩效中期回顾', date: '', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
+          { name: '绩效考核', date: '', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
+        ]
+      }
+    },
+  ]);
+
+  const [activeMenu, setActiveMenu] = useState('performance-activity');
+  const [gradeRanges, setGradeRanges] = useState<GradeRange[]>([
+    { id: '1', grade: 'S', min: '4.75', max: '5.00' },
+    { id: '2', grade: 'A', min: '4.25', max: '4.74' },
+    { id: '3', grade: 'B+', min: '3.75', max: '4.24' },
+    { id: '4', grade: 'B', min: '3.00', max: '3.74' },
+    { id: '5', grade: 'C', min: '2.00', max: '2.99' },
+  ]);
+
+  const [roundingRule, setRoundingRule] = useState('round');
+
+  const [deptDimensionConfigs, setDeptDimensionConfigs] = useState([
+    { 
+      id: '1', 
+      name: '标准部门考核规则',
+      description: '标准部门的考核指标维度规则说明',
+      status: true,
+      creator: '管理员',
+      createTime: '2024-03-20 10:00',
+      updater: '管理员',
+      updateTime: '2024-03-22 14:30',
+      rules: [
+        { id: '101', deptType: '经营单元', requiredDimensions: ['财务指标', '运营指标'], optionalDimensions: ['客户指标', '组织发展指标'] },
+        { id: '102', deptType: '职能部门', requiredDimensions: ['运营指标', '组织发展指标'], optionalDimensions: ['能力建设指标'] }
+      ]
+    },
+    { 
+      id: '2', 
+      name: '职能体系通用规则',
+      description: '职能体系通用的考核指标维度规则说明',
+      status: true,
+      creator: '管理员',
+      createTime: '2024-03-21 09:00',
+      updater: '张某某',
+      updateTime: '2024-03-25 11:20',
+      rules: [
+        { id: '201', deptType: '职能部门', requiredDimensions: ['运营指标', '组织发展指标'], optionalDimensions: ['能力建设指标'] }
+      ]
+    }
+  ]);
+
+  const [levelScoreConfigs, setLevelScoreConfigs] = useState([
+    { 
+      id: '1', 
+      name: '2024年度等级评分标准',
+      status: true,
+      creator: '管理员',
+      createTime: '2024-01-15 10:00',
+      updater: '管理员',
+      updateTime: '2024-03-24 16:30',
+      levels: [
+        { grade: 'S', min: '4.75', max: '5.00' },
+        { grade: 'A', min: '4.25', max: '4.74' }
+      ]
+    },
+    { 
+      id: '2', 
+      name: '研发体系职级考核规则',
+      status: true,
+      creator: '张某某',
+      createTime: '2024-02-10 09:00',
+      updater: '李某某',
+      updateTime: '2024-03-20 11:20',
+      levels: [
+        { grade: 'S', min: '4.80', max: '5.00' },
+        { grade: 'A', min: '4.50', max: '4.79' }
+      ]
+    }
+  ]);
+
+  const [notificationConfigs, setNotificationConfigs] = useState([
+    { 
+      id: '1', 
+      name: '全员绩效通知模版',
+      status: true,
+      creator: '管理员',
+      createTime: '2024-02-01 10:00',
+      updater: '管理员',
+      updateTime: '2024-03-15 14:30',
+    },
+    { 
+      id: '2', 
+      name: '管理层特殊节点预警',
+      status: false,
+      creator: '张某某',
+      createTime: '2024-02-15 09:00',
+      updater: '张某某',
+      updateTime: '2024-02-28 11:20',
+    }
+  ]);
+
+  const [performanceProcessConfigs, setPerformanceProcessConfigs] = useState([
+    { id: '1', name: '标准部门考核规则', status: true, creator: '管理员', createTime: '2024-03-20 10:00', updater: '管理员', updateTime: '2024-03-22 14:30' },
+    { id: '2', name: '职能体系通用规则', status: true, creator: '管理员', createTime: '2024-03-21 09:00', updater: '张某某', updateTime: '2024-03-25 11:20' },
+  ]);
+
+  const addRow = () => {
+    const newRow: GradeRange = {
+      id: Math.random().toString(36).substr(2, 9),
+      grade: '',
+      min: '',
+      max: ''
+    };
+    setGradeRanges([...gradeRanges, newRow]);
+  };
+
+  const deleteRow = (id: string) => {
+    setGradeRanges(gradeRanges.filter(row => row.id !== id));
+  };
+
+  const updateRow = (id: string, field: keyof GradeRange, value: string) => {
+    setGradeRanges(gradeRanges.map(row => row.id === id ? { ...row, [field]: value } : row));
+  };
+
+  return (
+    <div className="flex h-screen bg-[#f4f5f7] font-sans text-gray-800">
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
+        {/* Logo Area */}
+        <div className="h-12 bg-[#2f54eb] flex items-center justify-between px-4 text-white">
+          <span className="text-sm font-bold tracking-wide">HR2.0开发环境</span>
+          <div className="w-6 h-6 bg-white/20 rounded flex items-center justify-center cursor-pointer hover:bg-white/30">
+            <Plus size={16} />
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="p-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            <input 
+              type="text" 
+              placeholder="菜单搜索 (⌘+/)" 
+              className="w-full bg-gray-100 border-none rounded py-1.5 pl-9 pr-3 text-[12px] focus:ring-1 focus:ring-[#2f54eb] outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Menu Items */}
+        <nav className="flex-1 overflow-y-auto">
+          <SidebarItem icon={User} label="个人绩效管理" hasSubmenu={false} />
+          
+          <div className="mt-1">
+            <SidebarItem icon={Users} label="组织绩效管理" hasSubmenu={true} isOpen={true} />
+            <div className="bg-blue-50/30">
+              <SubmenuItem 
+                label="组织绩效活动" 
+                active={activeMenu === 'performance-activity'} 
+                onClick={() => setActiveMenu('performance-activity')}
+              />
+              <SubmenuItem 
+                label="组织绩效流程监控" 
+                active={activeMenu === 'performance-monitoring'} 
+                onClick={() => setActiveMenu('performance-monitoring')}
+              />
+              <SubmenuItem 
+                label="组织绩效指标库" 
+                active={activeMenu === 'indicator-library'} 
+                onClick={() => setActiveMenu('indicator-library')}
+              />
+              <SubmenuItem 
+                label="组织绩效基础设置" 
+                active={activeMenu === 'basic-rules'} 
+                onClick={() => setActiveMenu('basic-rules')}
+              />
+            </div>
+          </div>
+        </nav>
+
+        {/* Sidebar Footer */}
+        <div className="p-2 border-t border-gray-100 flex justify-between text-gray-400">
+          <LayoutGrid size={16} className="cursor-pointer hover:text-gray-600" />
+          <FileText size={16} className="cursor-pointer hover:text-gray-600" />
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top Header */}
+        <header className="h-12 bg-[#2f54eb] flex items-center justify-end px-4 gap-6 text-white shrink-0">
+          <div className="flex items-center gap-1 text-[13px] cursor-pointer hover:opacity-80">
+            <span>HR2.0租户</span>
+            <ChevronDown size={14} />
+          </div>
+          <div className="cursor-pointer hover:opacity-80 relative">
+            <div className="w-5 h-5 border border-white/40 rounded-sm flex items-center justify-center">
+              <span className="text-[10px]">👕</span>
+            </div>
+          </div>
+          <div className="relative cursor-pointer hover:opacity-80">
+            <Bell size={18} />
+            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] px-1 rounded-full border border-[#2f54eb]">46</span>
+          </div>
+          <HelpCircle size={18} className="cursor-pointer hover:opacity-80" />
+          <div className="flex items-center gap-2 cursor-pointer hover:opacity-80">
+            <div className="w-7 h-7 bg-gray-300 rounded-full flex items-center justify-center text-gray-600 text-xs font-bold">
+              HR
+            </div>
+            <span className="text-[13px]">HR租户管理员</span>
+            <ChevronDown size={14} />
+          </div>
+        </header>
+
+        {/* Content Area */}
+        {activeMenu === 'grade-settings' ? (
+          <GradeSettingsPage 
+            gradeRanges={gradeRanges}
+            addRow={addRow}
+            deleteRow={deleteRow}
+            updateRow={updateRow}
+            roundingRule={roundingRule}
+            setRoundingRule={setRoundingRule}
+          />
+        ) : activeMenu === 'indicator-library' ? (
+          <IndicatorLibraryPage />
+        ) : activeMenu === 'performance-monitoring' ? (
+          <PerformanceProcessMonitoringPage activities={activities} />
+        ) : activeMenu === 'dashboard-mgmt' ? (
+          <DashboardDataMgmtPage />
+        ) : activeMenu === 'basic-rules' ? (
+          <BasicRuleSettingsPage 
+            gradeRanges={gradeRanges}
+            addRow={addRow}
+            deleteRow={deleteRow}
+            updateRow={updateRow}
+            roundingRule={roundingRule}
+            setRoundingRule={setRoundingRule}
+            deptDimensionConfigs={deptDimensionConfigs}
+            setDeptDimensionConfigs={setDeptDimensionConfigs}
+            levelScoreConfigs={levelScoreConfigs}
+            setLevelScoreConfigs={setLevelScoreConfigs}
+            notificationConfigs={notificationConfigs}
+            setNotificationConfigs={setNotificationConfigs}
+            performanceProcessConfigs={performanceProcessConfigs}
+            setPerformanceProcessConfigs={setPerformanceProcessConfigs}
+          />
+        ) : (
+          <PerformanceActivityPage 
+            deptDimensionConfigs={deptDimensionConfigs}
+            levelScoreConfigs={levelScoreConfigs}
+            notificationConfigs={notificationConfigs}
+            performanceProcessConfigs={performanceProcessConfigs}
+            activities={activities}
+            setActivities={setActivities}
+          />
+        )}
+      </main>
+    </div>
+  );
+}

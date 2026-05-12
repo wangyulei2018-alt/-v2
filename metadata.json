@@ -1,0 +1,6 @@
+{
+  "name": "组织绩效管理端v1",
+  "description": "提供组织绩效管理，包括等级分数区间设置等功能。",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
