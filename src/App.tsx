@@ -83,6 +83,30 @@ interface Indicator {
   target5: string;
   dept: string;
   category: string;
+  /** 指标分类（列表/表单图1） */
+  classification: string;
+  /** 数据来源部门（中文，列表展示） */
+  dataSourceDept: string;
+  /** 数据来源部门（英文） */
+  dataSourceDeptEn: string;
+  /** 适用范围：组织类型 */
+  scopeOrgTypes: string[];
+  /** 适用组织 */
+  scopeOrgs: string[];
+  /** 适用组织阶段 */
+  scopeStages: string[];
+  /** 适用范围块：指标可选性（单选：必选 / 监控 / 可选） */
+  scopeOptionality: string;
+  /** 适用范围块：其他说明 */
+  scopeOtherNote: string;
+  /** 外部调研块：指标可选性 */
+  researchOptionality: string[];
+  /** 外部调研：其他说明 */
+  researchOtherNote: string;
+  /** 指标标准外部调研说明 */
+  researchStandardText: string;
+  /** 外部调研附件展示名 */
+  researchAttachmentName: string;
 }
 
 // --- Components ---
@@ -129,10 +153,128 @@ const SubmenuItem = ({ label, active = false, onClick }: { label: string, active
   </div>
 );
 
+/** 指标库列表：下拉多选筛选项 */
+const ListFilterMultiSelect = ({
+  fieldKey,
+  label,
+  options,
+  value,
+  onChange,
+  openKey,
+  onOpenKey,
+  placeholder = '请选择',
+}: {
+  fieldKey: string;
+  label: string;
+  options: readonly string[];
+  value: string[];
+  onChange: (next: string[]) => void;
+  openKey: string | null;
+  onOpenKey: (k: string | null) => void;
+  placeholder?: string;
+}) => {
+  const open = openKey === fieldKey;
+  const toggle = (opt: string) => {
+    onChange(value.includes(opt) ? value.filter((x) => x !== opt) : [...value, opt]);
+  };
+  const summary =
+    value.length === 0
+      ? placeholder
+      : value.length <= 2
+        ? value.join('、')
+        : `${value.slice(0, 2).join('、')} 等${value.length}项`;
+  return (
+    <div className="relative min-w-0">
+      <span className="block text-[11px] text-gray-500 mb-0.5 truncate">{label}</span>
+      <button
+        type="button"
+        onClick={() => onOpenKey(open ? null : fieldKey)}
+        className={`w-full flex items-center justify-between gap-1 min-h-[32px] px-2 py-1 border rounded text-left text-[12px] bg-white transition-colors ${
+          open ? 'border-[#1677ff] ring-1 ring-[#1677ff]/20' : 'border-gray-200 hover:border-gray-300'
+        } ${value.length ? 'text-gray-900' : 'text-gray-400'}`}
+      >
+        <span className="truncate flex-1 min-w-0">{summary}</span>
+        <ChevronDown size={14} className={`shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-[60]" aria-hidden onClick={() => onOpenKey(null)} />
+          <div className="absolute left-0 right-0 top-full mt-1 z-[61] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden flex flex-col max-h-[min(260px,45vh)]">
+            <div className="overflow-y-auto p-1.5 space-y-0.5">
+              {options.map((opt) => (
+                <label
+                  key={opt}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50 cursor-pointer select-none text-[12px] text-gray-700"
+                >
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-[#1677ff] focus:ring-[#1677ff] shrink-0"
+                    checked={value.includes(opt)}
+                    onChange={() => toggle(opt)}
+                  />
+                  <span className="truncate">{opt}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 p-2 border-t border-gray-100 bg-gray-50/80 shrink-0">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange([]);
+                }}
+                className="px-2.5 py-1 text-[11px] text-gray-600 hover:bg-white rounded border border-gray-200"
+              >
+                清空
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenKey(null);
+                }}
+                className="px-2.5 py-1 text-[11px] bg-[#1677ff] text-white rounded hover:bg-[#0958d9]"
+              >
+                完成
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+type ListOptionalFilterKey = 'classification' | 'type' | 'scopeOrgType' | 'scopeOrg' | 'scopeStage';
+
+const LIST_OPTIONAL_FILTER_ORDER: ListOptionalFilterKey[] = [
+  'classification',
+  'type',
+  'scopeOrgType',
+  'scopeOrg',
+  'scopeStage',
+];
+
+const LIST_OPTIONAL_FILTER_LABELS: Record<ListOptionalFilterKey, string> = {
+  classification: '指标分类',
+  type: '指标类型',
+  scopeOrgType: '适用组织类型',
+  scopeOrg: '适用组织',
+  scopeStage: '适用组织阶段',
+};
+
 const IndicatorLibraryPage = () => {
-  const [selectedCategory, setSelectedCategory] = useState('全部指标库');
-  const [activeTab, setActiveTab] = useState('所有指标');
-  const [indicatorSearchTerm, setIndicatorSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('全部指标分类');
+  const [listFilterCodeNameDept, setListFilterCodeNameDept] = useState('');
+  const [listFilterClassifications, setListFilterClassifications] = useState<string[]>([]);
+  const [listFilterTypes, setListFilterTypes] = useState<string[]>([]);
+  const [listFilterScopeOrgTypes, setListFilterScopeOrgTypes] = useState<string[]>([]);
+  const [listFilterScopeOrgs, setListFilterScopeOrgs] = useState<string[]>([]);
+  const [listFilterScopeStages, setListFilterScopeStages] = useState<string[]>([]);
+  const [listFilterOpenKey, setListFilterOpenKey] = useState<string | null>(null);
+  const [listOptionalFilterKeys, setListOptionalFilterKeys] = useState<ListOptionalFilterKey[]>([]);
+  const [isAddListFilterModalOpen, setIsAddListFilterModalOpen] = useState(false);
+  const [addListFilterDraft, setAddListFilterDraft] = useState<ListOptionalFilterKey[]>([]);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [categoryModalMode, setCategoryModalMode] = useState<'create' | 'edit'>('create');
   const [isIndicatorModalOpen, setIsIndicatorModalOpen] = useState(false);
@@ -140,11 +282,10 @@ const IndicatorLibraryPage = () => {
   const [selectedIndicator, setSelectedIndicator] = useState<Indicator | null>(null);
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   const [categories, setCategories] = useState([
-    { name: '技术序列/T3', count: 9 },
-    { name: '技术序列/T4', count: 9 },
-    { name: '通用指标', count: 9 },
-    { name: '销售序列/S2', count: 9 },
-    { name: '职能序列/P3', count: 9 }
+    { name: '财务指标' },
+    { name: '客户指标' },
+    { name: '运营指标' },
+    { name: '组织发展' },
   ]);
   const [isCategoryDeleteConfirmOpen, setIsCategoryDeleteConfirmOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
@@ -156,6 +297,51 @@ const IndicatorLibraryPage = () => {
   const [showEnInput, setShowEnInput] = useState(false);
   const [isLangDetailsOpen, setIsLangDetailsOpen] = useState(false);
 
+  const [indicatorClassification, setIndicatorClassification] = useState('财务指标');
+  const [scopeOrgTypes, setScopeOrgTypes] = useState<string[]>([]);
+  const [scopeOrgs, setScopeOrgs] = useState<string[]>([]);
+  const [scopeOrgsDropdownOpen, setScopeOrgsDropdownOpen] = useState(false);
+  const [scopeOrgsSearch, setScopeOrgsSearch] = useState('');
+  const [scopeStages, setScopeStages] = useState<string[]>([]);
+  const [scopeOptionality, setScopeOptionality] = useState<string>('');
+  const [scopeOtherNote, setScopeOtherNote] = useState('');
+  const [researchStandardText, setResearchStandardText] = useState('');
+  const [researchAttachmentName, setResearchAttachmentName] = useState('');
+  const [draftIndicatorCode, setDraftIndicatorCode] = useState('MET4074');
+  const researchFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const toggleStrInList = (list: string[], setList: (v: string[]) => void, value: string) => {
+    setList(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
+  };
+
+  const SCOPE_ORG_TYPE_OPTS = ['经营单元', '能力中心', '职能部门'];
+  const SCOPE_ORG_OPTS = ['电动车', '中经', '短交通', '机器人', '海外业务', '其他BU'];
+  /** 适用组织下拉：BU + 职能部门（演示，可与主数据对接） */
+  const SCOPE_ORG_SELECT_OPTS = [
+    ...SCOPE_ORG_OPTS,
+    '财务部',
+    '人力资源部',
+    '技术中心',
+    '营销中心',
+    '供应链中心',
+    '总裁办',
+    '审计部',
+    '法务部',
+  ];
+  const SCOPE_STAGE_OPTS = ['初创期', '成长期', '成熟期', '转型期', '全阶段'];
+  const OPTIONALITY_OPTS = ['必选', '监控', '可选'];
+
+  const scopeOrgSelectListAll = useMemo(() => {
+    const extra = scopeOrgs.filter((v) => !SCOPE_ORG_SELECT_OPTS.includes(v));
+    return [...extra, ...SCOPE_ORG_SELECT_OPTS.filter((o) => !extra.includes(o))];
+  }, [scopeOrgs]);
+
+  const filteredScopeOrgSelectOpts = useMemo(() => {
+    const q = scopeOrgsSearch.trim().toLowerCase();
+    if (!q) return scopeOrgSelectListAll;
+    return scopeOrgSelectListAll.filter((o) => o.toLowerCase().includes(q));
+  }, [scopeOrgsSearch, scopeOrgSelectListAll]);
+
   // -- Multi-language state for indicator drawer --
   const [indicatorTypeInDrawer, setIndicatorTypeInDrawer] = useState<'定量' | '定性'>('定性');
   const [drawerLangField, setDrawerLangField] = useState<string | null>(null);
@@ -163,10 +349,10 @@ const IndicatorLibraryPage = () => {
     name: { zh: '', en: '' },
     formula: { zh: '', en: '' },
     definition: { zh: '', en: '' },
-    guidance: { zh: '', en: '' },
+    dataSourceDept: { zh: '', en: '' },
     target0: { zh: '', en: '' },
     target3: { zh: '', en: '' },
-    target5: { zh: '', en: '' }
+    target5: { zh: '', en: '' },
   });
   
   const [indicators, setIndicators] = useState<Indicator[]>([
@@ -174,7 +360,7 @@ const IndicatorLibraryPage = () => {
       id: '1',
       code: 'MET20251000',
       name: '代码质量缺陷率-0',
-      library: '通用指标',
+      library: '财务指标',
       type: '定量',
       formula: '(Bug数 / 代码行数) * 1000',
       definition: '衡量交付代码质量',
@@ -183,13 +369,25 @@ const IndicatorLibraryPage = () => {
       target3: '10%',
       target5: '> 15%',
       dept: '财务部',
-      category: '通用指标'
+      category: '财务指标',
+      classification: '财务指标',
+      dataSourceDept: '财务部',
+      dataSourceDeptEn: '',
+      scopeOrgTypes: ['经营单元'],
+      scopeOrgs: ['电动车', '短交通'],
+      scopeStages: ['成长期', '成熟期'],
+      scopeOptionality: '必选',
+      scopeOtherNote: '',
+      researchOptionality: ['监控'],
+      researchOtherNote: '',
+      researchStandardText: '',
+      researchAttachmentName: '',
     },
     {
       id: '2',
       code: 'MET20251001',
       name: '团队协作评分-1',
-      library: '技术序列/T3',
+      library: '客户指标',
       type: '定性',
       formula: '--',
       definition: '衡量协作价值',
@@ -198,13 +396,25 @@ const IndicatorLibraryPage = () => {
       target3: '85',
       target5: '> 95',
       dept: '技术部',
-      category: '技术序列/T3'
+      category: '客户指标',
+      classification: '客户指标',
+      dataSourceDept: '技术部',
+      dataSourceDeptEn: '',
+      scopeOrgTypes: ['职能部门', '能力中心'],
+      scopeOrgs: ['中经'],
+      scopeStages: ['全阶段'],
+      scopeOptionality: '可选',
+      scopeOtherNote: '',
+      researchOptionality: ['可选'],
+      researchOtherNote: '',
+      researchStandardText: '',
+      researchAttachmentName: '',
     },
     {
       id: '3',
       code: 'MET20251002',
       name: '重大安全事故-2',
-      library: '技术序列/T4',
+      library: '运营指标',
       type: '定性',
       formula: '--',
       definition: '衡量负向违规',
@@ -213,13 +423,25 @@ const IndicatorLibraryPage = () => {
       target3: '8%',
       target5: '> 12%',
       dept: '技术部',
-      category: '技术序列/T4'
+      category: '运营指标',
+      classification: '运营指标',
+      dataSourceDept: '安全监察部',
+      dataSourceDeptEn: '',
+      scopeOrgTypes: ['经营单元', '职能部门'],
+      scopeOrgs: ['电动车', '机器人'],
+      scopeStages: ['成熟期'],
+      scopeOptionality: '必选',
+      scopeOtherNote: '',
+      researchOptionality: ['必选'],
+      researchOtherNote: '',
+      researchStandardText: '',
+      researchAttachmentName: '',
     },
     {
       id: '4',
       code: 'MET20251003',
       name: '代码质量缺陷率-3',
-      library: '销售序列/S2',
+      library: '组织发展',
       type: '定量',
       formula: '(Bug数 / 代码行数) * 1000',
       definition: '衡量交付代码质量',
@@ -228,13 +450,25 @@ const IndicatorLibraryPage = () => {
       target3: '10%',
       target5: '> 15%',
       dept: '财务部',
-      category: '销售序列/S2'
+      category: '组织发展',
+      classification: '组织发展',
+      dataSourceDept: '研发效能组',
+      dataSourceDeptEn: '',
+      scopeOrgTypes: ['能力中心'],
+      scopeOrgs: ['短交通', '海外业务'],
+      scopeStages: ['成长期'],
+      scopeOptionality: '监控',
+      scopeOtherNote: '',
+      researchOptionality: [],
+      researchOtherNote: '',
+      researchStandardText: '',
+      researchAttachmentName: '',
     },
     {
       id: '5',
       code: 'MET20251004',
       name: '团队协作评分-4',
-      library: '职能序列/P3',
+      library: '财务指标',
       type: '定性',
       formula: '--',
       definition: '衡量协作价值',
@@ -243,17 +477,75 @@ const IndicatorLibraryPage = () => {
       target3: '85',
       target5: '> 95',
       dept: '财务部',
-      category: '职能序列/P3'
-    }
+      category: '财务指标',
+      classification: '财务指标',
+      dataSourceDept: '财务部',
+      dataSourceDeptEn: '',
+      scopeOrgTypes: [],
+      scopeOrgs: [],
+      scopeStages: ['转型期'],
+      scopeOptionality: '可选',
+      scopeOtherNote: '',
+      researchOptionality: ['可选', '监控'],
+      researchOtherNote: '',
+      researchStandardText: '',
+      researchAttachmentName: '',
+    },
   ]);
 
-  const filteredIndicators = indicators.filter(i => {
-    const categoryMatch = selectedCategory === '全部指标库' || i.category === selectedCategory;
-    const typeMatch = activeTab === '所有指标' || i.type === activeTab;
-    const searchMatch = !indicatorSearchTerm || 
-      i.name.toLowerCase().includes(indicatorSearchTerm.toLowerCase()) || 
-      i.code.toLowerCase().includes(indicatorSearchTerm.toLowerCase());
-    return categoryMatch && typeMatch && searchMatch;
+  const listFilterClassificationOptions = useMemo(() => {
+    const set = new Set<string>(categories.map((c) => c.name));
+    indicators.forEach((ind) => set.add(ind.classification));
+    return Array.from(set);
+  }, [categories, indicators]);
+  const listFilterScopeOrgOptions = useMemo(() => {
+    const set = new Set<string>(SCOPE_ORG_SELECT_OPTS);
+    indicators.forEach((ind) => ind.scopeOrgs.forEach((o) => set.add(o)));
+    return Array.from(set);
+  }, [indicators]);
+
+  const filteredIndicators = indicators.filter((i) => {
+    const categoryMatch = selectedCategory === '全部指标分类' || i.category === selectedCategory;
+    const kw = listFilterCodeNameDept.trim().toLowerCase();
+    if (kw) {
+      const dept = (i.dataSourceDept || '').toLowerCase();
+      if (
+        !i.code.toLowerCase().includes(kw) &&
+        !i.name.toLowerCase().includes(kw) &&
+        !dept.includes(kw)
+      ) {
+        return false;
+      }
+    }
+    if (listOptionalFilterKeys.includes('classification')) {
+      if (listFilterClassifications.length && !listFilterClassifications.includes(i.classification)) {
+        return false;
+      }
+    }
+    if (listOptionalFilterKeys.includes('type')) {
+      if (listFilterTypes.length && !listFilterTypes.includes(i.type)) {
+        return false;
+      }
+    }
+    if (listOptionalFilterKeys.includes('scopeOrgType')) {
+      if (
+        listFilterScopeOrgTypes.length &&
+        !i.scopeOrgTypes.some((t) => listFilterScopeOrgTypes.includes(t))
+      ) {
+        return false;
+      }
+    }
+    if (listOptionalFilterKeys.includes('scopeOrg')) {
+      if (listFilterScopeOrgs.length && !i.scopeOrgs.some((o) => listFilterScopeOrgs.includes(o))) {
+        return false;
+      }
+    }
+    if (listOptionalFilterKeys.includes('scopeStage')) {
+      if (listFilterScopeStages.length && !i.scopeStages.some((s) => listFilterScopeStages.includes(s))) {
+        return false;
+      }
+    }
+    return categoryMatch;
   });
 
   const toggleSelectAll = (checked: boolean) => {
@@ -278,8 +570,8 @@ const IndicatorLibraryPage = () => {
   };
 
   const getCategoryCount = (catName: string) => {
-    if (catName === '全部指标库') return 45;
-    return 9;
+    if (catName === '全部指标分类') return indicators.length;
+    return indicators.filter((i) => i.category === catName).length;
   };
 
   return (
@@ -293,7 +585,7 @@ const IndicatorLibraryPage = () => {
         {/* Left Category Sidebar */}
         <div className="w-52 bg-white rounded-lg border border-gray-200 flex flex-col shadow-sm shrink-0">
           <div className="p-5 flex items-center justify-between text-gray-900">
-            <span className="font-bold text-[16px]">指标库</span>
+            <span className="font-bold text-[16px]">指标分类</span>
             <button 
               className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-[#2f54eb] transition-all"
               onClick={() => {
@@ -307,12 +599,12 @@ const IndicatorLibraryPage = () => {
           
           <div className="flex-1 overflow-y-auto px-2">
             <div 
-              onClick={() => setSelectedCategory('全部指标库')}
-              className={`flex items-center justify-between px-4 py-2.5 rounded-md cursor-pointer text-[14px] mb-1 transition-all ${selectedCategory === '全部指标库' ? 'bg-[#e6f4ff] text-[#1677ff]' : 'text-gray-600 hover:bg-gray-50'}`}
+              onClick={() => setSelectedCategory('全部指标分类')}
+              className={`flex items-center justify-between px-4 py-2.5 rounded-md cursor-pointer text-[14px] mb-1 transition-all ${selectedCategory === '全部指标分类' ? 'bg-[#e6f4ff] text-[#1677ff]' : 'text-gray-600 hover:bg-gray-50'}`}
             >
-              <span>全部指标库</span>
-              <span className={`text-[12px] ${selectedCategory === '全部指标库' ? 'text-blue-400' : 'text-gray-400'}`}>
-                45
+              <span>全部指标分类</span>
+              <span className={`text-[12px] ${selectedCategory === '全部指标分类' ? 'text-blue-400' : 'text-gray-400'}`}>
+                {getCategoryCount('全部指标分类')}
               </span>
             </div>
             
@@ -353,7 +645,7 @@ const IndicatorLibraryPage = () => {
                     </div>
                   )}
                   <span className={`text-[12px] ${selectedCategory === cat.name ? 'text-blue-400' : 'text-gray-400'}`}>
-                    {cat.count}
+                    {getCategoryCount(cat.name)}
                   </span>
                 </div>
               </div>
@@ -363,48 +655,143 @@ const IndicatorLibraryPage = () => {
 
         {/* Right Content Area */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white border border-gray-200 rounded-lg shadow-sm">
-          {/* Header Actions */}
-          <div className="px-5 py-4 flex items-center justify-between gap-4">
-            <div className="relative w-[320px] shrink-0 flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
-                <input 
-                  type="text" 
-                  placeholder="搜索指标编码/指标名称" 
-                  value={indicatorSearchTerm}
-                  onChange={(e) => setIndicatorSearchTerm(e.target.value)}
-                  className="w-full h-8 border border-gray-200 rounded px-9 text-[12px] outline-none focus:border-[#1677ff] transition-all placeholder:text-gray-300 bg-white"
-                />
-                {indicatorSearchTerm && (
-                  <button 
-                    onClick={() => setIndicatorSearchTerm('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+          {/* 筛选与操作 */}
+          <div className="px-5 py-3 border-b border-gray-100 space-y-3">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="shrink-0 w-[min(100%,220px)] sm:w-[240px] md:w-[260px]">
+                    <input
+                      type="text"
+                      value={listFilterCodeNameDept}
+                      onChange={(e) => setListFilterCodeNameDept(e.target.value)}
+                      placeholder="指标编码 / 指标名称 / 数据来源部门"
+                      aria-label="指标编码、指标名称、数据来源部门（模糊匹配任一字段）"
+                      className="w-full h-8 border border-gray-200 rounded px-2 text-[12px] outline-none focus:border-[#1677ff] bg-white"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddListFilterDraft([...listOptionalFilterKeys]);
+                      setIsAddListFilterModalOpen(true);
+                    }}
+                    className="h-8 px-3 border border-dashed border-gray-300 rounded text-[12px] text-gray-600 hover:border-[#1677ff] hover:text-[#1677ff] bg-white whitespace-nowrap shrink-0 transition-colors"
                   >
-                    <X size={12} />
+                    添加条件
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setListFilterCodeNameDept('');
+                      setListFilterClassifications([]);
+                      setListFilterTypes([]);
+                      setListFilterScopeOrgTypes([]);
+                      setListFilterScopeOrgs([]);
+                      setListFilterScopeStages([]);
+                      setListOptionalFilterKeys([]);
+                      setListFilterOpenKey(null);
+                      setIsAddListFilterModalOpen(false);
+                    }}
+                    className="px-3 h-8 border border-gray-200 rounded text-[12px] text-gray-600 hover:bg-gray-50 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    重置
+                  </button>
+                </div>
+                {listOptionalFilterKeys.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-2 pt-1">
+                    {listOptionalFilterKeys.includes('classification') && (
+                      <div className="block min-w-0">
+                        <ListFilterMultiSelect
+                          fieldKey="classification"
+                          label="指标分类"
+                          options={listFilterClassificationOptions}
+                          value={listFilterClassifications}
+                          onChange={setListFilterClassifications}
+                          openKey={listFilterOpenKey}
+                          onOpenKey={setListFilterOpenKey}
+                        />
+                      </div>
+                    )}
+                    {listOptionalFilterKeys.includes('type') && (
+                      <div className="block min-w-0">
+                        <ListFilterMultiSelect
+                          fieldKey="type"
+                          label="指标类型"
+                          options={['定量', '定性']}
+                          value={listFilterTypes}
+                          onChange={setListFilterTypes}
+                          openKey={listFilterOpenKey}
+                          onOpenKey={setListFilterOpenKey}
+                        />
+                      </div>
+                    )}
+                    {listOptionalFilterKeys.includes('scopeOrgType') && (
+                      <div className="block min-w-0">
+                        <ListFilterMultiSelect
+                          fieldKey="scopeOrgType"
+                          label="适用组织类型"
+                          options={SCOPE_ORG_TYPE_OPTS}
+                          value={listFilterScopeOrgTypes}
+                          onChange={setListFilterScopeOrgTypes}
+                          openKey={listFilterOpenKey}
+                          onOpenKey={setListFilterOpenKey}
+                        />
+                      </div>
+                    )}
+                    {listOptionalFilterKeys.includes('scopeOrg') && (
+                      <div className="block min-w-0">
+                        <ListFilterMultiSelect
+                          fieldKey="scopeOrg"
+                          label="适用组织"
+                          options={listFilterScopeOrgOptions}
+                          value={listFilterScopeOrgs}
+                          onChange={setListFilterScopeOrgs}
+                          openKey={listFilterOpenKey}
+                          onOpenKey={setListFilterOpenKey}
+                        />
+                      </div>
+                    )}
+                    {listOptionalFilterKeys.includes('scopeStage') && (
+                      <div className="block min-w-0">
+                        <ListFilterMultiSelect
+                          fieldKey="scopeStage"
+                          label="适用组织阶段"
+                          options={SCOPE_STAGE_OPTS}
+                          value={listFilterScopeStages}
+                          onChange={setListFilterScopeStages}
+                          openKey={listFilterOpenKey}
+                          onOpenKey={setListFilterOpenKey}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-              <button 
-                onClick={() => setIndicatorSearchTerm('')}
-                className="px-3 h-8 border border-gray-200 rounded text-[12px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer whitespace-nowrap"
-              >
-                重置
-              </button>
-            </div>
-            
-            <div className="flex items-center gap-2 overflow-hidden">
               <button 
                 onClick={() => {
                   setSelectedIndicator(null);
                   setIndicatorTypeInDrawer('定性');
+                  setIndicatorClassification('财务指标');
+                  setScopeOrgTypes([]);
+                  setScopeOrgs([]);
+                  setScopeOrgsDropdownOpen(false);
+                  setScopeOrgsSearch('');
+                  setScopeStages([]);
+                  setScopeOptionality('');
+                  setScopeOtherNote('');
+                  setResearchStandardText('');
+                  setResearchAttachmentName('');
+                  setDraftIndicatorCode(`MET${Date.now().toString().slice(-7)}`);
+                  setDrawerLangField(null);
                   setDrawerLanguages({
                     name: { zh: '', en: '' },
                     formula: { zh: '', en: '' },
                     definition: { zh: '', en: '' },
-                    guidance: { zh: '', en: '' },
+                    dataSourceDept: { zh: '', en: '' },
                     target0: { zh: '', en: '' },
                     target3: { zh: '', en: '' },
-                    target5: { zh: '', en: '' }
+                    target5: { zh: '', en: '' },
                   });
                   setIsIndicatorModalOpen(true);
                 }}
@@ -434,6 +821,78 @@ const IndicatorLibraryPage = () => {
                 <span>删除</span>
               </button>
             </div>
+            {isAddListFilterModalOpen && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
+                <div className="bg-white rounded-xl shadow-xl w-[440px] max-w-[calc(100vw-2rem)] overflow-hidden border border-gray-100">
+                  <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <h3 className="text-[16px] font-bold text-gray-900">添加条件</h3>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddListFilterModalOpen(false)}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                      aria-label="关闭"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  <div className="px-6 py-4 space-y-3">
+                    <p className="text-[12px] text-gray-500 leading-relaxed">
+                      勾选需要在列表上方展示的筛选字段；未勾选的字段将从筛选区隐藏并清空已选值。
+                    </p>
+                    <div className="space-y-2.5">
+                      {LIST_OPTIONAL_FILTER_ORDER.map((key) => (
+                        <label
+                          key={key}
+                          className="flex items-center gap-2.5 cursor-pointer select-none text-[13px] text-gray-800"
+                        >
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-gray-300 text-[#1677ff] focus:ring-[#1677ff]"
+                            checked={addListFilterDraft.includes(key)}
+                            onChange={() => {
+                              setAddListFilterDraft((prev) =>
+                                prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+                              );
+                            }}
+                          />
+                          <span>{LIST_OPTIONAL_FILTER_LABELS[key]}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="px-6 py-4 bg-gray-50/80 flex justify-end gap-2 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddListFilterModalOpen(false)}
+                      className="px-4 py-2 border border-gray-200 rounded-lg text-[13px] font-medium text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = LIST_OPTIONAL_FILTER_ORDER.filter((k) => addListFilterDraft.includes(k));
+                        listOptionalFilterKeys.forEach((k) => {
+                          if (!next.includes(k)) {
+                            if (k === 'classification') setListFilterClassifications([]);
+                            else if (k === 'type') setListFilterTypes([]);
+                            else if (k === 'scopeOrgType') setListFilterScopeOrgTypes([]);
+                            else if (k === 'scopeOrg') setListFilterScopeOrgs([]);
+                            else if (k === 'scopeStage') setListFilterScopeStages([]);
+                          }
+                        });
+                        setListOptionalFilterKeys(next);
+                        setListFilterOpenKey(null);
+                        setIsAddListFilterModalOpen(false);
+                      }}
+                      className="px-5 py-2 bg-[#1677ff] text-white rounded-lg text-[13px] font-medium hover:bg-[#0958d9] transition-colors"
+                    >
+                      确定
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Table Area */}
@@ -449,12 +908,13 @@ const IndicatorLibraryPage = () => {
                       onChange={(e) => toggleSelectAll(e.target.checked)}
                     />
                   </th>
-                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[140px]">指标编码</th>
-                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[120px]">指标库</th>
-                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[180px]">指标名称</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[120px] whitespace-nowrap">指标编码</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[120px]">指标分类</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[200px]">指标名称</th>
                   <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[100px]">指标类型</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[220px]">指标定义/设置目的</th>
                   <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[180px]">计算公式</th>
-                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[180px]">指标定义</th>
+                  <th className="py-3 px-4 font-normal border-r border-gray-100 min-w-[140px]">数据来源部门</th>
                   <th className="w-[140px] py-3 px-5 font-normal sticky right-0 bg-white z-20 border-l border-gray-100 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.05)] text-left">操作</th>
                 </tr>
               </thead>
@@ -469,17 +929,25 @@ const IndicatorLibraryPage = () => {
                         onChange={() => toggleSelectRow(item.id)}
                       />
                     </td>
-                    <td className="py-3.5 px-4 font-mono border-r border-gray-50">{item.code}</td>
-                    <td className="py-3.5 px-4 border-r border-gray-50">{item.library}</td>
+                    <td
+                      className="py-3.5 px-4 border-r border-gray-50 font-mono text-[12px] text-gray-600 whitespace-nowrap max-w-[140px] truncate"
+                      title={item.code}
+                    >
+                      {item.code}
+                    </td>
+                    <td className="py-3.5 px-4 border-r border-gray-50">{item.classification}</td>
                     <td className="py-3.5 px-4 text-gray-900 border-r border-gray-50">{item.name}</td>
                     <td className="py-3.5 px-4 border-r border-gray-50">
                       <span className="font-medium">{item.type}</span>
                     </td>
+                    <td className="py-3.5 px-4 border-r border-gray-50 max-w-[260px] truncate" title={item.definition}>
+                      {item.definition}
+                    </td>
                     <td className="py-3.5 px-4 border-r border-gray-50 max-w-[200px] truncate" title={item.formula}>
                       {item.formula}
                     </td>
-                    <td className="py-3.5 px-4 border-r border-gray-50 max-w-[200px] truncate" title={item.definition}>
-                      {item.definition}
+                    <td className="py-3.5 px-4 border-r border-gray-50 max-w-[160px] truncate" title={item.dataSourceDept}>
+                      {item.dataSourceDept}
                     </td>
                     <td className="py-3.5 px-5 sticky right-0 bg-white group-hover:bg-gray-50 z-10 border-l border-gray-50 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.05)] transition-colors">
                       <div className="flex items-center gap-4 whitespace-nowrap">
@@ -487,14 +955,26 @@ const IndicatorLibraryPage = () => {
                           onClick={() => {
                             setSelectedIndicator(item);
                             setIndicatorTypeInDrawer(item.type);
+                            setIndicatorClassification(item.classification);
+                            setScopeOrgTypes([...item.scopeOrgTypes]);
+                            setScopeOrgs([...item.scopeOrgs]);
+                            setScopeOrgsDropdownOpen(false);
+                            setScopeOrgsSearch('');
+                            setScopeStages([...item.scopeStages]);
+                            setScopeOptionality(item.scopeOptionality);
+                            setScopeOtherNote(item.scopeOtherNote);
+                            setResearchStandardText(item.researchStandardText);
+                            setResearchAttachmentName(item.researchAttachmentName);
+                            setDraftIndicatorCode(item.code);
+                            setDrawerLangField(null);
                             setDrawerLanguages({
                               name: { zh: item.name, en: '' },
                               formula: { zh: item.formula, en: '' },
                               definition: { zh: item.definition, en: '' },
-                              guidance: { zh: item.remarks, en: '' },
+                              dataSourceDept: { zh: item.dataSourceDept, en: item.dataSourceDeptEn ?? '' },
                               target0: { zh: item.target0, en: '' },
                               target3: { zh: item.target3, en: '' },
-                              target5: { zh: item.target5, en: '' }
+                              target5: { zh: item.target5, en: '' },
                             });
                             setIsIndicatorModalOpen(true);
                           }}
@@ -553,7 +1033,7 @@ const IndicatorLibraryPage = () => {
             {/* Modal Header */}
             <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 transition-all">
               <h2 className="text-[26px] font-bold text-gray-900 tracking-tight">
-                {categoryModalMode === 'create' ? '新建指标库' : '编辑指标库'}
+                {categoryModalMode === 'create' ? '新建指标分类' : '编辑指标分类'}
               </h2>
               <button 
                 onClick={() => setIsCategoryModalOpen(false)}
@@ -568,7 +1048,7 @@ const IndicatorLibraryPage = () => {
               <div className="space-y-4">
                 <label className="block text-[16px] font-medium text-gray-700">
                   <span className="text-[#ff4d4f] mr-1 font-bold">*</span>
-                  <span className="opacity-80">指标库分类</span>
+                  <span className="opacity-80">指标分类</span>
                 </label>
                 <div className="relative group">
                   <input 
@@ -646,7 +1126,7 @@ const IndicatorLibraryPage = () => {
                 onClick={() => {
                   if (categoryLanguages.zh) {
                     if (categoryModalMode === 'create') {
-                      setCategories([...categories, { name: categoryLanguages.zh, count: 0 }]);
+                      setCategories([...categories, { name: categoryLanguages.zh }]);
                     } else {
                       // Handle edit logic if needed, for now just simple addition
                       setCategories(categories.map(c => c.name === selectedCategory ? { ...c, name: categoryLanguages.zh } : c));
@@ -675,7 +1155,11 @@ const IndicatorLibraryPage = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsIndicatorModalOpen(false)}
+              onClick={() => {
+                setScopeOrgsDropdownOpen(false);
+                setScopeOrgsSearch('');
+                setIsIndicatorModalOpen(false);
+              }}
               className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[1px]"
             />
             
@@ -685,7 +1169,7 @@ const IndicatorLibraryPage = () => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 h-full w-[720px] bg-white shadow-2xl z-[101] flex flex-col"
+              className="fixed top-0 right-0 h-full w-full max-w-[880px] bg-white shadow-2xl z-[101] flex flex-col"
             >
               {/* Drawer Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
@@ -693,7 +1177,11 @@ const IndicatorLibraryPage = () => {
                   {selectedIndicator ? '编辑指标' : '新建指标'}
                 </h2>
                 <button 
-                  onClick={() => setIsIndicatorModalOpen(false)}
+                  onClick={() => {
+                    setScopeOrgsDropdownOpen(false);
+                    setScopeOrgsSearch('');
+                    setIsIndicatorModalOpen(false);
+                  }}
                   className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all"
                 >
                   <X size={20} />
@@ -713,12 +1201,12 @@ const IndicatorLibraryPage = () => {
                   
                   <div className="grid grid-cols-2 gap-x-10 gap-y-6">
                     <div className="space-y-2">
-                    <label className="text-[14px] text-gray-900 font-medium">指标编码</label>
-                      <input 
-                        type="text" 
-                        value={selectedIndicator?.code || 'MET4074'}
+                      <label className="text-[14px] text-gray-900 font-medium">指标编码</label>
+                      <input
+                        type="text"
+                        value={draftIndicatorCode}
                         readOnly
-                        className="w-full h-11 border border-gray-200 bg-gray-50/50 rounded-lg px-4 text-[14px] text-gray-900 outline-none transition-all placeholder:text-gray-300"
+                        className="w-full h-11 border border-gray-200 bg-gray-50/50 rounded-lg px-4 text-[14px] text-gray-900 outline-none"
                       />
                     </div>
                     <div className="space-y-2">
@@ -726,24 +1214,27 @@ const IndicatorLibraryPage = () => {
                         <span className="text-red-500 mr-1">*</span>指标名称
                       </label>
                       <div className="relative">
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={drawerLanguages.name.zh}
-                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, name: { ...drawerLanguages.name, zh: e.target.value } })}
+                          onChange={(e) =>
+                            setDrawerLanguages({
+                              ...drawerLanguages,
+                              name: { ...drawerLanguages.name, zh: e.target.value },
+                            })
+                          }
                           placeholder="请输入指标名称"
                           className="w-full h-11 border border-gray-200 rounded-lg px-4 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none transition-all placeholder:text-gray-300"
                         />
-                        <div 
+                        <div
                           onClick={() => setDrawerLangField(drawerLangField === 'name' ? null : 'name')}
                           className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
                         >
                           中文
                         </div>
-
-                        {/* popup */}
                         <AnimatePresence>
                           {drawerLangField === 'name' && (
-                            <motion.div 
+                            <motion.div
                               initial={{ opacity: 0, y: 10, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -751,26 +1242,42 @@ const IndicatorLibraryPage = () => {
                             >
                               <div className="space-y-2">
                                 <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">中文名称</label>
-                                <input 
-                                  type="text" 
+                                <input
+                                  type="text"
                                   value={drawerLanguages.name.zh}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, name: { ...drawerLanguages.name, zh: e.target.value } })}
+                                  onChange={(e) =>
+                                    setDrawerLanguages({
+                                      ...drawerLanguages,
+                                      name: { ...drawerLanguages.name, zh: e.target.value },
+                                    })
+                                  }
                                   className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
                                   placeholder="请输入中文"
                                 />
                               </div>
                               <div className="space-y-2">
                                 <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">英文名称</label>
-                                <input 
-                                  type="text" 
+                                <input
+                                  type="text"
                                   value={drawerLanguages.name.en}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, name: { ...drawerLanguages.name, en: e.target.value } })}
+                                  onChange={(e) =>
+                                    setDrawerLanguages({
+                                      ...drawerLanguages,
+                                      name: { ...drawerLanguages.name, en: e.target.value },
+                                    })
+                                  }
                                   className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
                                   placeholder="请输入英文"
                                 />
                               </div>
                               <div className="pt-2 flex justify-end">
-                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDrawerLangField(null)}
+                                  className="text-[13px] font-bold text-[#2f54eb] hover:underline"
+                                >
+                                  完成
+                                </button>
                               </div>
                             </motion.div>
                           )}
@@ -778,17 +1285,18 @@ const IndicatorLibraryPage = () => {
                       </div>
                     </div>
                     <div className="space-y-2">
-                    <label className="text-[14px] text-gray-900 font-medium">
-                        <span className="text-red-500 mr-1">*</span>指标库
-                      </label>
+                      <label className="text-[14px] text-gray-900 font-medium">指标分类</label>
                       <div className="relative">
-                        <select 
-                          defaultValue={selectedIndicator?.category || '通用指标'}
+                        <select
+                          value={indicatorClassification}
+                          onChange={(e) => setIndicatorClassification(e.target.value)}
                           className="w-full h-11 border border-gray-200 rounded-lg px-4 pr-10 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
                         >
-                          <option>通用指标</option>
-                          <option>技术序列/T3</option>
-                          <option>销售序列/S2</option>
+                          {categories.map((c) => (
+                            <option key={c.name} value={c.name}>
+                              {c.name}
+                            </option>
+                          ))}
                         </select>
                         <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                       </div>
@@ -796,7 +1304,7 @@ const IndicatorLibraryPage = () => {
                     <div className="space-y-2">
                       <label className="text-[14px] text-gray-900 font-medium">指标类型</label>
                       <div className="relative">
-                        <select 
+                        <select
                           value={indicatorTypeInDrawer}
                           onChange={(e) => setIndicatorTypeInDrawer(e.target.value as '定量' | '定性')}
                           className="w-full h-11 border border-gray-200 rounded-lg px-4 pr-10 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
@@ -807,71 +1315,73 @@ const IndicatorLibraryPage = () => {
                         <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                       </div>
                     </div>
-
-                    {indicatorTypeInDrawer === '定量' && (
-                      <div className="col-span-2 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <label className="text-[14px] text-gray-900 font-medium">
-                          <span className="text-red-500 mr-1">*</span>计算公式
-                        </label>
-                        <div className="relative">
-                          <textarea 
-                            value={drawerLanguages.formula.zh}
-                            onChange={(e) => setDrawerLanguages({ ...drawerLanguages, formula: { ...drawerLanguages.formula, zh: e.target.value } })}
-                            placeholder="请输入计算公式"
-                            rows={4}
-                            className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
-                          />
-                          <div className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium select-none shadow-sm">
-                            中文
-                          </div>
-                        </div>
-                      </div>
-                    )}
                     <div className="col-span-2 space-y-2">
-                    <label className="text-[14px] text-gray-900 font-medium">指标定义</label>
+                      <label className="text-[14px] text-gray-900 font-medium">
+                        <span className="text-red-500 mr-1">*</span>指标定义/设置目的
+                      </label>
                       <div className="relative">
-                        <textarea 
+                        <textarea
                           value={drawerLanguages.definition.zh}
-                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, definition: { ...drawerLanguages.definition, zh: e.target.value } })}
-                          placeholder="请输入指标定义"
+                          onChange={(e) =>
+                            setDrawerLanguages({
+                              ...drawerLanguages,
+                              definition: { ...drawerLanguages.definition, zh: e.target.value },
+                            })
+                          }
+                          placeholder="请输入指标定义或设置目的"
                           rows={4}
                           className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
                         />
-                        <div 
+                        <div
                           onClick={() => setDrawerLangField(drawerLangField === 'definition' ? null : 'definition')}
                           className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
                         >
                           中文
                         </div>
-                        {/* popup */}
                         <AnimatePresence>
                           {drawerLangField === 'definition' && (
-                            <motion.div 
+                            <motion.div
                               initial={{ opacity: 0, y: 10, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 10, scale: 0.95 }}
                               className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
                             >
                               <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">指标定义 (中)</label>
-                                <textarea 
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">中文</label>
+                                <textarea
                                   value={drawerLanguages.definition.zh}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, definition: { ...drawerLanguages.definition, zh: e.target.value } })}
+                                  onChange={(e) =>
+                                    setDrawerLanguages({
+                                      ...drawerLanguages,
+                                      definition: { ...drawerLanguages.definition, zh: e.target.value },
+                                    })
+                                  }
                                   className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
                                   rows={3}
                                 />
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">指标定义 (EN)</label>
-                                <textarea 
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">English</label>
+                                <textarea
                                   value={drawerLanguages.definition.en}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, definition: { ...drawerLanguages.definition, en: e.target.value } })}
+                                  onChange={(e) =>
+                                    setDrawerLanguages({
+                                      ...drawerLanguages,
+                                      definition: { ...drawerLanguages.definition, en: e.target.value },
+                                    })
+                                  }
                                   className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
                                   rows={3}
                                 />
                               </div>
                               <div className="pt-2 flex justify-end">
-                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDrawerLangField(null)}
+                                  className="text-[13px] font-bold text-[#2f54eb] hover:underline"
+                                >
+                                  完成
+                                </button>
                               </div>
                             </motion.div>
                           )}
@@ -879,50 +1389,104 @@ const IndicatorLibraryPage = () => {
                       </div>
                     </div>
                     <div className="col-span-2 space-y-2">
-                      <label className="text-[14px] text-gray-900 font-medium">指标操作指引</label>
+                      <label className="text-[14px] text-gray-900 font-medium">
+                        <span className="text-red-500 mr-1">*</span>计算公式
+                      </label>
                       <div className="relative">
-                        <textarea 
-                          placeholder="请输入指标操作指引"
+                        <textarea
+                          value={drawerLanguages.formula.zh}
+                          onChange={(e) =>
+                            setDrawerLanguages({
+                              ...drawerLanguages,
+                              formula: { ...drawerLanguages.formula, zh: e.target.value },
+                            })
+                          }
+                          placeholder="请输入计算公式"
                           rows={4}
-                          value={drawerLanguages.guidance.zh}
-                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, guidance: { ...drawerLanguages.guidance, zh: e.target.value } })}
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
                         />
-                        <div 
-                          onClick={() => setDrawerLangField(drawerLangField === 'guidance' ? null : 'guidance')}
-                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
+                      </div>
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <label className="text-[14px] text-gray-900 font-medium">
+                        <span className="text-red-500 mr-1">*</span>数据来源部门
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={drawerLanguages.dataSourceDept?.zh ?? ''}
+                          onChange={(e) =>
+                            setDrawerLanguages({
+                              ...drawerLanguages,
+                              dataSourceDept: {
+                                zh: e.target.value,
+                                en: drawerLanguages.dataSourceDept?.en ?? '',
+                              },
+                            })
+                          }
+                          placeholder="请输入数据来源部门"
+                          className="w-full h-11 border border-gray-200 rounded-lg px-4 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none placeholder:text-gray-300"
+                        />
+                        <div
+                          onClick={() =>
+                            setDrawerLangField(drawerLangField === 'dataSourceDept' ? null : 'dataSourceDept')
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
                         >
                           中文
                         </div>
-                        {/* popup */}
                         <AnimatePresence>
-                          {drawerLangField === 'guidance' && (
-                            <motion.div 
+                          {drawerLangField === 'dataSourceDept' && (
+                            <motion.div
                               initial={{ opacity: 0, y: 10, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
+                              className="absolute right-0 top-[110%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
                             >
                               <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">指引 (中)</label>
-                                <textarea 
-                                  value={drawerLanguages.guidance.zh}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, guidance: { ...drawerLanguages.guidance, zh: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">中文</label>
+                                <input
+                                  type="text"
+                                  value={drawerLanguages.dataSourceDept?.zh ?? ''}
+                                  onChange={(e) =>
+                                    setDrawerLanguages({
+                                      ...drawerLanguages,
+                                      dataSourceDept: {
+                                        zh: e.target.value,
+                                        en: drawerLanguages.dataSourceDept?.en ?? '',
+                                      },
+                                    })
+                                  }
+                                  className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
+                                  placeholder="请输入中文"
                                 />
                               </div>
                               <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Guidance (EN)</label>
-                                <textarea 
-                                  value={drawerLanguages.guidance.en}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, guidance: { ...drawerLanguages.guidance, en: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
+                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">English</label>
+                                <input
+                                  type="text"
+                                  value={drawerLanguages.dataSourceDept?.en ?? ''}
+                                  onChange={(e) =>
+                                    setDrawerLanguages({
+                                      ...drawerLanguages,
+                                      dataSourceDept: {
+                                        zh: drawerLanguages.dataSourceDept?.zh ?? '',
+                                        en: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="w-full h-10 border border-gray-200 rounded-lg px-4 text-[14px] focus:border-[#2f54eb] outline-none"
+                                  placeholder="Please enter in English"
                                 />
                               </div>
                               <div className="pt-2 flex justify-end">
-                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDrawerLangField(null)}
+                                  className="text-[13px] font-bold text-[#2f54eb] hover:underline"
+                                >
+                                  完成
+                                </button>
                               </div>
                             </motion.div>
                           )}
@@ -932,183 +1496,218 @@ const IndicatorLibraryPage = () => {
                   </div>
                 </section>
 
-                {/* Part 2: Performance Standards */}
+                {/* Part 2: 适用范围 / 配置指引 */}
                 <section>
-                  <div className="flex items-center gap-2 mb-8">
+                  <div className="flex items-center gap-2 mb-5">
                     <div className="w-1.5 h-6 bg-[#2f54eb] rounded-full" />
-                    <h3 className="text-[18px] font-bold text-gray-900">绩效标准</h3>
+                    <h3 className="text-[18px] font-bold text-gray-900">指标适用范围/配置指引</h3>
                   </div>
-                  
-                  <div className="space-y-8">
-                    <div className="space-y-2">
-                      <label className="text-[14px] text-gray-900 font-medium whitespace-nowrap">零分目标</label>
-                      <div className="relative">
-                        <textarea 
-                          value={drawerLanguages.target0.zh}
-                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target0: { ...drawerLanguages.target0, zh: e.target.value } })}
-                          placeholder="请输入零分目标"
-                          rows={4}
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
-                        />
-                        <div 
-                          onClick={() => setDrawerLangField(drawerLangField === 'target0' ? null : 'target0')}
-                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          中文
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                      <div className="space-y-2 min-w-0">
+                        <div className="text-[13px] font-medium text-gray-800">
+                          <span className="text-red-500 mr-1">*</span>适用组织类型
                         </div>
-                        {/* popup */}
-                        <AnimatePresence>
-                          {drawerLangField === 'target0' && (
-                            <motion.div 
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
-                            >
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">零分目标 (中)</label>
-                                <textarea 
-                                  value={drawerLanguages.target0.zh}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target0: { ...drawerLanguages.target0, zh: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
-                                />
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-gray-600">
+                          {SCOPE_ORG_TYPE_OPTS.map((opt) => (
+                            <label key={opt} className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]"
+                                checked={scopeOrgTypes.includes(opt)}
+                                onChange={() => toggleStrInList(scopeOrgTypes, setScopeOrgTypes, opt)}
+                              />
+                              <span>{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2 min-w-0 md:col-span-2 xl:col-span-2">
+                        <div className="text-[13px] font-medium text-gray-800">
+                          <span className="text-red-500 mr-1">*</span>适用组织
+                        </div>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setScopeOrgsDropdownOpen((o) => !o)}
+                            className={`w-full flex items-center justify-between gap-2 min-h-[38px] px-3 py-2 border rounded-lg text-left text-[13px] transition-colors bg-white ${
+                              scopeOrgsDropdownOpen
+                                ? 'border-[#2f54eb] ring-1 ring-[#2f54eb]/20'
+                                : 'border-gray-200 hover:border-gray-300'
+                            } ${scopeOrgs.length ? 'text-gray-900' : 'text-gray-400'}`}
+                          >
+                            <span className="truncate flex-1 min-w-0">
+                              {scopeOrgs.length === 0
+                                ? '请选择适用组织'
+                                : scopeOrgs.length > 2
+                                  ? `${scopeOrgs.slice(0, 2).join('、')} 等 ${scopeOrgs.length} 项`
+                                  : scopeOrgs.join('、')}
+                            </span>
+                            <ChevronDown
+                              size={16}
+                              className={`shrink-0 text-gray-400 transition-transform ${scopeOrgsDropdownOpen ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                          {scopeOrgsDropdownOpen && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-[102]"
+                                aria-hidden
+                                onClick={() => {
+                                  setScopeOrgsDropdownOpen(false);
+                                  setScopeOrgsSearch('');
+                                }}
+                              />
+                              <div className="absolute left-0 right-0 top-full mt-1 z-[103] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden flex flex-col max-h-[min(320px,50vh)]">
+                                <div className="p-2 border-b border-gray-100 shrink-0">
+                                  <div className="relative">
+                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                                    <input
+                                      type="text"
+                                      value={scopeOrgsSearch}
+                                      onChange={(e) => setScopeOrgsSearch(e.target.value)}
+                                      placeholder="搜索组织或部门"
+                                      className="w-full h-9 pl-8 pr-3 border border-gray-200 rounded-md text-[13px] outline-none focus:border-[#2f54eb]"
+                                      autoFocus
+                                    />
+                                  </div>
+                                </div>
+                                <div className="overflow-y-auto flex-1 p-2 space-y-0.5 min-h-0">
+                                  {filteredScopeOrgSelectOpts.length === 0 ? (
+                                    <div className="py-6 text-center text-[13px] text-gray-400">无匹配项</div>
+                                  ) : (
+                                    filteredScopeOrgSelectOpts.map((opt) => (
+                                      <label
+                                        key={opt}
+                                        className="flex items-center gap-2 px-2 py-2 rounded-md hover:bg-gray-50 cursor-pointer select-none text-[13px] text-gray-700"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
+                                          checked={scopeOrgs.includes(opt)}
+                                          onChange={() => toggleStrInList(scopeOrgs, setScopeOrgs, opt)}
+                                        />
+                                        <span className="truncate">{opt}</span>
+                                      </label>
+                                    ))
+                                  )}
+                                </div>
+                                <div className="flex justify-end gap-2 p-2 border-t border-gray-100 shrink-0 bg-gray-50/80">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setScopeOrgs([]);
+                                    }}
+                                    className="px-3 py-1.5 text-[12px] text-gray-600 hover:bg-white rounded border border-gray-200"
+                                  >
+                                    清空
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setScopeOrgsDropdownOpen(false);
+                                      setScopeOrgsSearch('');
+                                    }}
+                                    className="px-3 py-1.5 text-[12px] bg-[#2f54eb] text-white rounded hover:bg-[#1d39c4]"
+                                  >
+                                    完成
+                                  </button>
+                                </div>
                               </div>
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Target 0 (EN)</label>
-                                <textarea 
-                                  value={drawerLanguages.target0.en}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target0: { ...drawerLanguages.target0, en: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
-                                />
-                              </div>
-                              <div className="pt-2 flex justify-end">
-                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
-                              </div>
-                            </motion.div>
+                            </>
                           )}
-                        </AnimatePresence>
+                        </div>
+                      </div>
+                      <div className="space-y-2 min-w-0 md:col-span-2 xl:col-span-1">
+                        <div className="text-[13px] font-medium text-gray-800">
+                          <span className="text-red-500 mr-1">*</span>适用组织阶段
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-gray-600">
+                          {SCOPE_STAGE_OPTS.map((opt) => (
+                            <label key={opt} className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]"
+                                checked={scopeStages.includes(opt)}
+                                onChange={() => toggleStrInList(scopeStages, setScopeStages, opt)}
+                              />
+                              <span>{opt}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2 min-w-0 md:col-span-2 xl:col-span-2">
+                        <div className="text-[13px] font-medium text-gray-800">
+                          <span className="text-red-500 mr-1">*</span>指标可选性
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-gray-600">
+                          {OPTIONALITY_OPTS.map((opt) => (
+                            <label key={opt} className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="radio"
+                                name="indicator-scope-optionality"
+                                className="border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]"
+                                checked={scopeOptionality === opt}
+                                onChange={() => setScopeOptionality(opt)}
+                              />
+                              <span>{opt}</span>
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[14px] text-gray-900 font-medium whitespace-nowrap">三分目标</label>
-                      <div className="relative">
-                        <textarea 
-                          value={drawerLanguages.target3.zh}
-                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target3: { ...drawerLanguages.target3, zh: e.target.value } })}
-                          placeholder="请输入三分目标"
-                          rows={4}
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
-                        />
-                        <div 
-                          onClick={() => setDrawerLangField(drawerLangField === 'target3' ? null : 'target3')}
-                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          中文
-                        </div>
-                        {/* popup */}
-                        <AnimatePresence>
-                          {drawerLangField === 'target3' && (
-                            <motion.div 
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
-                            >
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">三分目标 (中)</label>
-                                <textarea 
-                                  value={drawerLanguages.target3.zh}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target3: { ...drawerLanguages.target3, zh: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Target 3 (EN)</label>
-                                <textarea 
-                                  value={drawerLanguages.target3.en}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target3: { ...drawerLanguages.target3, en: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
-                                />
-                              </div>
-                              <div className="pt-2 flex justify-end">
-                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[14px] text-gray-900 font-medium whitespace-nowrap">五分目标</label>
-                      <div className="relative">
-                        <textarea 
-                          value={drawerLanguages.target5.zh}
-                          onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target5: { ...drawerLanguages.target5, zh: e.target.value } })}
-                          placeholder="请输入五分目标"
-                          rows={4}
-                          className="w-full border border-gray-200 rounded-lg px-4 py-3 pr-16 text-[14px] focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-100 outline-none resize-none transition-all placeholder:text-gray-300"
-                        />
-                        <div 
-                          onClick={() => setDrawerLangField(drawerLangField === 'target5' ? null : 'target5')}
-                          className="absolute right-3 top-4 px-3 py-1 bg-white border border-gray-200 rounded text-[13px] text-gray-500 font-medium cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          中文
-                        </div>
-                        {/* popup */}
-                        <AnimatePresence>
-                          {drawerLangField === 'target5' && (
-                            <motion.div 
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              className="absolute right-0 top-[102%] z-50 bg-white rounded-xl shadow-[0_15px_35px_rgba(0,0,0,0.15)] border border-gray-100 p-5 w-[320px] space-y-4"
-                            >
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">五分目标 (中)</label>
-                                <textarea 
-                                  value={drawerLanguages.target5.zh}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target5: { ...drawerLanguages.target5, zh: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Target 5 (EN)</label>
-                                <textarea 
-                                  value={drawerLanguages.target5.en}
-                                  onChange={(e) => setDrawerLanguages({ ...drawerLanguages, target5: { ...drawerLanguages.target5, en: e.target.value } })}
-                                  className="w-full border border-gray-200 rounded-lg px-4 py-2 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
-                                  rows={3}
-                                />
-                              </div>
-                              <div className="pt-2 flex justify-end">
-                                <button onClick={() => setDrawerLangField(null)} className="text-[13px] font-bold text-[#2f54eb] hover:underline">完成</button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
+                      <label className="text-[13px] font-medium text-gray-800">其他说明</label>
+                      <textarea
+                        value={scopeOtherNote}
+                        onChange={(e) => setScopeOtherNote(e.target.value)}
+                        rows={3}
+                        placeholder="适用范围相关的补充说明"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[13px] focus:border-[#2f54eb] outline-none resize-none bg-white"
+                      />
                     </div>
                   </div>
                 </section>
 
-                {/* Part 3: Management Config */}
+                {/* Part 3: 指标标准外部调研 */}
                 <section>
-                  <div className="flex items-center gap-2 mb-8">
+                  <div className="flex items-center gap-2 mb-5">
                     <div className="w-1.5 h-6 bg-[#2f54eb] rounded-full" />
-                    <h3 className="text-[18px] font-bold text-gray-900">管理配置</h3>
+                    <h3 className="text-[18px] font-bold text-gray-900">指标标准外部调研</h3>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-[14px] text-gray-900 font-medium">数据提供部门</label>
-                    <div className="relative">
-                      <div className="w-full h-11 border border-gray-200 rounded-lg px-4 flex items-center justify-between bg-white cursor-pointer hover:border-gray-300 transition-all">
-                        <span className="text-[14px] text-gray-300">请选择部门（可多选）</span>
-                        <ChevronDown size={16} className="text-gray-400" />
+                  <div className="space-y-5">
+                    <div className="space-y-3">
+                      <div className="text-[14px] font-semibold text-gray-900">指标标准外部调研</div>
+                      <textarea
+                        value={researchStandardText}
+                        onChange={(e) => setResearchStandardText(e.target.value)}
+                        rows={4}
+                        placeholder="可填写对标说明、外部标准摘要、文档链接等"
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3 text-[14px] focus:border-[#2f54eb] outline-none resize-none"
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <input
+                          ref={researchFileInputRef}
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            setResearchAttachmentName(f ? f.name : '');
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => researchFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-[13px] hover:bg-gray-50 transition-colors"
+                        >
+                          <Upload size={14} />
+                          上传附件
+                        </button>
+                        {researchAttachmentName ? (
+                          <span className="text-[12px] text-gray-500 truncate max-w-[280px]" title={researchAttachmentName}>
+                            已选：{researchAttachmentName}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -1118,13 +1717,104 @@ const IndicatorLibraryPage = () => {
               {/* Drawer Footer */}
               <div className="flex items-center gap-3 px-10 py-6 bg-white border-t border-gray-50">
                 <button 
-                  onClick={() => setIsIndicatorModalOpen(false)}
+                  type="button"
+                  onClick={() => {
+                    const nameZh = drawerLanguages.name.zh.trim();
+                    const defZh = drawerLanguages.definition.zh.trim();
+                    const formulaZh = drawerLanguages.formula.zh.trim();
+                    const deptZh = (drawerLanguages.dataSourceDept?.zh ?? '').trim();
+                    const deptEn = (drawerLanguages.dataSourceDept?.en ?? '').trim();
+                    if (!nameZh) {
+                      window.alert('请填写指标名称');
+                      return;
+                    }
+                    if (!defZh) {
+                      window.alert('请填写指标定义/设置目的');
+                      return;
+                    }
+                    if (!formulaZh) {
+                      window.alert('请填写计算公式');
+                      return;
+                    }
+                    if (!deptZh) {
+                      window.alert('请填写数据来源部门');
+                      return;
+                    }
+                    if (scopeOrgTypes.length === 0) {
+                      window.alert('请选择适用组织类型');
+                      return;
+                    }
+                    if (scopeOrgs.length === 0) {
+                      window.alert('请选择适用组织');
+                      return;
+                    }
+                    if (scopeStages.length === 0) {
+                      window.alert('请选择适用组织阶段');
+                      return;
+                    }
+                    if (!scopeOptionality.trim()) {
+                      window.alert('请选择指标可选性');
+                      return;
+                    }
+                    const base = {
+                      name: nameZh,
+                      library: indicatorClassification,
+                      category: indicatorClassification,
+                      classification: indicatorClassification,
+                      type: indicatorTypeInDrawer,
+                      formula: formulaZh,
+                      definition: defZh,
+                      remarks: selectedIndicator?.remarks ?? '',
+                      dept: deptZh,
+                      dataSourceDept: deptZh,
+                      dataSourceDeptEn: deptEn,
+                      scopeOrgTypes: [...scopeOrgTypes],
+                      scopeOrgs: [...scopeOrgs],
+                      scopeStages: [...scopeStages],
+                      scopeOptionality,
+                      scopeOtherNote,
+                      researchOptionality: selectedIndicator ? [...selectedIndicator.researchOptionality] : [],
+                      researchOtherNote: selectedIndicator ? selectedIndicator.researchOtherNote : '',
+                      researchStandardText,
+                      researchAttachmentName,
+                      target0: drawerLanguages.target0.zh || '—',
+                      target3: drawerLanguages.target3.zh || '—',
+                      target5: drawerLanguages.target5.zh || '—',
+                    };
+                    if (selectedIndicator) {
+                      setIndicators((prev) =>
+                        prev.map((i) =>
+                          i.id === selectedIndicator.id
+                            ? { ...i, ...base, code: draftIndicatorCode }
+                            : i
+                        )
+                      );
+                    } else {
+                      const id = `ind-${Date.now()}`;
+                      setIndicators((prev) => [
+                        ...prev,
+                        {
+                          id,
+                          code: draftIndicatorCode,
+                          ...base,
+                        },
+                      ]);
+                    }
+                    setScopeOrgsDropdownOpen(false);
+                    setScopeOrgsSearch('');
+                    setIsIndicatorModalOpen(false);
+                  }}
                   className="px-8 py-2.5 bg-[#2f54eb] text-white rounded text-[14px] font-medium hover:bg-[#1d39c4] transition-all shadow-md shadow-blue-500/10 active:scale-95"
                 >
                   确定
                 </button>
                 <button 
-                  onClick={() => setIsIndicatorModalOpen(false)}
+                  type="button"
+                  onClick={() => {
+                    setScopeOrgsDropdownOpen(false);
+                    setScopeOrgsSearch('');
+                    setIsIndicatorModalOpen(false);
+                  }}
                   className="px-8 py-2.5 border border-gray-300 bg-white text-gray-700 rounded text-[14px] font-medium hover:bg-gray-50 hover:border-gray-400 transition-all active:scale-95"
                 >
                   取消
@@ -1168,7 +1858,7 @@ const IndicatorLibraryPage = () => {
                   onClick={() => {
                     setCategories(prev => prev.filter(c => c.name !== categoryToDelete));
                     if (selectedCategory === categoryToDelete) {
-                      setSelectedCategory('全部指标');
+                      setSelectedCategory('全部指标分类');
                     }
                     setIsCategoryDeleteConfirmOpen(false);
                     setCategoryToDelete(null);
@@ -1550,9 +2240,9 @@ const ActivityDrawer = ({
       return;
     }
     const stages: { name: string; s: string; e: string }[] = [
-      { name: '绩效计划制定', s: planStageStart.trim(), e: planStageEnd.trim() },
-      { name: '绩效中期回顾', s: midStageStart.trim(), e: midStageEnd.trim() },
-      { name: '绩效考核', s: appraisalStageStart.trim(), e: appraisalStageEnd.trim() },
+      { name: '组织绩效计划制定', s: planStageStart.trim(), e: planStageEnd.trim() },
+      { name: '组织绩效中期回顾', s: midStageStart.trim(), e: midStageEnd.trim() },
+      { name: '组织绩效考核', s: appraisalStageStart.trim(), e: appraisalStageEnd.trim() },
     ];
     for (const st of stages) {
       if (!st.s || !st.e) {
@@ -1738,21 +2428,21 @@ const ActivityDrawer = ({
                   {(
                     [
                       {
-                        label: '绩效计划制定',
+                        label: '组织绩效计划制定',
                         start: planStageStart,
                         end: planStageEnd,
                         setStart: setPlanStageStart,
                         setEnd: setPlanStageEnd,
                       },
                       {
-                        label: '绩效中期回顾',
+                        label: '组织绩效中期回顾',
                         start: midStageStart,
                         end: midStageEnd,
                         setStart: setMidStageStart,
                         setEnd: setMidStageEnd,
                       },
                       {
-                        label: '绩效考核',
+                        label: '组织绩效考核',
                         start: appraisalStageStart,
                         end: appraisalStageEnd,
                         setStart: setAppraisalStageStart,
@@ -2270,7 +2960,7 @@ function computeMidTermVsMasterDiff(
   return { added, removed, changed };
 }
 
-/** 模拟：绩效中期回顾阶段已归档并推送的组织快照 */
+/** 模拟：组织绩效中期回顾阶段已归档并推送的组织快照 */
 const MOCK_MID_TERM_ARCHIVED_ORGS: OrgRosterDiffLine[] = [
   { code: 'D001', path: '集团总部/信息化中心', level: '一级部门', orgType: '能力中心', leader: '刘信息 (M1001)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '能力中心负责人', approver: '孙七 (50001)' },
   { code: 'D002', path: '集团总部/人力行政中心', level: '一级部门', orgType: '职能部门', leader: '张人力 (M1002)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '相关方', approver: '吴九 (20002)' },
@@ -2299,7 +2989,7 @@ const PRE_ASSESSMENT_ROSTER_DIFF = computeMidTermVsMasterDiff(MOCK_MID_TERM_ARCH
 /** 中期回顾「更新轮次名单」与预考核对齐：上一阶段基线 vs 主数据（演示数据与预考核同源） */
 const MID_TERM_ROSTER_UPDATE_DIFF = PRE_ASSESSMENT_ROSTER_DIFF;
 
-/** 绩效考核 · 正式考核：与预考核对齐的演示比对数据（中期归档基线 vs 主数据） */
+/** 组织绩效考核 · 正式考核：与预考核对齐的演示比对数据（中期归档基线 vs 主数据） */
 const FORMAL_ASSESSMENT_ROSTER_DIFF = PRE_ASSESSMENT_ROSTER_DIFF;
 
 function applyOrgRosterDiffToAssessmentRows(
@@ -2368,26 +3058,31 @@ const OrgAssessmentModal = ({
   activity,
   onFormalAssessmentArchived,
   onEditActivity,
-  onDeleteActivity
+  onDeleteActivity,
+  onInitiatePlanChange,
+  planChangeSubjectsByActivityId = {},
 }: {
   isOpen: boolean;
   onClose: () => void;
   activity: any;
-  /** 绩效考核 · 正式考核：在「归档并完成」校验通过并完成归档后回调（如将活动标为已完成并关弹层） */
+  /** 组织绩效考核 · 正式考核：在「归档并完成」校验通过并完成归档后回调（如将活动标为已完成并关弹层） */
   onFormalAssessmentArchived?: () => void;
   /** 草稿活动：顶部「编辑」打开活动抽屉编辑 */
   onEditActivity?: () => void;
   /** 草稿活动：顶部「删除」走活动删除确认 */
   onDeleteActivity?: () => void;
+  /** 中期回顾：将所选考核对象写入「组织绩效计划变更监控」列表（同一对象可多次发起，仅「进行中」不可叠发） */
+  onInitiatePlanChange?: (activityId: string, subjects: any[]) => void;
+  /** 各活动已发起的计划变更行（同一考核对象仅当存在「进行中」申请时不可再发起；上一申请为「已完成」后可再发起） */
+  planChangeSubjectsByActivityId?: Record<string, any[]>;
 }) => {
   if (!isOpen) return null;
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeletePreAssessmentOpen, setIsDeletePreAssessmentOpen] = useState(false);
-  const [isMidTermArchiveModalOpen, setIsMidTermArchiveModalOpen] = useState(false);
-  const [midTermIncludePreChoice, setMidTermIncludePreChoice] = useState<boolean | null>(null);
-  /** 用户在「归档并进入绩效考核」弹窗中明确选择不开启预考核后，隐藏「添加组织绩效预考核」；离开绩效考核阶段后重置 */
-  const [suppressAddPreAssessmentRound, setSuppressAddPreAssessmentRound] = useState(false);
+  const [isSkipPreAssessmentConfirmOpen, setIsSkipPreAssessmentConfirmOpen] = useState(false);
+  /** 预考核经「跳过」确认结束后，在预考核 Tab 下将「更新名单 / 启动组织绩效考核 / 归档并进入下一轮次」置灰 */
+  const [preAssessmentPrimaryActionsLocked, setPreAssessmentPrimaryActionsLocked] = useState(false);
   /** null | 'pre' | 'mid' | 'formal' — 与组织主数据比对更新名单 */
   const [rosterUpdateModalKind, setRosterUpdateModalKind] = useState<null | 'pre' | 'mid' | 'formal'>(null);
   const [preRosterApplyAdd, setPreRosterApplyAdd] = useState(true);
@@ -2415,6 +3110,7 @@ const OrgAssessmentModal = ({
   const handleDeletePreAssessmentConfirm = () => {
     setMonitoringTabs2(prev => prev.filter(t => t.id !== 'pre'));
     setActiveMonitoringTab2('formal');
+    setPreAssessmentPrimaryActionsLocked(false);
     setIsDeletePreAssessmentOpen(false);
     showToast('已移除组织绩效预考核（本阶段为可选，可随时再次添加）', 'success');
   };
@@ -2422,9 +3118,9 @@ const OrgAssessmentModal = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [currentSubStepIndex, setCurrentSubStepIndex] = useState(0);
   const [isFrequencyModalOpen, setIsFrequencyModalOpen] = useState(false);
-  /** 已在计划制定阶段「归档并进入下一步」，才允许从步骤条进入绩效中期回顾 */
+  /** 已在计划制定阶段「归档并进入下一步」，才允许从步骤条进入组织绩效中期回顾 */
   const [planStageArchivedToMidTerm, setPlanStageArchivedToMidTerm] = useState(false);
-  /** 已在中期回顾「归档并进入下一步」并完成弹窗确认，才允许从步骤条进入绩效考核 */
+  /** 已在中期回顾「归档并进入下一步」后，才允许从步骤条进入组织绩效考核 */
   const [midTermArchivedToAppraisal, setMidTermArchivedToAppraisal] = useState(false);
   const [isInterventionModalOpen, setIsInterventionModalOpen] = useState(false);
   const [isApprovalChainModalOpen, setIsApprovalChainModalOpen] = useState(false);
@@ -2459,6 +3155,8 @@ const OrgAssessmentModal = ({
   const setMonitoringTabs = currentStep === 2 ? setMonitoringTabs2 : setMonitoringTabs1;
   const activeMonitoringTab = currentStep === 2 ? activeMonitoringTab2 : activeMonitoringTab1;
   const setActiveMonitoringTab = currentStep === 2 ? setActiveMonitoringTab2 : setActiveMonitoringTab1;
+  const isPreAssessmentPrimaryActionsLocked =
+    currentStep === 2 && activeMonitoringTab === 'pre' && preAssessmentPrimaryActionsLocked;
   const [isPlanStarted, setIsPlanStarted] = useState(false);
   const [isSubjectsGenerated, setIsSubjectsGenerated] = useState(false);
   const [isRoundModalOpen, setIsRoundModalOpen] = useState(false);
@@ -2469,11 +3167,11 @@ const OrgAssessmentModal = ({
     const midDateFromTabs = formatMidTermStepperDate(monitoringTabs1);
     const midFallback = isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.midTerm);
     const midDate = midDateFromTabs || midFallback;
-    /** 季度与年度均为三阶段：计划制定、中期回顾、绩效考核（年度不再单独展示「绩效预考核」步骤；预考核仍为绩效考核内的可选轮次 Tab） */
+    /** 季度与年度均为三阶段：组织绩效计划制定、组织绩效中期回顾、组织绩效考核（年度不再单独展示「绩效预考核」步骤；预考核仍为组织绩效考核内的可选轮次 Tab） */
     return [
-      { title: '绩效计划制定', date: isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.plan) },
-      { title: '绩效中期回顾', date: midDate },
-      { title: '绩效考核', date: isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal) }
+      { title: '组织绩效计划制定', date: isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.plan) },
+      { title: '组织绩效中期回顾', date: midDate },
+      { title: '组织绩效考核', date: isoStageWindowToStepperLabel(QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal) }
     ];
   }, [monitoringTabs1]);
 
@@ -2484,10 +3182,10 @@ const OrgAssessmentModal = ({
     if (isActivityCompleted) return undefined;
     if (stepIndex <= 0) return undefined;
     if (stepIndex === 1 && !planStageArchivedToMidTerm) {
-      return '请先在「绩效计划制定」阶段勾选已完成的数据，并点击「归档并进入下一步」后，方可进入「绩效中期回顾」。';
+      return '请先在「组织绩效计划制定」阶段勾选已完成的数据，并点击「归档并进入下一步」后，方可进入「组织绩效中期回顾」。';
     }
     if (stepIndex >= 2 && !midTermArchivedToAppraisal) {
-      return '请先在「绩效中期回顾」最后一轮勾选已完成的数据，并点击「归档并进入下一步」且在弹窗中确认后，方可进入「绩效考核」。';
+      return '请先在「组织绩效中期回顾」最后一轮勾选已完成的数据，并点击「归档并进入下一步」后，方可进入「组织绩效考核」。';
     }
     return undefined;
   };
@@ -2505,9 +3203,9 @@ const OrgAssessmentModal = ({
     const formal = monitoringTabs2.find(t => t.id === 'formal');
     const isQuarter = activity?.type !== '年度';
     const b = isQuarter ? QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal : midTermBounds;
-    const rangeLabel = isQuarter ? '绩效考核阶段' : '绩效中期回顾';
+    const rangeLabel = isQuarter ? '组织绩效考核阶段' : '组织绩效中期回顾';
     if (!b) {
-      showToast(isQuarter ? '无法获取绩效考核阶段窗口' : '无法解析绩效中期回顾时间', 'error');
+      showToast(isQuarter ? '无法获取组织绩效考核阶段窗口' : '无法解析组织绩效中期回顾时间', 'error');
       return;
     }
     let startDate = b.start;
@@ -2543,6 +3241,7 @@ const OrgAssessmentModal = ({
       return [{ id: 'pre', name: '组织绩效预考核', isDefault: true, startDate, endDate }, ...rest];
     });
     setActiveMonitoringTab2('pre');
+    setPreAssessmentPrimaryActionsLocked(false);
     showToast('已添加组织绩效预考核', 'success');
   };
 
@@ -2594,14 +3293,14 @@ const OrgAssessmentModal = ({
     if (activity?.type !== '年度') {
       const aw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal;
       if (s < aw.start || e > aw.end) {
-        showToast(`轮次时间须在绩效考核阶段窗口内（${isoStageWindowToStepperLabel(aw)}）`, 'error');
+        showToast(`轮次时间须在组织绩效考核阶段窗口内（${isoStageWindowToStepperLabel(aw)}）`, 'error');
         return false;
       }
     } else {
       const bounds = midTermBounds;
       if (bounds) {
         if (s < bounds.start || e > bounds.end) {
-          showToast(`轮次时间须在绩效中期回顾范围内（${bounds.start} ~ ${bounds.end}）`, 'error');
+          showToast(`轮次时间须在组织绩效中期回顾范围内（${bounds.start} ~ ${bounds.end}）`, 'error');
           return false;
         }
       }
@@ -2614,7 +3313,7 @@ const OrgAssessmentModal = ({
     return true;
   };
 
-  /** 绩效中期回顾：保存轮次弹窗时校验起止日与多轮不交叉 */
+  /** 组织绩效中期回顾：保存轮次弹窗时校验起止日与多轮不交叉 */
   const validateMidTermRoundModal = (tabId: string | undefined, startDate: string, endDate: string): boolean => {
     if (currentStep !== 1) return true;
     const s = startDate || '';
@@ -2636,7 +3335,7 @@ const OrgAssessmentModal = ({
       const mw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.midTerm;
       if (!isoRangeWithinWindow(s, e, mw)) {
         showToast(
-          `当前轮次时间须在绩效中期回顾阶段窗口内（${isoStageWindowToStepperLabel(mw)}），且不能超出该整体窗口。`,
+          `当前轮次时间须在组织绩效中期回顾阶段窗口内（${isoStageWindowToStepperLabel(mw)}），且不能超出该整体窗口。`,
           'error',
           6500
         );
@@ -2718,11 +3417,8 @@ const OrgAssessmentModal = ({
 
   useEffect(() => {
     if (currentStep !== 2) {
-      setSuppressAddPreAssessmentRound(false);
+      setPreAssessmentPrimaryActionsLocked(false);
     }
-  }, [currentStep]);
-
-  useEffect(() => {
     if (currentStep === 2) setIsMoreMenuOpen(false);
   }, [currentStep]);
 
@@ -2856,7 +3552,7 @@ const OrgAssessmentModal = ({
         showToast(
           [
             '请先维护当前回顾轮次的开始时间与结束时间。',
-            '绩效中期回顾整体周期可能较长，后续还可能新增多轮回顾；当前轮次的起止仅代表本轮，不等同于整个中期回顾阶段，请为后续轮次预留时间窗口。',
+            '组织绩效中期回顾整体周期可能较长，后续还可能新增多轮回顾；当前轮次的起止仅代表本轮，不等同于整个中期回顾阶段，请为后续轮次预留时间窗口。',
             '若存在多轮回顾，各轮次的起止时间不得交叉。'
           ].join('\n'),
           'error',
@@ -2881,7 +3577,7 @@ const OrgAssessmentModal = ({
         const mw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.midTerm;
         if (!isoRangeWithinWindow(tab.startDate, tab.endDate, mw)) {
           showToast(
-            `当前轮次时间须在绩效中期回顾阶段窗口内（${isoStageWindowToStepperLabel(mw)}），且不能超出该整体窗口后再启动。`,
+            `当前轮次时间须在组织绩效中期回顾阶段窗口内（${isoStageWindowToStepperLabel(mw)}），且不能超出该整体窗口后再启动。`,
             'error',
             6500
           );
@@ -2898,7 +3594,7 @@ const OrgAssessmentModal = ({
           showToast(
             [
               `考核对象已勾选，但「${tab.name}」的开始时间、结束时间尚未填写，无法启动考核。`,
-              '请点击该轮次标签右侧的「编辑」图标，在弹窗中补全起止日期后再点击「启动绩效考核」。',
+              '请点击该轮次标签右侧的「编辑」图标，在弹窗中补全起止日期后再点击「启动组织绩效考核」。',
             ].join('\n'),
             'warning',
             6500
@@ -2975,13 +3671,20 @@ const OrgAssessmentModal = ({
     if (currentStep === 0) {
       setPlanStageArchivedToMidTerm(true);
       setCurrentStep(1);
-      showToast('已进入绩效中期回顾', 'success');
+      showToast('已进入组织绩效中期回顾', 'success');
     }
   };
 
-  /** 绩效中期回顾 · 多轮非末轮：归档勾选数据并切换到下一轮 Tab */
+  /** 组织绩效中期回顾 · 多轮非末轮：须当前列表全部考核对象为「已完成」方可归档；通过后进入下一轮并将名单初始化为「未开始」 */
   const handleMidTermArchiveAndNextRound = () => {
-    if (!validateArchiveSelection()) return;
+    if (assessmentData.length === 0) {
+      showToast('暂无考核对象', 'warning');
+      return;
+    }
+    if (!assessmentData.every((item) => item.status === '已完成')) {
+      showToast('仅所有考核对象的状态为「已完成」时才可以归档并进入下一轮次', 'warning');
+      return;
+    }
     const idx = monitoringTabs1.findIndex((t) => t.id === activeMonitoringTab1);
     const nextTab = idx >= 0 && idx < monitoringTabs1.length - 1 ? monitoringTabs1[idx + 1] : null;
     if (!nextTab) {
@@ -2989,26 +3692,49 @@ const OrgAssessmentModal = ({
       return;
     }
     setAssessmentData((prev) =>
-      prev.map((item) =>
-        selectedIds.includes(item.id) ? { ...item, status: '已完成' as any } : item
-      )
+      prev.map((item) => ({ ...item, status: '未开始' as any }))
     );
     setSelectedIds([]);
     setActiveMonitoringTab1(nextTab.id);
     showToast(`已归档并进入${nextTab.name}`, 'success');
   };
 
-  /** 绩效考核阶段 · 组织绩效预考核：归档勾选数据并切换到正式考核轮次 */
+  /** 组织绩效考核阶段 · 组织绩效预考核：须当前列表全部考核对象为「已完成」方可归档；通过后进入正式考核并将名单初始化为「未开始」 */
   const handlePreAssessmentArchiveAndNextRound = () => {
-    if (!validateArchiveSelection()) return;
-    setAssessmentData(prev => prev.map(item =>
-      selectedIds.includes(item.id) ? { ...item, status: '已完成' as any } : item
-    ));
-    setSelectedIds([]);
-    if (monitoringTabs2.some(t => t.id === 'formal')) {
-      setActiveMonitoringTab2('formal');
+    if (assessmentData.length === 0) {
+      showToast('暂无考核对象', 'warning');
+      return;
     }
+    if (!assessmentData.every((item) => item.status === '已完成')) {
+      showToast('仅所有考核对象的状态为「已完成」时才可以归档并进入下一轮次', 'warning');
+      return;
+    }
+    if (!monitoringTabs2.some((t) => t.id === 'formal')) {
+      showToast('当前未配置组织绩效正式考核轮次', 'warning');
+      return;
+    }
+    setAssessmentData((prev) => prev.map((item) => ({ ...item, status: '未开始' as any })));
+    setSelectedIds([]);
+    setActiveMonitoringTab2('formal');
     showToast('已归档并进入组织绩效正式考核', 'success');
+  };
+
+  /** 组织绩效考核阶段 · 预考核：跳过当前轮次，直接进入正式考核（不要求勾选与「已完成」校验）；由确认弹窗触发 */
+  const handleSkipPreAssessmentToFormal = () => {
+    if (currentStep !== 2 || activeMonitoringTab !== 'pre') {
+      setIsSkipPreAssessmentConfirmOpen(false);
+      return;
+    }
+    if (!monitoringTabs2.some((t) => t.id === 'formal')) {
+      setIsSkipPreAssessmentConfirmOpen(false);
+      showToast('当前未配置组织绩效正式考核轮次', 'warning');
+      return;
+    }
+    setIsSkipPreAssessmentConfirmOpen(false);
+    setSelectedIds([]);
+    setPreAssessmentPrimaryActionsLocked(true);
+    setActiveMonitoringTab2('formal');
+    showToast('已跳过预考核，当前数据已推送至组织绩效正式考核', 'success');
   };
 
   const openPreRosterUpdateModal = () => {
@@ -3026,7 +3752,7 @@ const OrgAssessmentModal = ({
   const openMidTermRosterUpdateModal = () => {
     const diff = MID_TERM_ROSTER_UPDATE_DIFF;
     if (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0) {
-      showToast('绩效计划制定阶段名单与组织主数据一致，无需更新名单', 'success');
+      showToast('组织绩效计划制定阶段名单与组织主数据一致，无需更新名单', 'success');
       return;
     }
     setPreRosterApplyAdd(true);
@@ -3095,12 +3821,9 @@ const OrgAssessmentModal = ({
     showToast('已按确认结果更新组织绩效正式考核名单', 'success');
   };
 
-  const confirmMidTermArchiveAndNext = () => {
+  /** 组织绩效中期回顾最后一轮：归档并进入组织绩效考核；默认落在「组织绩效预考核」轮次（可手动切换至正式考核 Tab） */
+  const performMidTermArchiveEnterAppraisal = () => {
     if (!validateArchiveSelection()) return;
-    if (midTermIncludePreChoice !== true && midTermIncludePreChoice !== false) {
-      showToast('请先选择是否开启组织绩效预考核，再点击确认', 'warning');
-      return;
-    }
     setAssessmentData(prev => prev.map(item =>
       selectedIds.includes(item.id) ? { ...item, status: '已完成' as any } : item
     ));
@@ -3110,35 +3833,11 @@ const OrgAssessmentModal = ({
     const aw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal;
 
     if (isQuarter) {
-      if (midTermIncludePreChoice) {
-        let preEnd = addDaysIso(aw.start, 14);
-        if (preEnd >= aw.end) preEnd = aw.end;
-        let formalStart = addDaysIso(preEnd, 1);
-        if (formalStart > aw.end) {
-          showToast('绩效考核阶段时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
-          setMonitoringTabs2([
-            { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-          ]);
-          setActiveMonitoringTab2('formal');
-        } else {
-          setMonitoringTabs2([
-            { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
-            { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-          ]);
-          setActiveMonitoringTab2('pre');
-        }
-      } else {
-        setMonitoringTabs2([
-          { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-        ]);
-        setActiveMonitoringTab2('formal');
-      }
-    } else if (midTermIncludePreChoice && b) {
-      let preEnd = addDaysIso(b.start, 2);
-      if (preEnd > b.end) preEnd = b.end;
-      let formalStart = addDaysIso(preEnd, 1);
-      if (formalStart > b.end) {
-        showToast('绩效中期回顾时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
+      let preEnd = addDaysIso(aw.start, 14);
+      if (preEnd >= aw.end) preEnd = aw.end;
+      const formalStart = addDaysIso(preEnd, 1);
+      if (formalStart > aw.end) {
+        showToast('组织绩效考核阶段时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
         setMonitoringTabs2([
           { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
         ]);
@@ -3150,24 +3849,34 @@ const OrgAssessmentModal = ({
         ]);
         setActiveMonitoringTab2('pre');
       }
-    } else if (midTermIncludePreChoice && !b) {
+    } else if (b) {
+      let preEnd = addDaysIso(b.start, 2);
+      if (preEnd > b.end) preEnd = b.end;
+      const formalStart = addDaysIso(preEnd, 1);
+      if (formalStart > b.end) {
+        showToast('组织绩效中期回顾时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
+        setMonitoringTabs2([
+          { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+        ]);
+        setActiveMonitoringTab2('formal');
+      } else {
+        setMonitoringTabs2([
+          { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
+          { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
+        ]);
+        setActiveMonitoringTab2('pre');
+      }
+    } else {
       setMonitoringTabs2([
         { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
         { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
       ]);
       setActiveMonitoringTab2('pre');
-    } else {
-      setMonitoringTabs2([
-        { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-      ]);
-      setActiveMonitoringTab2('formal');
     }
-    setSuppressAddPreAssessmentRound(midTermIncludePreChoice === false);
     setMidTermArchivedToAppraisal(true);
     setCurrentStep(2);
-    setIsMidTermArchiveModalOpen(false);
-    setMidTermIncludePreChoice(null);
-    showToast('已进入绩效考核', 'success');
+    setPreAssessmentPrimaryActionsLocked(false);
+    showToast('已进入组织绩效考核', 'success');
   };
 
   const getStatusText = (item: any) => {
@@ -3270,7 +3979,7 @@ const OrgAssessmentModal = ({
                   <h3 className="text-[16px] font-semibold text-gray-900">删除组织绩效预考核？</h3>
                 </div>
                 <p className="text-[14px] text-gray-600 leading-relaxed mb-6">
-                  「组织绩效预考核」是否在活动中有此阶段，是在<strong className="text-gray-800">绩效中期回顾完成、归档并进入绩效考核</strong>时确认的，属于<strong className="text-gray-800">可选</strong>轮次，因此仅预考核支持删除。删除后仍保留「组织绩效正式考核」；若后续需要，可再添加预考核轮次。
+                  「组织绩效预考核」为<strong className="text-gray-800">可选</strong>轮次，仅预考核支持删除。删除后仍保留「组织绩效正式考核」；需要时可再通过「添加组织绩效预考核」补回。
                 </p>
                 <div className="flex justify-end gap-3">
                   <button
@@ -3295,71 +4004,43 @@ const OrgAssessmentModal = ({
       </AnimatePresence>
 
       <AnimatePresence>
-        {isMidTermArchiveModalOpen && (
+        {isSkipPreAssessmentConfirmOpen && (
           <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden"
+              className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden"
             >
-              <div className="p-6 border-b border-gray-100">
-                <h3 className="text-[16px] font-semibold text-gray-900">归档并进入绩效考核</h3>
-                <p className="text-[13px] text-gray-600 mt-3 leading-relaxed">
-                  即将进入<strong className="text-gray-800">绩效考核</strong>阶段。该阶段包含两个轮次：
-                </p>
-                <ul className="mt-2 text-[13px] text-gray-700 space-y-1.5 list-disc pl-5">
-                  <li><strong>组织绩效正式考核</strong>为<strong className="text-[#2f54eb]">必有</strong>轮次；</li>
-                  <li><strong>组织绩效预考核</strong>为<strong className="text-gray-600">可选</strong>轮次。</li>
-                </ul>
-                <p className="text-[13px] text-gray-600 mt-3 leading-relaxed">
-                  请确认是否在本活动中<strong>开启</strong>「组织绩效预考核」：开启后可在绩效考核中管理预考核与正式考核两轮；不开启则仅进入正式考核轮次。
-                </p>
-                <div className="mt-5 space-y-3">
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="midterm-pre"
-                      className="mt-1"
-                      checked={midTermIncludePreChoice === true}
-                      onChange={() => setMidTermIncludePreChoice(true)}
-                    />
-                    <span className="text-[13px] text-gray-800 leading-snug">
-                      开启组织绩效预考核（进入绩效考核后可见预考核与正式考核两个 Tab）
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="midterm-pre"
-                      className="mt-1"
-                      checked={midTermIncludePreChoice === false}
-                      onChange={() => setMidTermIncludePreChoice(false)}
-                    />
-                    <span className="text-[13px] text-gray-800 leading-snug">
-                      不开启，仅进入组织绩效正式考核（仅展示正式考核 Tab）
-                    </span>
-                  </label>
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                    <AlertCircle className="text-amber-600" size={24} />
+                  </div>
+                  <h3 className="text-[16px] font-semibold text-gray-900">确认跳过组织绩效预考核？</h3>
                 </div>
-              </div>
-              <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMidTermArchiveModalOpen(false);
-                    setMidTermIncludePreChoice(null);
-                  }}
-                  className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-white transition-colors"
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmMidTermArchiveAndNext}
-                  className="px-4 py-2 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-[#1d39c4] transition-colors shadow-sm"
-                >
-                  确认归档并进入
-                </button>
+                <p className="text-[14px] text-gray-600 leading-relaxed mb-2">
+                  跳过后将直接进入<strong className="text-gray-900">组织绩效正式考核</strong>轮次，当前预考核轮次结束，名单与数据将按当前状态推送至正式考核。
+                </p>
+                <p className="text-[14px] text-amber-900/90 leading-relaxed mb-6 font-medium">
+                  该操作<strong>不可撤销</strong>，请确认后再继续。
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsSkipPreAssessmentConfirmOpen(false)}
+                    className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSkipPreAssessmentToFormal}
+                    className="px-4 py-2 bg-amber-600 text-white rounded text-[13px] hover:bg-amber-700 shadow-md transition-colors"
+                  >
+                    确认跳过
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -3448,7 +4129,7 @@ const OrgAssessmentModal = ({
                     isActivityInProgress
                       ? '活动进行中：顶部「编辑」已关闭。请通过上方轮次标签旁的铅笔图标，维护各轮次的开始与结束时间。'
                       : currentStep !== 2
-                        ? '请进入「绩效考核」阶段后编辑轮次时间'
+                        ? '请进入「组织绩效考核」阶段后编辑轮次时间'
                         : '编辑当前轮次开始/结束时间（与轮次标签旁图标相同）'
                   }
                   className={`px-4 py-1.5 border rounded text-[13px] transition-all cursor-pointer bg-white ${
@@ -3476,7 +4157,7 @@ const OrgAssessmentModal = ({
                     isActivityInProgress
                       ? '活动进行中，不可删除活动或移除此处轮次'
                       : currentStep !== 2
-                        ? '请进入「绩效考核」阶段'
+                        ? '请进入「组织绩效考核」阶段'
                         : activeMonitoringTab !== 'pre'
                           ? '仅「组织绩效预考核」为可选阶段，可删除；正式考核不可删除'
                           : '删除可选的组织绩效预考核轮次'
@@ -3601,11 +4282,11 @@ const OrgAssessmentModal = ({
                   <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
                 </button>
               )}
-              {!isActivityCompleted && currentStep === 2 && !monitoringTabs2.some(t => t.id === 'pre') && !suppressAddPreAssessmentRound && (
+              {!isActivityCompleted && currentStep === 2 && !monitoringTabs2.some(t => t.id === 'pre') && (
                 <button
                   type="button"
                   onClick={addPreAssessmentRound}
-                  title="若进入本阶段时未开启预考核，此处可补充添加（已在归档时明确选择不开启的，不显示此入口）"
+                  title="删除预考核后，可在此补回组织绩效预考核轮次"
                   className="mb-1.5 ml-1 shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-[#2f54eb] bg-white border border-[#2f54eb]/30 rounded-lg hover:bg-blue-50 transition-colors"
                 >
                   <Plus size={16} />
@@ -3617,7 +4298,7 @@ const OrgAssessmentModal = ({
 
           {currentStep === 1 && monitoringTabs1.length > 1 && !isLastMidTermRoundTab && !isActivityCompleted && (
             <div className="mx-4 mb-0 px-4 py-2.5 rounded-md bg-amber-50 border border-amber-100 text-[12px] text-amber-900 leading-relaxed">
-              「归档并进入下一步」仅在<strong className="font-semibold">绩效中期回顾最后一轮</strong>（{monitoringTabs1.at(-1)?.name ?? ''}）下显示；请切换至该轮次后再归档。
+              「归档并进入下一步」仅在<strong className="font-semibold">组织绩效中期回顾最后一轮</strong>（{monitoringTabs1.at(-1)?.name ?? ''}）下显示；请切换至该轮次后再归档。
             </div>
           )}
 
@@ -3689,7 +4370,7 @@ const OrgAssessmentModal = ({
                   </div>
                   {currentStep === 2 && midTermBounds && (
                     <p className="text-[12px] text-gray-500 leading-relaxed">
-                      说明：是否启用「组织绩效预考核」在<strong className="font-medium text-gray-600">绩效中期回顾归档并进入本阶段</strong>时确认，为可选轮次。约束：开始、结束须在绩效中期回顾（{midTermBounds.start} ~ {midTermBounds.end}）内；预考核与正式考核时间段不可交叉。
+                      说明：从组织绩效中期回顾进入本阶段后默认包含「组织绩效预考核」与「组织绩效正式考核」两个轮次（预考核为可选，可删除）。约束：开始、结束须在组织绩效中期回顾（{midTermBounds.start} ~ {midTermBounds.end}）内；预考核与正式考核时间段不可交叉。
                     </p>
                   )}
                 </div>
@@ -3717,19 +4398,19 @@ const OrgAssessmentModal = ({
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-[640px] max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-3 shrink-0">
                   <div>
-                    <h3 className="text-[16px] font-bold text-gray-900">更新轮次名单 · 数据比对确认</h3>
+                    <h3 className="text-[16px] font-bold text-gray-900">更新名单 · 数据比对确认</h3>
                     <p className="text-[12px] text-gray-500 mt-1.5 leading-relaxed">
                       {rosterUpdateModalKind === 'mid' ? (
                         <>
-                          将<strong className="text-gray-700">绩效计划制定阶段已确认的组织名单</strong>与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">当前回顾轮次</strong>名单。
+                          将<strong className="text-gray-700">组织绩效计划制定阶段已确认的组织名单</strong>与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">当前回顾轮次</strong>名单。
                         </>
                       ) : rosterUpdateModalKind === 'formal' ? (
                         <>
-                          将<strong className="text-gray-700">绩效中期回顾阶段已归档并推送</strong>的组织数据与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">组织绩效正式考核</strong>本轮名单。
+                          将<strong className="text-gray-700">组织绩效中期回顾阶段已归档并推送</strong>的组织数据与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">组织绩效正式考核</strong>本轮名单。
                         </>
                       ) : (
                         <>
-                          将<strong className="text-gray-700">绩效中期回顾阶段已归档并推送</strong>的组织数据与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">组织绩效预考核</strong>本轮名单。
+                          将<strong className="text-gray-700">组织绩效中期回顾阶段已归档并推送</strong>的组织数据与<strong className="text-gray-700">组织主数据</strong>比对。请分别确认是否应用「新增」「删除」「信息变更」；仅勾选的部分会在您点击「确认执行」后写入<strong className="text-gray-700">组织绩效预考核</strong>本轮名单。
                         </>
                       )}
                     </p>
@@ -3974,7 +4655,9 @@ const OrgAssessmentModal = ({
                     {currentStep >= 1 ? (
                       <button 
                         type="button"
+                        disabled={isPreAssessmentPrimaryActionsLocked}
                         onClick={() => {
+                          if (isPreAssessmentPrimaryActionsLocked) return;
                           if (currentStep === 2 && activeMonitoringTab === 'pre') {
                             openPreRosterUpdateModal();
                             return;
@@ -3989,10 +4672,15 @@ const OrgAssessmentModal = ({
                           }
                           showToast('当前阶段请通过对应轮次入口更新名单', 'warning');
                         }}
-                        className="flex items-center gap-2 text-[13px] px-3 py-1.5 rounded transition-colors font-medium border bg-white text-[#2f54eb] border-[#2f54eb] hover:bg-blue-50 cursor-pointer"
+                        title={isPreAssessmentPrimaryActionsLocked ? '当前预考核轮次已跳过，不可再更新名单' : undefined}
+                        className={`flex items-center gap-2 text-[13px] px-3 py-1.5 rounded transition-colors font-medium border bg-white ${
+                          isPreAssessmentPrimaryActionsLocked
+                            ? 'text-gray-300 border-gray-100 cursor-not-allowed'
+                            : 'text-[#2f54eb] border-[#2f54eb] hover:bg-blue-50 cursor-pointer'
+                        }`}
                       >
                         <Settings size={14} />
-                        <span>更新轮次名单</span>
+                        <span>更新名单</span>
                       </button>
                     ) : (
                       <button 
@@ -4011,19 +4699,60 @@ const OrgAssessmentModal = ({
                       </button>
                     )}
                     <button 
-                      onClick={handleStartPlan}
-                      className="px-4 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-all cursor-pointer shadow-sm"
+                      type="button"
+                      disabled={isPreAssessmentPrimaryActionsLocked}
+                      onClick={() => {
+                        if (isPreAssessmentPrimaryActionsLocked) return;
+                        handleStartPlan();
+                      }}
+                      title={isPreAssessmentPrimaryActionsLocked ? '当前预考核轮次已跳过，不可再启动' : undefined}
+                      className={`px-4 py-1.5 rounded text-[13px] shadow-sm ${
+                        isPreAssessmentPrimaryActionsLocked
+                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                          : 'bg-[#2f54eb] text-white hover:bg-blue-600 cursor-pointer'
+                      }`}
                     >
-                      {currentStep === 1 ? '启动中期回顾' : currentStep === 2 ? '启动绩效考核' : '启动计划制定'}
+                      {currentStep === 1 ? '启动中期回顾' : currentStep === 2 ? '启动组织绩效考核' : '启动计划制定'}
                     </button>
                     {currentStep === 2 && activeMonitoringTab === 'pre' && (
                       <button
                         type="button"
-                        onClick={handlePreAssessmentArchiveAndNextRound}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-all cursor-pointer shadow-sm"
+                        disabled={isPreAssessmentPrimaryActionsLocked}
+                        onClick={() => {
+                          if (isPreAssessmentPrimaryActionsLocked) return;
+                          handlePreAssessmentArchiveAndNextRound();
+                        }}
+                        title={isPreAssessmentPrimaryActionsLocked ? '当前预考核轮次已跳过，不可再归档' : undefined}
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded text-[13px] shadow-sm ${
+                          isPreAssessmentPrimaryActionsLocked
+                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-[#2f54eb] text-white hover:bg-blue-600 cursor-pointer'
+                        }`}
                       >
                         <FileCheck size={14} />
                         <span>归档并进入下一轮次</span>
+                      </button>
+                    )}
+                    {currentStep === 2 && activeMonitoringTab === 'pre' && (
+                      <button
+                        type="button"
+                        disabled={preAssessmentPrimaryActionsLocked}
+                        onClick={() => {
+                          if (preAssessmentPrimaryActionsLocked) return;
+                          setIsSkipPreAssessmentConfirmOpen(true);
+                        }}
+                        title={
+                          preAssessmentPrimaryActionsLocked
+                            ? '当前预考核轮次已跳过'
+                            : '结束组织绩效预考核轮次，将当前名单与数据推送至组织绩效正式考核'
+                        }
+                        className={`px-4 py-1.5 border rounded text-[13px] ${
+                          preAssessmentPrimaryActionsLocked
+                            ? 'border-gray-100 text-gray-300 bg-gray-50 cursor-not-allowed'
+                            : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50 cursor-pointer'
+                        }`}
+                      >
+                        跳过
                       </button>
                     )}
                     {(currentStep !== 1 || isLastMidTermRoundTab) && !(currentStep === 2 && activeMonitoringTab === 'pre') && (
@@ -4031,16 +4760,14 @@ const OrgAssessmentModal = ({
                       type="button"
                       onClick={() => {
                         if (currentStep === 1) {
-                          if (!validateArchiveSelection()) return;
-                          setMidTermIncludePreChoice(null);
-                          setIsMidTermArchiveModalOpen(true);
+                          performMidTermArchiveEnterAppraisal();
                           return;
                         }
                         handleArchive();
                       }}
                       title={
                         currentStep === 1
-                          ? '在最后一轮中期回顾归档后进入绩效考核，并确认是否开启组织绩效预考核'
+                          ? '在最后一轮中期回顾归档后进入组织绩效考核，默认打开组织绩效预考核轮次'
                           : undefined
                       }
                       className="px-4 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-all cursor-pointer shadow-sm"
@@ -4049,7 +4776,7 @@ const OrgAssessmentModal = ({
                     </button>
                     )}
                     
-                    {/* 绩效中期回顾：不使用「更多」，将「归档并进入下一轮次」平铺（单轮不展示「跳过此阶段」） */}
+                    {/* 组织绩效中期回顾：不使用「更多」，将「归档并进入下一轮次」平铺（单轮不展示「跳过此阶段」） */}
                     {currentStep === 1 && showMidTermArchiveNextRoundInMore && (
                       <button
                         type="button"
@@ -4058,6 +4785,42 @@ const OrgAssessmentModal = ({
                       >
                         <FileCheck size={14} />
                         <span>归档并进入下一轮次</span>
+                      </button>
+                    )}
+                    {currentStep === 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedIds.length === 0) {
+                            showToast('请至少选择一条数据', 'warning');
+                            return;
+                          }
+                          const subjects = assessmentData.filter((r) => selectedIds.includes(r.id));
+                          const aid = activity?.id;
+                          if (aid == null || aid === '') {
+                            showToast('无法识别当前活动，请从活动列表重新进入', 'error');
+                            return;
+                          }
+                          const aidStr = String(aid);
+                          const existing = planChangeSubjectsByActivityId[aidStr] ?? [];
+                          const inProgressIds = new Set(
+                            existing.filter((r: any) => r?.status === '进行中').map((r: any) => r.id)
+                          );
+                          const blocked = subjects.filter((s) => inProgressIds.has(s.id));
+                          if (blocked.length > 0) {
+                            showToast(
+                              '所选考核对象中存在「进行中」的变更申请，无法重复发起；待该申请变为「已完成」后可再次发起。请调整勾选后重试',
+                              'warning'
+                            );
+                            return;
+                          }
+                          onInitiatePlanChange?.(aidStr, subjects);
+                          showToast('已发起绩效计划变更申请，可在「组织绩效考核流程监控 / 组织绩效计划变更监控」中查看', 'success');
+                        }}
+                        title="同一考核对象可多次发起：存在「进行中」变更时不可再发起；上一申请为「已完成」后可再次发起"
+                        className="px-4 py-1.5 border border-amber-200 text-amber-800 rounded text-[13px] bg-amber-50/80 hover:bg-amber-50 transition-all cursor-pointer shrink-0 font-medium"
+                      >
+                        绩效计划变更
                       </button>
                     )}
 
@@ -4907,7 +5670,9 @@ const IndicatorDimensionDrawer = ({
             className="fixed top-0 right-0 h-full w-[800px] bg-white shadow-2xl z-[101] flex flex-col"
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}考核指标维度规则</h2>
+              <h2 className="text-[16px] font-bold text-gray-900">
+                {data?._isDuplicate ? '复制考核指标维度规则' : data ? '编辑考核指标维度规则' : '新增考核指标维度规则'}
+              </h2>
               <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
                 <X size={20} className="text-gray-400" />
               </button>
@@ -5296,9 +6061,9 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
               <label className="text-[14px] font-bold text-gray-900">大阶段</label>
               <div className="relative">
                 <select className="w-full p-2.5 border border-gray-200 rounded text-[13px] outline-none appearance-none bg-white cursor-pointer focus:border-[#2f54eb]">
-                  <option>绩效计划制定</option>
-                  <option>绩效中期回顾</option>
-                  <option>绩效考核评估</option>
+                  <option>组织绩效计划制定</option>
+                  <option>组织绩效中期回顾</option>
+                  <option>组织绩效考核评估</option>
                 </select>
                 <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
@@ -5417,13 +6182,13 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
 };
 
 const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
-  const [activeTab, setActiveTab] = useState('绩效计划制定');
+  const [activeTab, setActiveTab] = useState('组织绩效计划制定');
   const [activeSubTab, setActiveSubTab] = useState('第一轮');
 
   const tabs = [
-    { name: '绩效计划制定', hasSubTabs: false },
-    { name: '绩效中期回顾', hasSubTabs: true, subTabs: ['第一轮', '第二轮'] },
-    { name: '绩效考核', hasSubTabs: true, subTabs: ['第一轮', '第二轮', '年终'] },
+    { name: '组织绩效计划制定', hasSubTabs: false },
+    { name: '组织绩效中期回顾', hasSubTabs: true, subTabs: ['第一轮', '第二轮'] },
+    { name: '组织绩效考核', hasSubTabs: true, subTabs: ['第一轮', '第二轮', '年终'] },
   ];
 
   const currentTab = tabs.find(t => t.name === activeTab);
@@ -5510,10 +6275,10 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               <div className="flex items-center justify-between mb-3 pt-0.5">
                 <div className="flex items-center gap-3">
                   <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '绩效计划制定' ? '发起' : activeTab === '绩效中期回顾' ? '自评发起' : '考核发起'}
+                    {activeTab === '组织绩效计划制定' ? '发起' : activeTab === '组织绩效中期回顾' ? '自评发起' : '考核发起'}
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-blue-50 text-[#2f54eb] border border-blue-100 font-medium">
-                    {activeTab === '绩效计划制定' ? '发起' : '进行中'}
+                    {activeTab === '组织绩效计划制定' ? '发起' : '进行中'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-gray-400 text-[12px] font-mono">
@@ -5537,7 +6302,7 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
                 </div>
                 <div className="flex items-start gap-2.5 text-gray-600 text-[13px] pl-11">
                   <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-40 text-[#2f54eb]" />
-                  <span>{activeTab === '绩效计划制定' ? '提交绩效目标' : '提交阶段反馈'}</span>
+                  <span>{activeTab === '组织绩效计划制定' ? '提交绩效目标' : '提交阶段反馈'}</span>
                 </div>
               </div>
             </div>
@@ -5550,7 +6315,7 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               <div className="flex items-center justify-between mb-3 pt-0.5">
                 <div className="flex items-center gap-3">
                   <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '绩效计划制定' ? '直接上级审批' : activeTab === '绩效中期回顾' ? '上级面谈' : '初评节点'}
+                    {activeTab === '组织绩效计划制定' ? '直接上级审批' : activeTab === '组织绩效中期回顾' ? '上级面谈' : '初评节点'}
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-green-50 text-green-600 border border-green-100 font-medium">
                     审批通过
@@ -5590,7 +6355,7 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               <div className="flex items-center justify-between mb-3 pt-0.5">
                 <div className="flex items-center gap-3">
                   <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '绩效计划制定' ? '管理员操作' : activeTab === '绩效中期回顾' ? '沟通确认' : '校准节点'}
+                    {activeTab === '组织绩效计划制定' ? '管理员操作' : activeTab === '组织绩效中期回顾' ? '沟通确认' : '校准节点'}
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-orange-50 text-orange-600 border border-orange-100 font-medium flex items-center gap-1">
                     <AlertCircle size={10} />
@@ -5630,7 +6395,7 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '绩效计划制定' ? '隔级上级审批' : activeTab === '绩效中期回顾' ? '结果发布' : '结果确认'}
+                    {activeTab === '组织绩效计划制定' ? '隔级上级审批' : activeTab === '组织绩效中期回顾' ? '结果发布' : '结果确认'}
                   </span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-green-50 text-green-600 border border-green-100 font-medium">
                     审批通过
@@ -5983,9 +6748,57 @@ function pickLatestUpdatedOngoingActivityId(activityList: any[]): string {
   return sorted[0]?.id ?? '';
 }
 
-const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: any[] }) => {
+/** 与流程监控「组织绩效计划变更」列表节点一致 */
+const PLAN_CHANGE_MONITORING_FLOW_NODES = [
+  { nodeName: '变更申请填报', role: 'leader' as const },
+  { nodeName: '变更审批', role: 'hrbp' as const },
+  { nodeName: '计划发布确认', role: 'exec' as const },
+];
+
+function buildPlanChangeRowFromAssessmentSubject(row: any, index: number) {
+  const config = PLAN_CHANGE_MONITORING_FLOW_NODES[index % PLAN_CHANGE_MONITORING_FLOW_NODES.length];
+  let approver = '-';
+  if (config.role === 'leader') approver = row.leader;
+  else if (config.role === 'hrbp') approver = row.hrbp;
+  else if (config.role === 'exec') approver = row.exec;
+  return {
+    id: row.id,
+    path: row.path,
+    level: row.level,
+    leader: row.leader,
+    hrbp: row.hrbp,
+    exec: row.exec,
+    standing: row.exec,
+    orgType: row.orgType,
+    status: '进行中',
+    currentNode: config.nodeName,
+    currentApprover: approver,
+  };
+}
+
+/** 流程监控页：无活动或未配置阶段时的占位（与列表活动结构一致） */
+const DEFAULT_PERFORMANCE_MONITORING_PHASES: any[] = [
+  { name: '组织绩效计划制定', date: '—', showRounds: false, rounds: [] },
+  { name: '组织绩效中期回顾', date: '—', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
+  { name: '组织绩效考核', date: '—', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] },
+];
+
+type MonitoringSummaryKey = 'assessmentTotal' | 'completed' | 'inProgress' | 'stuck';
+type PlanChangeSummaryKey = 'departments' | 'completed' | 'inProgress' | 'stuck';
+
+const PerformanceProcessMonitoringPage = ({
+  activities = [],
+  planChangeSubjectsByActivityId = {},
+}: {
+  activities?: any[];
+  planChangeSubjectsByActivityId?: Record<string, any[]>;
+}) => {
   const [monitoringSearchTerm, setMonitoringSearchTerm] = useState('');
-  const [monitoringViewTab, setMonitoringViewTab] = useState<'考核流程监控' | '绩效计划变更监控'>('考核流程监控');
+  const [monitoringSummaryKey, setMonitoringSummaryKey] = useState<MonitoringSummaryKey>('assessmentTotal');
+  const [toolbarFilterDropdown, setToolbarFilterDropdown] = useState<null | 'orgType' | 'status'>(null);
+  const monitoringSummaryFirstCardRef = useRef<HTMLDivElement | null>(null);
+  const planChangeSummaryFirstCardRef = useRef<HTMLDivElement | null>(null);
+  const [monitoringViewTab, setMonitoringViewTab] = useState<'组织绩效考核流程监控' | '组织绩效计划变更监控'>('组织绩效考核流程监控');
   const [isInterventionModalOpen, setIsInterventionModalOpen] = useState(false);
   const [isApprovalChainModalOpen, setIsApprovalChainModalOpen] = useState(false);
   const [isSendMessageDrawerOpen, setIsSendMessageDrawerOpen] = useState(false);
@@ -5993,7 +6806,13 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planChangeSearchTerm, setPlanChangeSearchTerm] = useState('');
   const [planChangeSelectedIds, setPlanChangeSelectedIds] = useState<string[]>([]);
-  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null);
+  const [planChangeSummaryKey, setPlanChangeSummaryKey] = useState<PlanChangeSummaryKey>('departments');
+  const [planChangeFilters, setPlanChangeFilters] = useState<{ orgType: string[]; status: string[] }>({
+    orgType: [],
+    status: [],
+  });
+  const [planChangeToolbarDropdown, setPlanChangeToolbarDropdown] = useState<null | 'orgType' | 'status'>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' | 'warning' } | null>(null);
 
   useEffect(() => {
     if (toast) {
@@ -6074,19 +6893,6 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
     );
   };
 
-  const getFilteredData = () => {
-    return tableData.filter(row => {
-      for (const [key, values] of Object.entries(selectedFilters)) {
-        const filterValues = values as any[];
-        if (filterValues.length > 0) {
-          const rowValue = (row as any)[key];
-          if (!filterValues.includes(rowValue)) return false;
-        }
-      }
-      return true;
-    });
-  };
-  
   // Activity Selection：仅「进行中」，默认选中 updateTime 最新的活动
   const ongoingActivities = useMemo(
     () => activities.filter((a: any) => a?.status === '进行中'),
@@ -6110,12 +6916,38 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
     ongoingActivities.find((a) => a.id === selectedActivityId) ||
     ongoingActivities.find((a) => a.id === latestOngoingActivityId);
 
-  // Phase Selection
-  const activityPhases = selectedActivity?.config?.phases || [
-    { name: '绩效计划制定', date: '2024/07/01 ~ 2024/07/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] },
-    { name: '绩效中期回顾', date: '2024/08/15 ~ 2024/08/20', showRounds: false, rounds: [] },
-    { name: '绩效考核', date: '2024/09/30 ~ 2024/10/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
-  ];
+  const isMonitoringActivityCompleted = (selectedActivity?.status ?? '进行中') === '已完成';
+  const planStageArchivedToMidTerm = Boolean((selectedActivity as any)?.planStageArchivedToMidTerm);
+  const midTermArchivedToAppraisal = Boolean((selectedActivity as any)?.midTermArchivedToAppraisal);
+
+  /** 与绩效活动详情步骤条一致：未满足前置归档时不可进入后续阶段（hover / 点击提示文案一致） */
+  const getMonitoringPhaseStepBlockTitle = (phaseIndex: number): string | undefined => {
+    if (isMonitoringActivityCompleted) return undefined;
+    if (phaseIndex <= 0) return undefined;
+    if (phaseIndex === 1 && !planStageArchivedToMidTerm) {
+      return '请先在「组织绩效计划制定」阶段勾选已完成的数据，并点击「归档并进入下一步」后，方可进入「组织绩效中期回顾」。';
+    }
+    if (phaseIndex >= 2 && !midTermArchivedToAppraisal) {
+      return '请先在「组织绩效中期回顾」最后一轮勾选已完成的数据，并点击「归档并进入下一步」后，方可进入「组织绩效考核」。';
+    }
+    return undefined;
+  };
+
+  const handleMonitoringPhaseStepClick = (phaseIndex: number, phaseName: string) => {
+    const tip = getMonitoringPhaseStepBlockTitle(phaseIndex);
+    if (tip) {
+      setToast({ message: tip, type: 'warning' });
+      return;
+    }
+    setSelectedPhase(phaseName);
+  };
+
+  // Phase Selection：阶段与轮次名称均来自当前选中活动的 config.phases
+  const activityPhases = useMemo(() => {
+    const p = selectedActivity?.config?.phases;
+    return Array.isArray(p) && p.length > 0 ? p : DEFAULT_PERFORMANCE_MONITORING_PHASES;
+  }, [selectedActivity]);
+
   const [selectedPhase, setSelectedPhase] = useState('');
   const [isPhaseDropdownOpen, setIsPhaseDropdownOpen] = useState(false);
 
@@ -6125,27 +6957,50 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
   const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
 
-  // Update phase and rounds when activity changes
+  /** 切换活动时校正当前阶段；归档进度不足时仅能停留在已开放的最大阶段（与绩效活动详情一致） */
   useEffect(() => {
-    if (selectedActivity) {
-      const phases = selectedActivity.config?.phases || activityPhases;
-      const initialPhase = phases[0]?.name || '';
-      setSelectedPhase(initialPhase);
+    if (!activityPhases.length) {
+      setSelectedPhase('');
+      setRounds([]);
+      setActiveRoundId('');
+      return;
     }
-  }, [selectedActivityId]);
+    if (isMonitoringActivityCompleted) {
+      setSelectedPhase((prev) =>
+        prev && activityPhases.some((x: any) => x.name === prev) ? prev : activityPhases[0]?.name || ''
+      );
+      return;
+    }
+    const maxIdx = !planStageArchivedToMidTerm ? 0 : !midTermArchivedToAppraisal ? 1 : activityPhases.length - 1;
+    setSelectedPhase((prev) => {
+      const inList = prev && activityPhases.some((x: any) => x.name === prev);
+      const prevIdx = inList ? activityPhases.findIndex((x: any) => x.name === prev) : 0;
+      const safeIdx = Math.min(Math.max(0, prevIdx), maxIdx);
+      return activityPhases[safeIdx]?.name || activityPhases[0]?.name || '';
+    });
+  }, [
+    selectedActivityId,
+    activityPhases,
+    isMonitoringActivityCompleted,
+    planStageArchivedToMidTerm,
+    midTermArchivedToAppraisal,
+  ]);
 
-  // Update rounds when phase changes
+  /** 当前阶段变化或活动阶段配置变化时，同步轮次 Tab 与轮次名称（与活动数据一致） */
   useEffect(() => {
-    const phaseConfig = activityPhases.find(p => p.name === selectedPhase);
+    const phaseConfig = activityPhases.find((p) => p.name === selectedPhase);
     if (phaseConfig) {
-      const newRounds = phaseConfig.showRounds ? (phaseConfig.rounds || []) : [];
+      const newRounds = phaseConfig.showRounds ? phaseConfig.rounds || [] : [];
       setRounds(newRounds);
-      setActiveRoundId(newRounds[0]?.id || '');
+      setActiveRoundId((prev) => {
+        if (newRounds.some((r) => r.id === prev)) return prev;
+        return newRounds[0]?.id || '';
+      });
     } else {
       setRounds([]);
       setActiveRoundId('');
     }
-  }, [selectedPhase, selectedActivityId]);
+  }, [selectedPhase, activityPhases]);
 
   const activeRound = rounds.find(r => r.id === activeRoundId) || (rounds.length > 0 ? rounds[0] : { id: '', name: '-' });
 
@@ -6199,23 +7054,16 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
     setIsApprovalChainModalOpen(true);
   };
 
-  const summaryCards = [
-    { title: '考核部门数', value: '28', subValue: '当前阶段应参与考核', color: 'text-gray-900', bgColor: 'bg-white' },
-    { title: '已完成', value: '12', subValue: '占比 43%', color: 'text-green-500', bgColor: 'bg-green-50/30' },
-    { title: '进行中', value: '14', subValue: '流程正常流转中', color: 'text-blue-500', bgColor: 'bg-blue-50/30' },
-    { title: '滞留 / 超时', value: '2', subValue: '2 个部门存在超时节点', color: 'text-red-500', bgColor: 'bg-red-50/30' },
-  ];
-
   const phaseNodeConfigs: Record<string, any> = {
-    '绩效计划制定': [
+    '组织绩效计划制定': [
       { nodeName: '指标填报', role: 'leader' },
       { nodeName: '指标审核', role: 'hrbp' }
     ],
-    '绩效中期回顾': [
+    '组织绩效中期回顾': [
       { nodeName: '指标回顾', role: 'leader' },
       { nodeName: '回顾审核', role: 'hrbp' }
     ],
-    '绩效考核': [
+    '组织绩效考核': [
       { nodeName: '自评', role: 'leader' },
       { nodeName: '上级评价', role: 'exec' },
       { nodeName: '隔级审核', role: 'standing' }
@@ -6235,63 +7083,158 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
     { id: 'D010', path: '集团总部/技术研发中心', level: '一级部门', leader: '范技术 (M1010)', hrbp: '钱BP (H1005)', exec: '周执委 (E1003)', standing: '吴常委 (S1003)', orgType: '能力中心', status: '未开始' },
   ];
 
-  const tableData = baseTableData.map((row, index) => {
-    if (row.status === '未开始') {
-      return { ...row, currentNode: '-', currentApprover: '-' };
-    }
-    if (row.status === '已完成') {
-      return { ...row, currentNode: '已归档', currentApprover: '-' };
-    }
+  const tableData = useMemo(
+    () =>
+      baseTableData.map((row, index) => {
+        if (row.status === '未开始') {
+          return { ...row, currentNode: '-', currentApprover: '-' };
+        }
+        if (row.status === '已完成') {
+          return { ...row, currentNode: '已归档', currentApprover: '-' };
+        }
 
-    const configs = phaseNodeConfigs[selectedPhase] || [];
-    if (configs.length === 0) {
-      return { ...row, currentNode: '-', currentApprover: '-' };
+        const configs = phaseNodeConfigs[selectedPhase] || [];
+        if (configs.length === 0) {
+          return { ...row, currentNode: '-', currentApprover: '-' };
+        }
+
+        const configIndex = (index % 4 === 0 || index === 4) ? 0 : (index % 2 === 1 ? 1 : 2);
+        const config = configs[configIndex];
+
+        let approver = '-';
+        if (config && config.role === 'leader') approver = row.leader;
+        else if (config && config.role === 'hrbp') approver = row.hrbp;
+        else if (config && config.role === 'exec') approver = (row as any).exec;
+        else if (config && config.role === 'standing') approver = (row as any).standing;
+
+        return {
+          ...row,
+          currentNode: config ? config.nodeName : '-',
+          currentApprover: approver,
+        };
+      }),
+    [selectedPhase]
+  );
+
+  const monitoringSummaryCards = useMemo(() => {
+    const rows = tableData;
+    const total = rows.length;
+    const completed = rows.filter((r) => r.status === '已完成').length;
+    const inProgress = rows.filter((r) => r.status === '进行中').length;
+    const stuck = rows.filter((r) => r.status === '滞留/超时').length;
+    const pct = total ? Math.round((completed / total) * 100) : 0;
+    return [
+      {
+        key: 'assessmentTotal' as const,
+        title: '考核部门数',
+        value: String(total),
+        subValue: '当前阶段应参与考核',
+        color: 'text-gray-900',
+        bgColor: 'bg-white',
+      },
+      {
+        key: 'completed' as const,
+        title: '已完成',
+        value: String(completed),
+        subValue: `占比 ${pct}%`,
+        color: 'text-green-500',
+        bgColor: 'bg-green-50/30',
+      },
+      {
+        key: 'inProgress' as const,
+        title: '进行中',
+        value: String(inProgress),
+        subValue: '流程正常流转中',
+        color: 'text-blue-500',
+        bgColor: 'bg-blue-50/30',
+      },
+      {
+        key: 'stuck' as const,
+        title: '滞留 / 超时',
+        value: String(stuck),
+        subValue: stuck ? `${stuck} 个部门存在超时节点` : '暂无滞留',
+        color: 'text-red-500',
+        bgColor: 'bg-red-50/30',
+      },
+    ];
+  }, [tableData]);
+
+  const getFilteredData = () => {
+    const q = monitoringSearchTerm.trim().toLowerCase();
+    let rows = tableData;
+    if (q) {
+      rows = rows.filter((row) => {
+        const pathShort = row.path.replace('集团总部/', '').toLowerCase();
+        return (
+          row.id.toLowerCase().includes(q) ||
+          pathShort.includes(q) ||
+          row.leader.toLowerCase().includes(q) ||
+          row.hrbp.toLowerCase().includes(q)
+        );
+      });
     }
-    
-    // 根据部门类型或索引模拟当前所处的节点配置
-    // 例如：信息化中心(D001)处于第1个节点，法务合规部(D005)也处于第1个节点
-    const configIndex = (index % 4 === 0 || index === 4) ? 0 : (index % 2 === 1 ? 1 : 2);
-    const config = configs[configIndex];
-    
-    let approver = '-';
-    if (config && config.role === 'leader') approver = row.leader;
-    else if (config && config.role === 'hrbp') approver = row.hrbp;
-    else if (config && config.role === 'exec') approver = (row as any).exec;
-    else if (config && config.role === 'standing') approver = (row as any).standing;
+    if (monitoringSummaryKey === 'completed') {
+      rows = rows.filter((r) => r.status === '已完成');
+    } else if (monitoringSummaryKey === 'inProgress') {
+      rows = rows.filter((r) => r.status === '进行中');
+    } else if (monitoringSummaryKey === 'stuck') {
+      rows = rows.filter((r) => r.status === '滞留/超时');
+    }
+    return rows.filter((row) => {
+      for (const [key, values] of Object.entries(selectedFilters)) {
+        const filterValues = values as any[];
+        if (filterValues.length > 0) {
+          const rowValue = (row as any)[key];
+          if (!filterValues.includes(rowValue)) return false;
+        }
+      }
+      return true;
+    });
+  };
 
-    return {
-      ...row,
-      currentNode: config ? config.nodeName : '-',
-      currentApprover: approver
-    };
-  });
+  useEffect(() => {
+    setMonitoringSummaryKey('assessmentTotal');
+  }, [selectedActivityId, selectedPhase]);
 
-  const planChangeFlowNodes = [
-    { nodeName: '变更申请填报', role: 'leader' as const },
-    { nodeName: '变更审批', role: 'hrbp' as const },
-    { nodeName: '计划发布确认', role: 'exec' as const },
-  ];
+  useEffect(() => {
+    setPlanChangeSummaryKey('departments');
+    setPlanChangeFilters({ orgType: [], status: [] });
+    setPlanChangeToolbarDropdown(null);
+    setPlanChangeSearchTerm('');
+  }, [selectedActivityId]);
+
+  useEffect(() => {
+    if (monitoringViewTab !== '组织绩效考核流程监控') return;
+    const timer = window.setTimeout(() => {
+      monitoringSummaryFirstCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [monitoringViewTab]);
+
+  useEffect(() => {
+    if (monitoringViewTab !== '组织绩效计划变更监控') return;
+    setPlanChangeSummaryKey('departments');
+    setPlanChangeFilters({ orgType: [], status: [] });
+    setPlanChangeToolbarDropdown(null);
+    const timer = window.setTimeout(() => {
+      planChangeSummaryFirstCardRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [monitoringViewTab]);
 
   const planChangeRows = useMemo(() => {
-    return baseTableData.map((row, index) => {
-      if (row.status === '未开始') {
-        return { ...row, currentNode: '-', currentApprover: '-' };
-      }
-      if (row.status === '已完成') {
-        return { ...row, currentNode: '已归档', currentApprover: '-' };
-      }
-      const config = planChangeFlowNodes[index % planChangeFlowNodes.length];
-      let approver = '-';
-      if (config.role === 'leader') approver = row.leader;
-      else if (config.role === 'hrbp') approver = row.hrbp;
-      else if (config.role === 'exec') approver = (row as any).exec;
-      return {
-        ...row,
-        currentNode: config.nodeName,
-        currentApprover: approver,
-      };
-    });
-  }, []);
+    const rows = planChangeSubjectsByActivityId[selectedActivityId];
+    if (Array.isArray(rows) && rows.length > 0) return rows;
+    return [];
+  }, [planChangeSubjectsByActivityId, selectedActivityId]);
 
   const planChangeSummaryCards = useMemo(() => {
     const total = planChangeRows.length;
@@ -6300,10 +7243,32 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
     const stuck = planChangeRows.filter((r) => r.status === '滞留/超时').length;
     const pct = total ? Math.round((done / total) * 100) : 0;
     return [
-      { title: '涉及部门数', value: String(total), subValue: '当前存在计划变更流程', color: 'text-gray-900', bgColor: 'bg-white' },
-      { title: '已完成', value: String(done), subValue: `占比 ${pct}%`, color: 'text-green-500', bgColor: 'bg-green-50/30' },
-      { title: '进行中', value: String(ing), subValue: '变更流程处理中', color: 'text-blue-500', bgColor: 'bg-blue-50/30' },
       {
+        key: 'departments' as const,
+        title: '涉及部门数',
+        value: String(total),
+        subValue: '当前存在计划变更流程',
+        color: 'text-gray-900',
+        bgColor: 'bg-white',
+      },
+      {
+        key: 'completed' as const,
+        title: '已完成',
+        value: String(done),
+        subValue: `占比 ${pct}%`,
+        color: 'text-green-500',
+        bgColor: 'bg-green-50/30',
+      },
+      {
+        key: 'inProgress' as const,
+        title: '进行中',
+        value: String(ing),
+        subValue: '变更流程处理中',
+        color: 'text-blue-500',
+        bgColor: 'bg-blue-50/30',
+      },
+      {
+        key: 'stuck' as const,
         title: '滞留 / 超时',
         value: String(stuck),
         subValue: stuck ? `${stuck} 个部门存在超时节点` : '暂无滞留',
@@ -6313,18 +7278,58 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
     ];
   }, [planChangeRows]);
 
+  const getPlanChangeColumnOptions = (column: 'orgType' | 'status') => {
+    return Array.from(new Set(planChangeRows.map((r) => r[column]).filter((v) => v && v !== '-'))).sort();
+  };
+
+  const togglePlanChangeFilterValue = (column: 'orgType' | 'status', value: string) => {
+    setPlanChangeFilters((prev) => {
+      const cur = prev[column];
+      const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
+      return { ...prev, [column]: next };
+    });
+  };
+
+  const clearPlanChangeFilter = (column: 'orgType' | 'status') => {
+    setPlanChangeFilters((prev) => ({ ...prev, [column]: [] }));
+  };
+
   const getPlanChangeFilteredRows = () => {
     const q = planChangeSearchTerm.trim().toLowerCase();
-    if (!q) return planChangeRows;
-    return planChangeRows.filter((row) => {
-      const pathShort = row.path.replace('集团总部/', '').toLowerCase();
-      return (
-        row.id.toLowerCase().includes(q) ||
-        pathShort.includes(q) ||
-        row.leader.toLowerCase().includes(q) ||
-        row.hrbp.toLowerCase().includes(q)
-      );
-    });
+    let rows = planChangeRows;
+    if (q) {
+      rows = rows.filter((row) => {
+        const pathShort = row.path.replace('集团总部/', '').toLowerCase();
+        const org = String(row.orgType ?? '').toLowerCase();
+        const node = String(row.currentNode ?? '').toLowerCase();
+        const st = String(row.status ?? '').toLowerCase();
+        const appr = String(row.currentApprover ?? '').toLowerCase();
+        return (
+          row.id.toLowerCase().includes(q) ||
+          pathShort.includes(q) ||
+          row.leader.toLowerCase().includes(q) ||
+          row.hrbp.toLowerCase().includes(q) ||
+          org.includes(q) ||
+          node.includes(q) ||
+          st.includes(q) ||
+          appr.includes(q)
+        );
+      });
+    }
+    if (planChangeFilters.orgType.length) {
+      rows = rows.filter((r) => planChangeFilters.orgType.includes(r.orgType));
+    }
+    if (planChangeFilters.status.length) {
+      rows = rows.filter((r) => planChangeFilters.status.includes(r.status));
+    }
+    if (planChangeSummaryKey === 'completed') {
+      rows = rows.filter((r) => r.status === '已完成');
+    } else if (planChangeSummaryKey === 'inProgress') {
+      rows = rows.filter((r) => r.status === '进行中');
+    } else if (planChangeSummaryKey === 'stuck') {
+      rows = rows.filter((r) => r.status === '滞留/超时');
+    }
+    return rows;
   };
 
   const handlePlanChangeSendReminder = () => {
@@ -6356,7 +7361,7 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <h1 className="text-[18px] font-bold text-gray-900 shrink-0">组织绩效流程监控</h1>
           <div className="flex items-center h-9 rounded-lg bg-gray-100 p-0.5 gap-0.5 shrink-0">
-            {(['考核流程监控', '绩效计划变更监控'] as const).map((tab) => (
+            {(['组织绩效考核流程监控', '组织绩效计划变更监控'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -6364,6 +7369,10 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                   setMonitoringViewTab(tab);
                   setSelectedIds([]);
                   setPlanChangeSelectedIds([]);
+                  if (tab === '组织绩效考核流程监控') {
+                    setMonitoringSummaryKey('assessmentTotal');
+                    setToolbarFilterDropdown(null);
+                  }
                 }}
                 className={`h-full px-4 rounded-md text-[13px] font-medium whitespace-nowrap transition-all ${
                   monitoringViewTab === tab
@@ -6423,7 +7432,7 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
         </div>
       </div>
 
-      {monitoringViewTab === '考核流程监控' ? (
+      {monitoringViewTab === '组织绩效考核流程监控' ? (
       <>
       {/* Phase Progress and Rounds */}
       <div className="bg-white border-b border-gray-100 flex flex-col">
@@ -6442,19 +7451,40 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
           />
           
           <div className="flex justify-between w-full max-w-4xl relative z-10 px-8">
-              {activityPhases.map((p, idx) => (
-                <div key={p.name} className="flex flex-col items-center gap-1 group cursor-pointer" onClick={() => setSelectedPhase(p.name)}>
+              {activityPhases.map((p, idx) => {
+                const phaseStepBlockTitle = getMonitoringPhaseStepBlockTitle(idx);
+                const phaseStepLocked = Boolean(phaseStepBlockTitle);
+                return (
+                <div
+                  key={p.name}
+                  role="button"
+                  tabIndex={0}
+                  title={phaseStepBlockTitle}
+                  onClick={() => handleMonitoringPhaseStepClick(idx, p.name)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleMonitoringPhaseStepClick(idx, p.name);
+                    }
+                  }}
+                  className={`flex flex-col items-center gap-1 group outline-none ${
+                    phaseStepLocked ? 'cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                    p.name === selectedPhase ? 'bg-[#2f54eb] border-[#2f54eb] text-white' : idx === 0 ? 'bg-white border-[#2f54eb] text-[#2f54eb]' : 'bg-white border-gray-200 text-gray-400 group-hover:border-gray-300'
+                    phaseStepLocked ? 'opacity-60' : ''
+                  } ${
+                    p.name === selectedPhase ? 'bg-[#2f54eb] border-[#2f54eb] text-white' : idx === 0 ? 'bg-white border-[#2f54eb] text-[#2f54eb]' : `bg-white border-gray-200 text-gray-400 ${phaseStepLocked ? '' : 'group-hover:border-gray-300'}`
                   }`}>
                     {idx + 1}
                   </div>
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center" title={phaseStepBlockTitle}>
                     <span className={`text-[13px] font-bold transition-colors ${p.name === selectedPhase ? 'text-[#2f54eb]' : 'text-gray-500'}`}>{p.name}</span>
                     <span className="text-[11px] text-gray-400 min-w-max bg-gray-50/50 px-1.5 py-0.5 rounded border border-gray-100/50">{p.date}</span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
           </div>
         </div>
 
@@ -6482,8 +7512,25 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Summary Cards */}
         <div className="grid grid-cols-4 gap-4">
-          {summaryCards.map((card) => (
-            <div key={card.title} className={`${card.bgColor} p-5 rounded-sm shadow-sm border border-gray-100/80 relative overflow-hidden group hover:shadow-md transition-shadow`}>
+          {monitoringSummaryCards.map((card, idx) => (
+            <div
+              key={card.key}
+              ref={idx === 0 ? monitoringSummaryFirstCardRef : undefined}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setMonitoringSummaryKey(card.key);
+                }
+              }}
+              onClick={() => setMonitoringSummaryKey(card.key)}
+              className={`${card.bgColor} p-5 rounded-sm shadow-sm relative overflow-hidden group hover:shadow-md transition-all cursor-pointer border ${
+                monitoringSummaryKey === card.key
+                  ? 'ring-2 ring-[#2f54eb] ring-offset-2 border-[#2f54eb]/40'
+                  : 'border-gray-100/80'
+              }`}
+            >
               <div className="relative z-10 flex flex-col py-1">
                 <span className="text-[13px] text-gray-500 mb-2">{card.title}</span>
                 <div className="flex items-baseline gap-3">
@@ -6491,8 +7538,7 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                   <span className="text-[12px] text-gray-400 font-normal">{card.subValue}</span>
                 </div>
               </div>
-              
-              {/* Decorative background elements like in Fig 1 */}
+
               <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-gray-50/50 rounded-full blur-2xl group-hover:scale-125 transition-transform" />
               {card.color !== 'text-gray-900' && (
                 <div className={`absolute top-0 right-0 w-1 h-full opacity-40 ${card.color.replace('text-', 'bg-')}`} />
@@ -6502,54 +7548,209 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
         </div>
 
         {/* Filters and Actions */}
-        <div className="bg-white p-3 rounded shadow-sm border border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-                    <div className="relative w-80">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input 
-                        type="text" 
-                        placeholder="搜索部门编码/名称/负责人/HRBP" 
-                        defaultValue={monitoringSearchTerm}
-                        onBlur={(e) => setMonitoringSearchTerm(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            setMonitoringSearchTerm(e.currentTarget.value);
-                          }
-                        }}
-                        className="w-full pl-9 pr-12 py-1.5 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] bg-gray-50/50"
-                      />
-                      {monitoringSearchTerm && (
-                        <button 
-                          onClick={() => setMonitoringSearchTerm('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+        <div className="bg-white p-3 rounded shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3 min-w-0">
+            <div className="relative w-80 shrink-0">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="搜索部门编码/名称/负责人/HRBP"
+                value={monitoringSearchTerm}
+                onChange={(e) => setMonitoringSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-12 py-1.5 border border-gray-200 rounded text-[13px] outline-none focus:border-[#2f54eb] bg-gray-50/50"
+              />
+              {monitoringSearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setMonitoringSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setToolbarFilterDropdown((d) => (d === 'orgType' ? null : 'orgType'))}
+                className={`flex items-center gap-1.5 min-w-[120px] justify-between border rounded px-3 py-1.5 text-[13px] transition-colors cursor-pointer ${
+                  toolbarFilterDropdown === 'orgType' || (selectedFilters.orgType?.length ?? 0) > 0
+                    ? 'border-[#2f54eb] text-[#2f54eb] bg-blue-50/40'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <span className="truncate">组织类型</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  {(selectedFilters.orgType?.length ?? 0) > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-[#2f54eb]/15 text-[11px] font-medium">
+                      {selectedFilters.orgType.length}
+                    </span>
+                  )}
+                  <ChevronDown size={14} className={`text-gray-400 transition-transform ${toolbarFilterDropdown === 'orgType' ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
+              <AnimatePresence>
+                {toolbarFilterDropdown === 'orgType' && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setToolbarFilterDropdown(null)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      className="absolute left-0 top-full mt-1 w-[240px] max-h-[280px] overflow-y-auto bg-white border border-gray-100 rounded-lg shadow-xl z-40 py-2"
+                    >
+                      <div className="px-3 pb-2 flex items-center justify-between border-b border-gray-50 mb-1">
+                        <span className="text-[12px] font-bold text-gray-900">组织类型</span>
+                        {(selectedFilters.orgType?.length ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearFilter('orgType');
+                            }}
+                            className="text-[11px] text-[#2f54eb] hover:underline"
+                          >
+                            清空
+                          </button>
+                        )}
+                      </div>
+                      {getColumnOptions('orgType').map((opt) => (
+                        <label
+                          key={opt}
+                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer group"
                         >
-                          <X size={12} />
-                        </button>
-                      )}
-                    </div>
-            <button 
+                          <div
+                            role="presentation"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFilterValue('orgType', opt);
+                            }}
+                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                              selectedFilters.orgType?.includes(opt)
+                                ? 'bg-[#2f54eb] border-[#2f54eb]'
+                                : 'border-gray-300 group-hover:border-gray-400'
+                            }`}
+                          >
+                            {selectedFilters.orgType?.includes(opt) && <Check size={10} className="text-white" />}
+                          </div>
+                          <span className="text-[13px] text-gray-700 truncate">{opt}</span>
+                        </label>
+                      ))}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setToolbarFilterDropdown((d) => (d === 'status' ? null : 'status'))}
+                className={`flex items-center gap-1.5 min-w-[120px] justify-between border rounded px-3 py-1.5 text-[13px] transition-colors cursor-pointer ${
+                  toolbarFilterDropdown === 'status' || (selectedFilters.status?.length ?? 0) > 0
+                    ? 'border-[#2f54eb] text-[#2f54eb] bg-blue-50/40'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <span className="truncate">状态</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  {(selectedFilters.status?.length ?? 0) > 0 && (
+                    <span className="px-1.5 py-0.5 rounded bg-[#2f54eb]/15 text-[11px] font-medium">
+                      {selectedFilters.status.length}
+                    </span>
+                  )}
+                  <ChevronDown size={14} className={`text-gray-400 transition-transform ${toolbarFilterDropdown === 'status' ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
+              <AnimatePresence>
+                {toolbarFilterDropdown === 'status' && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setToolbarFilterDropdown(null)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      className="absolute left-0 top-full mt-1 w-[240px] max-h-[280px] overflow-y-auto bg-white border border-gray-100 rounded-lg shadow-xl z-40 py-2"
+                    >
+                      <div className="px-3 pb-2 flex items-center justify-between border-b border-gray-50 mb-1">
+                        <span className="text-[12px] font-bold text-gray-900">状态</span>
+                        {(selectedFilters.status?.length ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearFilter('status');
+                            }}
+                            className="text-[11px] text-[#2f54eb] hover:underline"
+                          >
+                            清空
+                          </button>
+                        )}
+                      </div>
+                      {getColumnOptions('status').map((opt) => (
+                        <label
+                          key={opt}
+                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer group"
+                        >
+                          <div
+                            role="presentation"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFilterValue('status', opt);
+                            }}
+                            className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                              selectedFilters.status?.includes(opt)
+                                ? 'bg-[#2f54eb] border-[#2f54eb]'
+                                : 'border-gray-300 group-hover:border-gray-400'
+                            }`}
+                          >
+                            {selectedFilters.status?.includes(opt) && <Check size={10} className="text-white" />}
+                          </div>
+                          <span className="text-[13px] text-gray-700 truncate">{opt}</span>
+                        </label>
+                      ))}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <button
+              type="button"
               onClick={() => {
                 setMonitoringSearchTerm('');
+                setMonitoringSummaryKey('assessmentTotal');
+                setToolbarFilterDropdown(null);
                 setSelectedFilters({
+                  path: [],
                   orgType: [],
+                  level: [],
+                  currentNode: [],
+                  currentApprover: [],
                   status: [],
-                  node: []
                 });
               }}
-              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
             >
               重置
             </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+            <button
+              type="button"
+              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5 shrink-0"
+            >
               <Download size={14} />
               导出
             </button>
-            <button className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+            <button
+              type="button"
+              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5 shrink-0"
+            >
               <Download size={14} />
               批量导出表单
             </button>
+          </div>
+          <div className="flex items-center gap-2">
             <button 
               onClick={handleSendReminder}
               className="px-4 py-1.5 bg-orange-50 border border-orange-200 text-orange-600 rounded text-[13px] hover:bg-orange-100 transition-colors flex items-center gap-1.5"
@@ -6582,11 +7783,6 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                 <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
                   <div className="flex items-center gap-1">
                     组织类型
-                  </div>
-                </th>
-                <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
-                  <div className="flex items-center gap-1">
-                    组织层级
                   </div>
                 </th>
                 <th className="w-[150px] py-3 px-3 font-medium text-left whitespace-nowrap relative">
@@ -6626,9 +7822,6 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                     <span className="text-[13px]">{row.orgType}</span>
                   </td>
                   <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
-                    {row.level}
-                  </td>
-                  <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
                     {row.currentNode === '-' ? (
                       <span className="text-gray-300">-</span>
                     ) : (
@@ -6665,7 +7858,6 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                         审批链
                       </button>
                       <button className="text-[#2f54eb] hover:underline whitespace-nowrap">查看表单</button>
-                      <button className="text-[#2f54eb] hover:underline whitespace-nowrap">导出表单</button>
                     </div>
                   </td>
                 </tr>
@@ -6701,10 +7893,24 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
         <>
           <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
             <div className="grid grid-cols-4 gap-4">
-              {planChangeSummaryCards.map((card) => (
+              {planChangeSummaryCards.map((card, idx) => (
                 <div
-                  key={card.title}
-                  className={`${card.bgColor} p-5 rounded-sm shadow-sm border border-gray-100/80 relative overflow-hidden group hover:shadow-md transition-shadow`}
+                  key={card.key}
+                  ref={idx === 0 ? planChangeSummaryFirstCardRef : undefined}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setPlanChangeSummaryKey(card.key);
+                    }
+                  }}
+                  onClick={() => setPlanChangeSummaryKey(card.key)}
+                  className={`${card.bgColor} p-5 rounded-sm shadow-sm relative overflow-hidden group hover:shadow-md transition-all cursor-pointer border ${
+                    planChangeSummaryKey === card.key
+                      ? 'ring-2 ring-[#2f54eb] ring-offset-2 border-[#2f54eb]/40'
+                      : 'border-gray-100/80'
+                  }`}
                 >
                   <div className="relative z-10 flex flex-col py-1">
                     <span className="text-[13px] text-gray-500 mb-2">{card.title}</span>
@@ -6721,9 +7927,9 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
               ))}
             </div>
 
-            <div className="bg-white p-3 rounded shadow-sm border border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative w-80">
+            <div className="bg-white p-3 rounded shadow-sm border border-gray-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 min-w-0">
+                <div className="relative w-80 shrink-0">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
@@ -6742,10 +7948,162 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                     </button>
                   )}
                 </div>
+
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPlanChangeToolbarDropdown((d) => (d === 'orgType' ? null : 'orgType'))}
+                    className={`flex items-center gap-1.5 min-w-[120px] justify-between border rounded px-3 py-1.5 text-[13px] transition-colors cursor-pointer ${
+                      planChangeToolbarDropdown === 'orgType' || planChangeFilters.orgType.length > 0
+                        ? 'border-[#2f54eb] text-[#2f54eb] bg-blue-50/40'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <span className="truncate">组织类型</span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      {planChangeFilters.orgType.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-[#2f54eb]/15 text-[11px] font-medium">
+                          {planChangeFilters.orgType.length}
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        className={`text-gray-400 transition-transform ${planChangeToolbarDropdown === 'orgType' ? 'rotate-180' : ''}`}
+                      />
+                    </span>
+                  </button>
+                  <AnimatePresence>
+                    {planChangeToolbarDropdown === 'orgType' && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setPlanChangeToolbarDropdown(null)} />
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 4 }}
+                          className="absolute left-0 top-full mt-1 w-[240px] max-h-[280px] overflow-y-auto bg-white border border-gray-100 rounded-lg shadow-xl z-40 py-2"
+                        >
+                          <div className="px-3 pb-2 flex items-center justify-between border-b border-gray-50 mb-1">
+                            <span className="text-[12px] font-bold text-gray-900">组织类型</span>
+                            {planChangeFilters.orgType.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearPlanChangeFilter('orgType');
+                                }}
+                                className="text-[11px] text-[#2f54eb] hover:underline"
+                              >
+                                清空
+                              </button>
+                            )}
+                          </div>
+                          {getPlanChangeColumnOptions('orgType').map((opt) => (
+                            <label key={opt} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer group">
+                              <div
+                                role="presentation"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePlanChangeFilterValue('orgType', opt);
+                                }}
+                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                  planChangeFilters.orgType.includes(opt)
+                                    ? 'bg-[#2f54eb] border-[#2f54eb]'
+                                    : 'border-gray-300 group-hover:border-gray-400'
+                                }`}
+                              >
+                                {planChangeFilters.orgType.includes(opt) && <Check size={10} className="text-white" />}
+                              </div>
+                              <span className="text-[13px] text-gray-700 truncate">{opt}</span>
+                            </label>
+                          ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPlanChangeToolbarDropdown((d) => (d === 'status' ? null : 'status'))}
+                    className={`flex items-center gap-1.5 min-w-[120px] justify-between border rounded px-3 py-1.5 text-[13px] transition-colors cursor-pointer ${
+                      planChangeToolbarDropdown === 'status' || planChangeFilters.status.length > 0
+                        ? 'border-[#2f54eb] text-[#2f54eb] bg-blue-50/40'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <span className="truncate">状态</span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      {planChangeFilters.status.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-[#2f54eb]/15 text-[11px] font-medium">
+                          {planChangeFilters.status.length}
+                        </span>
+                      )}
+                      <ChevronDown
+                        size={14}
+                        className={`text-gray-400 transition-transform ${planChangeToolbarDropdown === 'status' ? 'rotate-180' : ''}`}
+                      />
+                    </span>
+                  </button>
+                  <AnimatePresence>
+                    {planChangeToolbarDropdown === 'status' && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setPlanChangeToolbarDropdown(null)} />
+                        <motion.div
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 4 }}
+                          className="absolute left-0 top-full mt-1 w-[240px] max-h-[280px] overflow-y-auto bg-white border border-gray-100 rounded-lg shadow-xl z-40 py-2"
+                        >
+                          <div className="px-3 pb-2 flex items-center justify-between border-b border-gray-50 mb-1">
+                            <span className="text-[12px] font-bold text-gray-900">状态</span>
+                            {planChangeFilters.status.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  clearPlanChangeFilter('status');
+                                }}
+                                className="text-[11px] text-[#2f54eb] hover:underline"
+                              >
+                                清空
+                              </button>
+                            )}
+                          </div>
+                          {getPlanChangeColumnOptions('status').map((opt) => (
+                            <label key={opt} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer group">
+                              <div
+                                role="presentation"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePlanChangeFilterValue('status', opt);
+                                }}
+                                className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                  planChangeFilters.status.includes(opt)
+                                    ? 'bg-[#2f54eb] border-[#2f54eb]'
+                                    : 'border-gray-300 group-hover:border-gray-400'
+                                }`}
+                              >
+                                {planChangeFilters.status.includes(opt) && <Check size={10} className="text-white" />}
+                              </div>
+                              <span className="text-[13px] text-gray-700 truncate">{opt}</span>
+                            </label>
+                          ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setPlanChangeSearchTerm('')}
-                  className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setPlanChangeSearchTerm('');
+                    setPlanChangeSummaryKey('departments');
+                    setPlanChangeFilters({ orgType: [], status: [] });
+                    setPlanChangeToolbarDropdown(null);
+                  }}
+                  className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer shrink-0"
                 >
                   重置
                 </button>
@@ -6780,7 +8138,6 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                     <th className="w-[100px] py-3 px-4 font-medium text-left bg-gray-50/50 whitespace-nowrap">部门编码</th>
                     <th className="w-[200px] py-3 px-4 font-medium text-left bg-gray-50/50 whitespace-nowrap">部门名称</th>
                     <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap">组织类型</th>
-                    <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap">组织层级</th>
                     <th className="w-[150px] py-3 px-3 font-medium text-left whitespace-nowrap">当前办理节点</th>
                     <th className="w-[150px] py-3 px-3 font-medium text-left whitespace-nowrap">当前办理人</th>
                     <th className="w-[120px] py-3 px-3 font-medium text-left whitespace-nowrap">状态</th>
@@ -6814,7 +8171,6 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                         <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
                           <span className="text-[13px]">{row.orgType}</span>
                         </td>
-                        <td className="py-3 px-3 text-gray-600 whitespace-nowrap">{row.level}</td>
                         <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
                           {row.currentNode === '-' ? (
                             <span className="text-gray-300">-</span>
@@ -6864,9 +8220,6 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
                             </button>
                             <button type="button" className="text-[#2f54eb] hover:underline whitespace-nowrap">
                               查看表单
-                            </button>
-                            <button type="button" className="text-[#2f54eb] hover:underline whitespace-nowrap">
-                              导出表单
                             </button>
                           </div>
                         </td>
@@ -6918,7 +8271,7 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
           <SendMessageReminderDrawer 
             isOpen={isSendMessageDrawerOpen}
             onClose={() => setIsSendMessageDrawerOpen(false)}
-            selectedCount={monitoringViewTab === '考核流程监控' ? selectedIds.length : planChangeSelectedIds.length}
+            selectedCount={monitoringViewTab === '组织绩效考核流程监控' ? selectedIds.length : planChangeSelectedIds.length}
           />
         )}
       </AnimatePresence>
@@ -6949,12 +8302,26 @@ const PerformanceProcessMonitoringPage = ({ activities = [] }: { activities?: an
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="fixed top-24 left-1/2 -translate-x-1/2 z-[1000] bg-white border border-gray-100 shadow-xl rounded-full px-6 py-2.5 flex items-center gap-3"
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[1000] bg-white border border-gray-100 shadow-xl rounded-full px-6 py-2.5 flex items-center gap-3 max-w-[min(92vw,720px)]"
           >
-            <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white">
-              <Info size={12} />
-            </div>
-            <span className="text-[14px] text-gray-700 font-medium">{toast.message}</span>
+            {toast.type === 'warning' ? (
+              <div className="w-5 h-5 rounded-full bg-orange-50 flex items-center justify-center text-orange-600 shrink-0">
+                <AlertCircle size={14} />
+              </div>
+            ) : toast.type === 'error' ? (
+              <div className="w-5 h-5 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
+                <X size={12} />
+              </div>
+            ) : toast.type === 'success' ? (
+              <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center text-green-600 shrink-0">
+                <CheckCircle2 size={13} />
+              </div>
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-white shrink-0">
+                <Info size={12} />
+              </div>
+            )}
+            <span className="text-[14px] text-gray-700 font-medium leading-snug">{toast.message}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -6998,15 +8365,15 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
 
   const templateMockData: { [key: string]: { title: string, content: string } } = {
     'default': {
-      title: '【待办提醒】关于绩效考核流程处理通知',
+      title: '【待办提醒】关于组织绩效考核流程处理通知',
       content: '您处理的项目 {@考核周期} 已经开始，请于 {@节点窗口期结束日期} 前完成 {@考核阶段} 处理。\n点击查看详情：${系统链接}'
     },
     'timeout': {
-      title: '【超时提醒】绩效考核节点已逾期',
+      title: '【超时提醒】组织绩效考核节点已逾期',
       content: '您处理的项目 {@考核周期} 的 {@考核阶段} 已于 {@节点窗口期结束日期} 到期，目前处于逾期状态，请尽快处理。\n点击查看详情：${系统链接}'
     },
     'mail_urgent': {
-      title: '【紧急任务】请尽快处理您的绩效考核待办',
+      title: '【紧急任务】请尽快处理您的组织绩效考核待办',
       content: '紧急通知：您在 {@考核周期} 中的考核任务即将关闭。请务必在 {@阶段窗口期结束日期} 之前登录系统完成。'
     },
     '': {
@@ -7285,18 +8652,33 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
 /** 通知规则「消息模板」下拉项对应的预览正文（占位符展示为字面量） */
 const NOTIFICATION_TEMPLATE_PREVIEW_BODIES: Record<string, string> = {
   绩效目标制定通知:
-    '您好，${employeeName}：当前已进入绩效计划制定阶段，请于 ${deadlineDate} 前在系统中完成本周期绩效目标的制定与提交。如有疑问请联系您的直属上级或 HR。',
+    '您好，${employeeName}：当前已进入组织绩效计划制定阶段，请于 ${deadlineDate} 前在系统中完成本周期绩效目标的制定与提交。如有疑问请联系您的直属上级或 HR。',
   默认通知模板:
     '回首过去，拼搏与汗水，换来今天的喜悦与收获，总结过去，勤奋加努力，得来今天的幸福与成功；亲爱的${hhrEmpName}，今天是您入司${number}周年纪念日，宇通愿您扬帆起航，创造更加精彩的明天！',
   绩效方案启动通知:
     '各位同事：${cycleName} 绩效方案已正式启动，请登录绩效系统查看方案说明与时间安排。启动时间：${startDate}。',
-  绩效考核提醒:
-    '您好，${employeeName}：${cycleName} 绩效考核正在进行中，请于 ${deadlineDate} 前完成自评/提交相关材料，逾期可能影响考核进度。',
+  组织绩效考核提醒:
+    '您好，${employeeName}：${cycleName} 组织绩效考核正在进行中，请于 ${deadlineDate} 前完成自评/提交相关材料，逾期可能影响考核进度。',
+};
+
+/** 通知规则抽屉阶段页签顺序；旧数据缺「组织绩效计划变更」时自动补默认规则 */
+const NOTIFICATION_DRAWER_PHASE_ORDER = [
+  '组织绩效计划制定',
+  '组织绩效中期回顾',
+  '组织绩效考核',
+  '组织绩效计划变更',
+] as const;
+
+const NOTIFICATION_PHASE_DEFAULT_TEMPLATE: Record<(typeof NOTIFICATION_DRAWER_PHASE_ORDER)[number], string> = {
+  组织绩效计划制定: '绩效目标制定通知',
+  组织绩效中期回顾: '组织绩效中期回顾通知',
+  组织绩效考核: '组织绩效考核启动通知',
+  组织绩效计划变更: '绩效方案启动通知',
 };
 
 // --- 通知规则方案抽屉组件 ---
 const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
-  const [activePhase, setActivePhase] = useState('绩效计划制定');
+  const [activePhase, setActivePhase] = useState('组织绩效计划制定');
   const [openRecipientDropdownId, setOpenRecipientDropdownId] = useState<string | null>(null);
   const [openMethodsDropdownId, setOpenMethodsDropdownId] = useState<string | null>(null);
   const [templatePreview, setTemplatePreview] = useState<{ title: string; body: string } | null>(null);
@@ -7320,13 +8702,14 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
     name: '',
     description: '',
     phases: {
-      '绩效计划制定': [createDefaultRule('init-1', '绩效目标制定通知')],
-      '绩效中期回顾': [createDefaultRule('init-2', '绩效中期回顾通知')],
-      '绩效考核': [createDefaultRule('init-3', '绩效考核启动通知')]
-    }
+      '组织绩效计划制定': [createDefaultRule('init-1', '绩效目标制定通知')],
+      '组织绩效中期回顾': [createDefaultRule('init-2', '组织绩效中期回顾通知')],
+      '组织绩效考核': [createDefaultRule('init-3', '组织绩效考核启动通知')],
+      '组织绩效计划变更': [createDefaultRule('init-4', '绩效方案启动通知')],
+    },
   });
 
-  const phases = ['绩效计划制定', '绩效中期回顾', '绩效考核'];
+  const phases = [...NOTIFICATION_DRAWER_PHASE_ORDER];
 
   useEffect(() => {
     const ensureMethods = (rules: any[]) =>
@@ -7334,29 +8717,39 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
         ...r,
         methods: Array.isArray(r.methods) && r.methods.length > 0 ? r.methods : ['企微'],
       }));
+
+    const fillPhases = (raw: Record<string, any[]> | undefined) => {
+      const src = raw && typeof raw === 'object' ? raw : {};
+      const out: Record<string, any[]> = {};
+      for (const key of NOTIFICATION_DRAWER_PHASE_ORDER) {
+        const list =
+          src[key as string] ??
+          (key === '组织绩效计划变更' ? src['绩效计划变更'] : undefined);
+        if (Array.isArray(list) && list.length > 0) {
+          out[key] = ensureMethods(list);
+        } else {
+          out[key] = ensureMethods([
+            createDefaultRule(
+              `fill-${key}-${Date.now()}`,
+              NOTIFICATION_PHASE_DEFAULT_TEMPLATE[key]
+            ),
+          ]);
+        }
+      }
+      return out;
+    };
+
     if (data) {
-      const rawPhases = data.phases || {
-        '绩效计划制定': [createDefaultRule('init-1', '绩效目标制定通知')],
-        '绩效中期回顾': [createDefaultRule('init-2', '绩效中期回顾通知')],
-        '绩效考核': [createDefaultRule('init-3', '绩效考核启动通知')]
-      };
       setFormData({
         name: data.name || '',
         description: data.description || '',
-        phases: Object.fromEntries(
-          Object.entries(rawPhases).map(([k, rules]) => [k, ensureMethods(rules as any[])])
-        ),
+        phases: fillPhases(data.phases),
       });
     } else {
-      const now = Date.now().toString();
       setFormData({
         name: '',
         description: '',
-        phases: {
-          '绩效计划制定': [createDefaultRule(now + '1', '绩效目标制定通知')],
-          '绩效中期回顾': [createDefaultRule(now + '2', '绩效中期回顾通知')],
-          '绩效考核': [createDefaultRule(now + '3', '绩效考核启动通知')]
-        }
+        phases: fillPhases(undefined),
       });
     }
   }, [data, isOpen]);
@@ -7388,7 +8781,9 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
         className="fixed top-0 right-0 h-full w-[1200px] bg-[#f8f9fa] shadow-2xl z-[101] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100">
-          <h2 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}通知规则</h2>
+          <h2 className="text-[16px] font-bold text-gray-900">
+            {data?._isDuplicate ? '复制通知规则' : data ? '编辑通知规则' : '新增通知规则'}
+          </h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
             <X size={20} className="text-gray-400" />
           </button>
@@ -7750,7 +9145,7 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
                             <option>绩效目标制定通知</option>
                             <option>默认通知模板</option>
                             <option>绩效方案启动通知</option>
-                            <option>绩效考核提醒</option>
+                            <option>组织绩效考核提醒</option>
                           </select>
                         </td>
                         <td className="px-3 py-4">
@@ -7932,7 +9327,9 @@ const GradeRangeDrawer = ({ isOpen, onClose, data, onSave }: any) => {
         className="fixed top-0 right-0 h-full w-[800px] bg-[#f8f9fa] shadow-2xl z-[101] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-100">
-          <h2 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}等级分数区间规则</h2>
+          <h2 className="text-[16px] font-bold text-gray-900">
+            {data?._isDuplicate ? '复制等级分数区间规则' : data ? '编辑等级分数区间规则' : '新增等级分数区间规则'}
+          </h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer">
             <X size={20} className="text-gray-400" />
           </button>
@@ -8094,16 +9491,16 @@ const GradeRangeDrawer = ({ isOpen, onClose, data, onSave }: any) => {
 
 /** 组织绩效流程规则抽屉：大阶段顺序（与 DEFAULT_PERFORMANCE_PROCESS_NODES 的 title 一致） */
 const PERFORMANCE_PROCESS_DRAWER_PHASE_ORDER = [
-  '绩效计划制定',
-  '绩效中期回顾',
-  '绩效考核',
-  '绩效计划变更',
+  '组织绩效计划制定',
+  '组织绩效中期回顾',
+  '组织绩效考核',
+  '组织绩效计划变更',
 ] as const;
 
 const DEFAULT_PERFORMANCE_PROCESS_NODES = [
   {
     id: '1',
-    title: '绩效计划制定',
+    title: '组织绩效计划制定',
     subNodes: [
       { id: '1-1', title: '填写绩效计划' },
       { id: '1-2', title: '填写绩效计划' },
@@ -8112,14 +9509,14 @@ const DEFAULT_PERFORMANCE_PROCESS_NODES = [
       { id: '1-5', title: '分管执委/常委审核' },
     ],
   },
-  { id: '2', title: '绩效中期回顾', subNodes: [
+  { id: '2', title: '组织绩效中期回顾', subNodes: [
     { id: '2-1', title: '数据提供人填报中期回顾结果' },
     { id: '2-2', title: 'HRBP审核' },
     { id: '2-3', title: '一级部门负责人审批中期回顾' },
   ] as { id: string; title: string }[] },
   {
     id: '3',
-    title: '绩效考核',
+    title: '组织绩效考核',
     subNodes: [
       { id: '3-1', title: '数据评分人评分' },
       { id: '3-2', title: 'HRBP审批' },
@@ -8130,7 +9527,7 @@ const DEFAULT_PERFORMANCE_PROCESS_NODES = [
   },
   {
     id: '4',
-    title: '绩效计划变更',
+    title: '组织绩效计划变更',
     subNodes: [
       { id: '4-1', title: '提交计划变更' },
       { id: '4-2', title: '计划变更审批' },
@@ -8145,11 +9542,15 @@ function cloneDefaultPerformanceProcessNodes() {
   }));
 }
 
-/** 将已保存的 nodes 与当前默认大阶段对齐（补全新增阶段，避免旧数据缺少「绩效计划变更」） */
+/** 将已保存的 nodes 与当前默认大阶段对齐（补全新增阶段，避免旧数据缺少「组织绩效计划变更」） */
 function mergeSavedProcessNodesWithDefaults(saved: any[]) {
   const defaults = cloneDefaultPerformanceProcessNodes();
   return defaults.map((def) => {
-    const hit = saved.find((n: any) => n.title === def.title);
+    const hit = saved.find(
+      (n: any) =>
+        n.title === def.title ||
+        (def.title === '组织绩效计划变更' && n.title === '绩效计划变更')
+    );
     if (!hit) return def;
     return {
       id: hit.id ?? def.id,
@@ -8203,7 +9604,7 @@ const PerformanceProcessDrawer = ({
   data: any;
   onSave: (data: any) => void; 
 }) => {
-  const [activeMainNode, setActiveMainNode] = useState('绩效计划制定');
+  const [activeMainNode, setActiveMainNode] = useState('组织绩效计划制定');
   const [activeSubNodeId, setActiveSubNodeId] = useState('1-1');
   const [formData, setFormData] = useState<any>(() => ({
     name: '',
@@ -8337,7 +9738,7 @@ const PerformanceProcessDrawer = ({
       setReturnResubmitMode('reapprove');
       setReturnCommentRequired(false);
     }
-    setActiveMainNode('绩效计划制定');
+    setActiveMainNode('组织绩效计划制定');
     setActiveSubNodeId('1-1');
   }, [data, isOpen]);
 
@@ -8361,7 +9762,9 @@ const PerformanceProcessDrawer = ({
       >
         <div className="bg-white px-6 py-4 flex items-center justify-between border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <h3 className="text-[16px] font-bold text-gray-900">{data ? '编辑' : '新增'}组织绩效流程规则</h3>
+            <h3 className="text-[16px] font-bold text-gray-900">
+              {data?._isDuplicate ? '复制组织绩效流程规则' : data ? '编辑组织绩效流程规则' : '新增组织绩效流程规则'}
+            </h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer text-gray-400">
             <X size={20} />
@@ -8413,7 +9816,7 @@ const PerformanceProcessDrawer = ({
               {PERFORMANCE_PROCESS_DRAWER_PHASE_ORDER.map((phase) => (
                 <div 
                   key={phase}
-                  title={phase === '绩效计划变更' ? '绩效计划制定完成后，用于处理计划变更相关业务' : undefined}
+                  title={phase === '组织绩效计划变更' ? '组织绩效计划制定完成后，用于处理计划变更相关业务' : undefined}
                   onClick={() => {
                     setDraggingSubId(null);
                     setDropBeforeSubId(null);
@@ -9115,7 +10518,7 @@ const BasicRuleSettingsPage = ({
   const [activeTab, setActiveTab] = useState('考核指标维度规则');
   const [activePermissionTab, setActivePermissionTab] = useState('看板权限');
   const [activeSidebar, setActiveSidebar] = useState('通知规则');
-  const [activePhase, setActivePhase] = useState('绩效计划制定');
+  const [activePhase, setActivePhase] = useState('组织绩效计划制定');
   const [activeSubNode, setActiveSubNode] = useState('员工本人');
 
   const [configSearchTerm, setConfigSearchTerm] = useState('');
@@ -9155,8 +10558,14 @@ const BasicRuleSettingsPage = ({
   const [isPortalButtonEnabled, setIsPortalButtonEnabled] = useState(false);
   const [showFormErrors, setShowFormErrors] = useState(false);
 
+  /** 复制规则时规则名称默认加「（副本）」，与纯新增共用抽屉，保存走新增逻辑 */
+  const ruleNameForDuplicate = (name: string) => {
+    const base = String(name || '').trim();
+    return base.endsWith('（副本）') ? base : `${base}（副本）`;
+  };
+
   const handleIndicatorSave = (newData: any) => {
-    if (currentIndicatorData) {
+    if (currentIndicatorData && !currentIndicatorData._isDuplicate) {
       // Edit
       setDeptDimensionConfigs(deptDimensionConfigs.map(c => 
         c.id === currentIndicatorData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
@@ -9179,7 +10588,7 @@ const BasicRuleSettingsPage = ({
   };
 
   const handleGradeRangeSave = (newData: any) => {
-    if (currentGradeRangeData) {
+    if (currentGradeRangeData && !currentGradeRangeData._isDuplicate) {
       // Edit
       setLevelScoreConfigs(levelScoreConfigs.map(c => 
         c.id === currentGradeRangeData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
@@ -9202,7 +10611,7 @@ const BasicRuleSettingsPage = ({
   };
 
   const handleNotificationSave = (newData: any) => {
-    if (currentNotificationData) {
+    if (currentNotificationData && !currentNotificationData._isDuplicate) {
       // Edit
       setNotificationConfigs(notificationConfigs.map(c => 
         c.id === currentNotificationData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
@@ -9225,7 +10634,7 @@ const BasicRuleSettingsPage = ({
   };
 
   const handleProcessSave = (newData: any) => {
-    if (currentProcessData) {
+    if (currentProcessData && !currentProcessData._isDuplicate) {
       // Edit
       setPerformanceProcessConfigs(performanceProcessConfigs.map(c => 
         c.id === currentProcessData.id ? { ...c, ...newData, updater: '管理员', updateTime: new Date().toLocaleString() } : c
@@ -9450,6 +10859,16 @@ const BasicRuleSettingsPage = ({
                               >
                                 删除
                               </button>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setCurrentIndicatorData({ ...config, name: ruleNameForDuplicate(config.name), _isDuplicate: true });
+                                  setIsIndicatorDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                复制
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -9570,6 +10989,16 @@ const BasicRuleSettingsPage = ({
                                 className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
                               >
                                 删除
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setCurrentProcessData({ ...config, name: ruleNameForDuplicate(config.name), _isDuplicate: true });
+                                  setIsProcessDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                复制
                               </button>
                             </div>
                           </td>
@@ -9692,6 +11121,16 @@ const BasicRuleSettingsPage = ({
                               >
                                 删除
                               </button>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setCurrentGradeRangeData({ ...config, name: ruleNameForDuplicate(config.name), _isDuplicate: true });
+                                  setIsGradeRangeDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                复制
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -9812,6 +11251,16 @@ const BasicRuleSettingsPage = ({
                                 className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
                               >
                                 删除
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setCurrentNotificationData({ ...config, name: ruleNameForDuplicate(config.name), _isDuplicate: true });
+                                  setIsNotificationDrawerOpen(true);
+                                }}
+                                className="text-[#2f54eb] hover:text-blue-700 text-[13px] transition-colors cursor-pointer hover:font-bold"
+                              >
+                                复制
                               </button>
                             </div>
                           </td>
@@ -10047,7 +11496,7 @@ const BasicRuleSettingsPage = ({
                         <div className="md:col-span-3 space-y-3">
                           <label className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">功能按钮名称</label>
                           <div className={`w-full px-4 py-2.5 bg-gray-50 text-gray-800 font-bold border border-gray-100 rounded-lg text-[14px] ${!isPortalButtonEnabled ? 'bg-gray-100/80 text-gray-400' : ''}`}>
-                            绩效计划变更
+                            组织绩效计划变更
                           </div>
                         </div>
 
@@ -10060,7 +11509,7 @@ const BasicRuleSettingsPage = ({
                             >
                               <option>绩效制定计划</option>
                               <option>绩效中期考核</option>
-                              <option>绩效考核</option>
+                              <option>组织绩效考核</option>
                             </select>
                             <ChevronDown size={14} className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isPortalButtonEnabled ? 'group-focus-within:text-[#2f54eb]' : ''}`} />
                           </div>
@@ -10742,14 +12191,18 @@ const PerformanceActivityPage = ({
   notificationConfigs,
   performanceProcessConfigs,
   activities,
-  setActivities
+  setActivities,
+  onInitiatePlanChange,
+  planChangeSubjectsByActivityId = {},
 }: {
   deptDimensionConfigs: any[],
   levelScoreConfigs: any[],
   notificationConfigs: any[],
   performanceProcessConfigs: any[],
   activities: any[],
-  setActivities: React.Dispatch<React.SetStateAction<any[]>>
+  setActivities: React.Dispatch<React.SetStateAction<any[]>>,
+  onInitiatePlanChange?: (activityId: string, subjects: any[]) => void,
+  planChangeSubjectsByActivityId?: Record<string, any[]>,
 }) => {
   const [activeTab, setActiveTab] = useState<'进行中' | '已完成'>('进行中');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -10827,6 +12280,8 @@ const PerformanceActivityPage = ({
         createTime: ts,
         updater: '管理员',
         updateTime: ts,
+        planStageArchivedToMidTerm: false,
+        midTermArchivedToAppraisal: false,
         cycleStart: payload.cycleStart,
         cycleEnd: payload.cycleEnd,
         planStageStart: payload.planStageStart,
@@ -10838,19 +12293,19 @@ const PerformanceActivityPage = ({
         config: {
           phases: [
             {
-              name: '绩效计划制定',
+              name: '组织绩效计划制定',
               date: `${slash(payload.planStageStart)} ~ ${slash(payload.planStageEnd)}`,
               showRounds: false,
               rounds: [],
             },
             {
-              name: '绩效中期回顾',
+              name: '组织绩效中期回顾',
               date: `${slash(payload.midStageStart)} ~ ${slash(payload.midStageEnd)}`,
               showRounds: false,
               rounds: [],
             },
             {
-              name: '绩效考核',
+              name: '组织绩效考核',
               date: `${slash(payload.appraisalStageStart)} ~ ${slash(payload.appraisalStageEnd)}`,
               showRounds: false,
               rounds: [],
@@ -10923,6 +12378,8 @@ const PerformanceActivityPage = ({
         isOpen={isOrgModalOpen} 
         onClose={() => setIsOrgModalOpen(false)} 
         activity={selectedActivity}
+        planChangeSubjectsByActivityId={planChangeSubjectsByActivityId}
+        onInitiatePlanChange={onInitiatePlanChange}
         onFormalAssessmentArchived={() => {
           const id = selectedActivity?.id;
           if (id) {
@@ -11005,7 +12462,7 @@ const PerformanceActivityPage = ({
               <tr className="text-left text-[13px] text-gray-500 bg-gray-50/50">
                 <th className="py-3 px-4 font-medium border-b border-gray-100">活动名称</th>
                 <th className="py-3 px-4 font-medium border-b border-gray-100">考核年度</th>
-                <th className="py-3 px-4 font-medium border-b border-gray-100">周期类型</th>
+                <th className="py-3 px-4 font-medium border-b border-gray-100">考核类型</th>
                 <th className="py-3 px-4 font-medium border-b border-gray-100">考核名单</th>
                 <th className="py-3 px-4 font-medium border-b border-gray-100 text-center">状态</th>
                 <th className="py-3 px-4 font-medium border-b border-gray-100">创建人</th>
@@ -11017,7 +12474,9 @@ const PerformanceActivityPage = ({
             </thead>
             <tbody>
               {filteredActivities.length > 0 ? (
-                filteredActivities.map((item) => (
+                filteredActivities.map((item) => {
+                  const isDraft = item.status === '草稿';
+                  return (
                   <tr key={item.id} className="hover:bg-gray-50/50 transition-colors text-[13px]">
                     <td className="py-3.5 px-4 border-b border-gray-50">
                       <span 
@@ -11049,18 +12508,51 @@ const PerformanceActivityPage = ({
                     <td className="py-3.5 px-4 border-b border-gray-50 text-gray-500">{item.updateTime}</td>
                     <td className="py-3.5 px-4 border-b border-gray-50 text-center sticky right-0 bg-white shadow-[-4px_0_4px_-2px_rgba(0,0,0,0.05)] z-10">
                       <div className="flex items-center justify-center gap-3 px-2">
-                        {item.status === '草稿' ? (
-                          <>
-                            <button type="button" onClick={(e) => handleEdit(item, e)} className="text-[#2f54eb] hover:text-[#1d39c4] transition-colors font-medium whitespace-nowrap cursor-pointer">编辑</button>
-                            <button type="button" onClick={(e) => handleDeleteClick(item, e)} className="text-red-500 hover:text-red-700 transition-colors font-medium whitespace-nowrap cursor-pointer">删除</button>
-                          </>
-                        ) : (
-                          <span className="text-gray-300 select-none">—</span>
-                        )}
+                        <button
+                          type="button"
+                          aria-disabled={!isDraft}
+                          tabIndex={isDraft ? 0 : -1}
+                          title={isDraft ? undefined : '仅草稿状态的活动可以编辑'}
+                          onClick={(e) => {
+                            if (!isDraft) {
+                              e.preventDefault();
+                              return;
+                            }
+                            handleEdit(item, e);
+                          }}
+                          className={`font-medium whitespace-nowrap transition-colors ${
+                            isDraft
+                              ? 'text-[#2f54eb] hover:text-[#1d39c4] cursor-pointer'
+                              : 'text-gray-300 cursor-not-allowed'
+                          }`}
+                        >
+                          编辑
+                        </button>
+                        <button
+                          type="button"
+                          aria-disabled={!isDraft}
+                          tabIndex={isDraft ? 0 : -1}
+                          title={isDraft ? undefined : '仅草稿状态的活动可以删除'}
+                          onClick={(e) => {
+                            if (!isDraft) {
+                              e.preventDefault();
+                              return;
+                            }
+                            handleDeleteClick(item, e);
+                          }}
+                          className={`font-medium whitespace-nowrap transition-colors ${
+                            isDraft
+                              ? 'text-red-500 hover:text-red-700 cursor-pointer'
+                              : 'text-gray-300 cursor-not-allowed'
+                          }`}
+                        >
+                          删除
+                        </button>
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={10} className="py-20 text-center text-gray-400 bg-white">
@@ -11109,7 +12601,7 @@ export default function App() {
   const [activities, setActivities] = useState([
     { 
       id: '1', 
-      name: '2023年年度绩效考核活动', 
+      name: '2023年年度组织绩效考核活动', 
       year: '2023', 
       type: '年度', 
       targetList: 125, 
@@ -11118,17 +12610,19 @@ export default function App() {
       createTime: '2025-01-10 10:00:00',
       updater: '张三',
       updateTime: '2026-02-01 09:00:00',
+      planStageArchivedToMidTerm: true,
+      midTermArchivedToAppraisal: false,
       config: {
         phases: [
-          { name: '绩效计划制定', date: '2023/01/10 ~ 2023/01/15', showRounds: false, rounds: [] },
-          { name: '绩效中期回顾', date: '2023/02/15 ~ 2023/02/20', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
-          { name: '绩效考核', date: '2023/03/30 ~ 2023/04/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
+          { name: '组织绩效计划制定', date: '2023/01/10 ~ 2023/01/15', showRounds: false, rounds: [] },
+          { name: '组织绩效中期回顾', date: '2023/02/15 ~ 2023/02/20', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
+          { name: '组织绩效考核', date: '2023/03/30 ~ 2023/04/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
         ]
       }
     },
     { 
       id: '2', 
-      name: '2024年年度绩效考核活动', 
+      name: '2024年年度组织绩效考核活动', 
       year: '2024', 
       type: '年度', 
       targetList: 48, 
@@ -11137,11 +12631,13 @@ export default function App() {
       createTime: '2025-02-01 09:00:00',
       updater: '李四',
       updateTime: '2026-03-01 10:00:00',
+      planStageArchivedToMidTerm: true,
+      midTermArchivedToAppraisal: true,
       config: {
         phases: [
-          { name: '绩效计划制定', date: '2024/01/01 ~ 2024/01/31', showRounds: false, rounds: [] },
-          { name: '绩效中期回顾', date: '2024/07/01 ~ 2024/07/31', showRounds: false, rounds: [] },
-          { name: '绩效考核', date: '2024/12/01 ~ 2024/12/31', showRounds: true, rounds: [{ id: '1', name: '年度评估轮' }] }
+          { name: '组织绩效计划制定', date: '2024/01/01 ~ 2024/01/31', showRounds: false, rounds: [] },
+          { name: '组织绩效中期回顾', date: '2024/07/01 ~ 2024/07/31', showRounds: false, rounds: [] },
+          { name: '组织绩效考核', date: '2024/12/01 ~ 2024/12/31', showRounds: true, rounds: [{ id: '1', name: '年度评估轮' }] }
         ]
       }
     },
@@ -11171,7 +12667,7 @@ export default function App() {
     },
     { 
       id: '5', 
-      name: '2025年年度绩效考核活动', 
+      name: '2025年年度组织绩效考核活动', 
       year: '2025', 
       type: '年度', 
       targetList: 15, 
@@ -11180,17 +12676,19 @@ export default function App() {
       createTime: '2025-03-01 14:00:00',
       updater: '李四',
       updateTime: '2026-04-15 11:00:00',
+      planStageArchivedToMidTerm: false,
+      midTermArchivedToAppraisal: false,
       config: {
         phases: [
-          { name: '绩效计划制定', date: '2025/03/01', showRounds: false, rounds: [] },
-          { name: '绩效中期回顾', date: '2025/04/15', showRounds: true, rounds: [{ id: '1', name: '中期提报轮' }] },
-          { name: '绩效考核', date: '2025/05/30', showRounds: true, rounds: [{ id: '1', name: '最终考核轮' }] }
+          { name: '组织绩效计划制定', date: '2025/03/01', showRounds: false, rounds: [] },
+          { name: '组织绩效中期回顾', date: '2025/04/15', showRounds: true, rounds: [{ id: '1', name: '中期提报轮' }] },
+          { name: '组织绩效考核', date: '2025/05/30', showRounds: true, rounds: [{ id: '1', name: '最终考核轮' }] }
         ]
       }
     },
     {
       id: '6',
-      name: '2026年年度绩效考核活动',
+      name: '2026年年度组织绩效考核活动',
       year: '2026',
       type: '年度',
       targetList: 0,
@@ -11201,13 +12699,35 @@ export default function App() {
       updateTime: '2026-05-10 14:00:00',
       config: {
         phases: [
-          { name: '绩效计划制定', date: '', showRounds: false, rounds: [] },
-          { name: '绩效中期回顾', date: '', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
-          { name: '绩效考核', date: '', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
+          { name: '组织绩效计划制定', date: '', showRounds: false, rounds: [] },
+          { name: '组织绩效中期回顾', date: '', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
+          { name: '组织绩效考核', date: '', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
         ]
       }
     },
   ]);
+
+  /** 各活动下「绩效计划变更」监控行：同一考核对象可多条时间线合并为一条展示时，仅「进行中」阻止叠发；上一申请「已完成」后再次发起会写入新的进行中行 */
+  const [planChangeSubjectsByActivityId, setPlanChangeSubjectsByActivityId] = useState<Record<string, any[]>>({});
+
+  /** 同一考核对象可多次发起：仅当该对象在本活动下已有「进行中」记录时跳过写入；否则（含上一申请已为「已完成」）覆盖/写入新申请 */
+  const handleInitiatePlanChange = (activityId: string, subjects: any[]) => {
+    if (!activityId || !subjects?.length) return;
+    setPlanChangeSubjectsByActivityId((prev) => {
+      const prevRows = prev[activityId] || [];
+      const map = new Map<string, any>(prevRows.map((r: any) => [r.id, r]));
+      subjects.forEach((row, i) => {
+        const existing = map.get(row.id);
+        if (existing?.status === '进行中') return;
+        map.set(row.id, buildPlanChangeRowFromAssessmentSubject(row, prevRows.length + i));
+      });
+      return { ...prev, [activityId]: Array.from(map.values()) };
+    });
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const updateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    setActivities((acts) => acts.map((a) => (a.id === activityId ? { ...a, updateTime } : a)));
+  };
 
   const [activeMenu, setActiveMenu] = useState('performance-activity');
   const [gradeRanges, setGradeRanges] = useState<GradeRange[]>([
@@ -11425,7 +12945,10 @@ export default function App() {
         ) : activeMenu === 'indicator-library' ? (
           <IndicatorLibraryPage />
         ) : activeMenu === 'performance-monitoring' ? (
-          <PerformanceProcessMonitoringPage activities={activities} />
+          <PerformanceProcessMonitoringPage
+            activities={activities}
+            planChangeSubjectsByActivityId={planChangeSubjectsByActivityId}
+          />
         ) : activeMenu === 'dashboard-mgmt' ? (
           <DashboardDataMgmtPage />
         ) : activeMenu === 'basic-rules' ? (
@@ -11453,6 +12976,8 @@ export default function App() {
             performanceProcessConfigs={performanceProcessConfigs}
             activities={activities}
             setActivities={setActivities}
+            onInitiatePlanChange={handleInitiatePlanChange}
+            planChangeSubjectsByActivityId={planChangeSubjectsByActivityId}
           />
         )}
       </main>
