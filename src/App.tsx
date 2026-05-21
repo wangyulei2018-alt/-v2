@@ -38,7 +38,6 @@ import {
   Calendar,
   Play,
   GitMerge,
-  GripVertical,
   ArrowLeft,
   Clock,
   ChevronLeft,
@@ -2921,8 +2920,8 @@ function orgPathDisplayName(path: string): string {
 function orgLineDiffLabels(mid: OrgRosterDiffLine, master: OrgRosterDiffLine): string[] {
   const pairs: [keyof OrgRosterDiffLine, string][] = [
     ['leader', '组织负责人'],
-    ['exec', '分管常委/分管执委'],
-    ['hrbp', 'HRBP'],
+    ['exec', '分管执委/分管常委'],
+    ['hrbp', '主HRBP'],
     ['orgType', '组织类型'],
     ['level', '组织层级'],
     ['node', '节点'],
@@ -4945,12 +4944,12 @@ const OrgAssessmentModal = ({
                         </th>
                         <th className="px-6 py-4 border-b w-[180px]">
                           <div className="flex items-center gap-1">
-                            分管常委/分管执委
+                            分管执委/分管常委
                           </div>
                         </th>
                         <th className="px-6 py-4 border-b w-[150px]">
                           <div className="flex items-center gap-1">
-                            HRBP
+                            主HRBP
                           </div>
                         </th>
                         <th className="px-6 py-4 border-b w-[120px] text-center">
@@ -5472,8 +5471,6 @@ const IndicatorDimensionDrawer = ({
     rules: mergeIndicatorFixedRules(null, DEFAULT_INDICATOR_DIMENSION_CATALOG),
   }));
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [editingDimId, setEditingDimId] = useState<string | null>(null);
-  const [editingDimName, setEditingDimName] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -5495,8 +5492,6 @@ const IndicatorDimensionDrawer = ({
       });
     }
     setSubmitError(null);
-    setEditingDimId(null);
-    setEditingDimName('');
   }, [data, isOpen]);
 
   const idToName = (id: string) =>
@@ -5554,62 +5549,6 @@ const IndicatorDimensionDrawer = ({
       }
     }
     onSave(serializeForSave());
-  };
-
-  const addCatalogDimension = () => {
-    setSubmitError(null);
-    const id = `dim-${Date.now()}`;
-    setFormData((prev: any) => ({
-      ...prev,
-      dimensionCatalog: [
-        ...(prev.dimensionCatalog || []),
-        { id, name: `新指标维度${(prev.dimensionCatalog?.length || 0) + 1}` },
-      ],
-    }));
-  };
-
-  const removeCatalogDimension = (dimId: string) => {
-    setSubmitError(null);
-    if (catalog.length <= 1) {
-      setSubmitError('至少保留一个指标维度。');
-      return;
-    }
-    if (editingDimId === dimId) {
-      setEditingDimId(null);
-      setEditingDimName('');
-    }
-    setFormData((prev: any) => ({
-      ...prev,
-      dimensionCatalog: (prev.dimensionCatalog || []).filter((d: IndicatorDimItem) => d.id !== dimId),
-      rules: (prev.rules || []).map((r: any) => ({
-        ...r,
-        optionalDimensionIds: (r.optionalDimensionIds || []).filter((id: string) => id !== dimId),
-        requiredDimensionIds: (r.requiredDimensionIds || []).filter((id: string) => id !== dimId),
-      })),
-    }));
-  };
-
-  const startEditDimension = (d: IndicatorDimItem) => {
-    setEditingDimId(d.id);
-    setEditingDimName(d.name);
-  };
-
-  const saveEditDimension = () => {
-    const name = editingDimName.trim();
-    if (!editingDimId || !name) return;
-    setFormData((prev: any) => ({
-      ...prev,
-      dimensionCatalog: (prev.dimensionCatalog || []).map((d: IndicatorDimItem) =>
-        d.id === editingDimId ? { ...d, name } : d
-      ),
-    }));
-    setEditingDimId(null);
-    setEditingDimName('');
-  };
-
-  const cancelEditDimension = () => {
-    setEditingDimId(null);
-    setEditingDimName('');
   };
 
   const toggleOptional = (ruleId: string, dimId: string) => {
@@ -5714,77 +5653,6 @@ const IndicatorDimensionDrawer = ({
                     <div className="w-1 h-4 bg-[#2f54eb] rounded-full" />
                     <h3 className="text-[14px] font-bold text-gray-900">考核指标维度</h3>
                   </div>
-                </div>
-
-                <div className="rounded-lg border border-gray-100 bg-gray-50/40 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <p className="text-[12px] text-gray-500 leading-relaxed">
-                      以下为<strong className="text-gray-700">全局指标维度库</strong>，可新增、编辑、删除；表格中「可选」与「必填」均引用此处维度。
-                      删除某维度时，将自动从各部门类型的勾选结果中移除。
-                    </p>
-                    <button
-                      type="button"
-                      onClick={addCatalogDimension}
-                      className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded border border-[#2f54eb] text-[12px] font-medium text-[#2f54eb] hover:bg-blue-50 transition-colors cursor-pointer"
-                    >
-                      <Plus size={14} />
-                      新增指标维度
-                    </button>
-                  </div>
-                  <ul className="divide-y divide-gray-100 rounded-md border border-gray-100 bg-white overflow-hidden">
-                    {catalog.map((dim) => (
-                      <li
-                        key={dim.id}
-                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-gray-50/80 transition-colors"
-                      >
-                        {editingDimId === dim.id ? (
-                          <div className="flex flex-1 flex-wrap items-center gap-2 min-w-0">
-                            <input
-                              type="text"
-                              value={editingDimName}
-                              onChange={(e) => setEditingDimName(e.target.value)}
-                              className="flex-1 min-w-[120px] border border-gray-200 rounded px-2 py-1 text-[13px] outline-none focus:border-[#2f54eb]"
-                              autoFocus
-                            />
-                            <button
-                              type="button"
-                              onClick={saveEditDimension}
-                              className="text-[12px] text-[#2f54eb] font-medium hover:underline cursor-pointer"
-                            >
-                              保存
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelEditDimension}
-                              className="text-[12px] text-gray-500 hover:text-gray-700 cursor-pointer"
-                            >
-                              取消
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <span className="text-[13px] text-gray-800 font-medium truncate">{dim.name}</span>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => startEditDimension(dim)}
-                                className="text-[12px] text-[#2f54eb] hover:underline cursor-pointer"
-                              >
-                                编辑
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeCatalogDimension(dim.id)}
-                                className="text-[12px] text-red-500 hover:underline cursor-pointer"
-                              >
-                                删除
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
                 </div>
 
                 <div className="border border-gray-100 rounded-lg overflow-hidden">
@@ -9535,10 +9403,48 @@ const DEFAULT_PERFORMANCE_PROCESS_NODES = [
   },
 ];
 
+type WorkflowSubNode = { id: string; title: string; order?: number };
+
+function normalizeWorkflowSubNodes(subNodes: WorkflowSubNode[]): WorkflowSubNode[] {
+  return (subNodes || []).map((sn, i) => ({
+    ...sn,
+    order: typeof sn.order === 'number' && sn.order > 0 ? sn.order : i + 1,
+  }));
+}
+
+function sortWorkflowSubNodesByOrder(subNodes: WorkflowSubNode[]): WorkflowSubNode[] {
+  return [...normalizeWorkflowSubNodes(subNodes)].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+function getSortedWorkflowSubNodes(nodes: any[], phaseTitle: string): WorkflowSubNode[] {
+  const phase = nodes.find((n: any) => n.title === phaseTitle);
+  return sortWorkflowSubNodesByOrder(phase?.subNodes ?? []);
+}
+
+function getNextWorkflowSubNodeOrder(nodes: any[], phaseTitle: string): number {
+  const list = getSortedWorkflowSubNodes(nodes, phaseTitle);
+  return list.length === 0 ? 1 : Math.max(...list.map((s) => s.order ?? 0)) + 1;
+}
+
+function orderExistsInWorkflowPhase(
+  nodes: any[],
+  phaseTitle: string,
+  order: number,
+  excludeSubId?: string
+): boolean {
+  return getSortedWorkflowSubNodes(nodes, phaseTitle).some(
+    (s) => s.order === order && s.id !== excludeSubId
+  );
+}
+
+function reindexWorkflowSubNodeOrders(subNodes: WorkflowSubNode[]): WorkflowSubNode[] {
+  return sortWorkflowSubNodesByOrder(subNodes).map((s, i) => ({ ...s, order: i + 1 }));
+}
+
 function cloneDefaultPerformanceProcessNodes() {
   return DEFAULT_PERFORMANCE_PROCESS_NODES.map((n) => ({
     ...n,
-    subNodes: n.subNodes.map((s) => ({ ...s })),
+    subNodes: n.subNodes.map((s, i) => ({ ...s, order: i + 1 })),
   }));
 }
 
@@ -9555,7 +9461,9 @@ function mergeSavedProcessNodesWithDefaults(saved: any[]) {
     return {
       id: hit.id ?? def.id,
       title: def.title,
-      subNodes: Array.isArray(hit.subNodes) ? hit.subNodes : def.subNodes,
+      subNodes: Array.isArray(hit.subNodes)
+        ? normalizeWorkflowSubNodes(hit.subNodes)
+        : def.subNodes,
     };
   });
 }
@@ -9593,6 +9501,23 @@ function nextUniqueDefaultSubNodeTitle(nodes: any[], phaseTitle: string): string
   return `${base}${n}`;
 }
 
+/** 流程配置 ·「选择执行/抄送规则」弹窗选项（唯一数据源） */
+const PERFORMANCE_EXECUTOR_RULE_OPTIONS = [
+  '一级部门负责人',
+  '主HRBP',
+  '能力中心负责人',
+  '考核人',
+  '数据提供人',
+  '分管执委/常委',
+] as const;
+
+function normalizePerformanceExecutorRuleLabel(value: string): string {
+  if (value === 'HRBP') return '主HRBP';
+  if (value === '被考核人') return '一级部门负责人';
+  if (value === '相关方') return '考核人';
+  return value;
+}
+
 const PerformanceProcessDrawer = ({ 
   isOpen, 
   onClose, 
@@ -9624,10 +9549,7 @@ const PerformanceProcessDrawer = ({
   const [returnResubmitMode, setReturnResubmitMode] = useState<'reapprove' | 'jumpToReturned'>('reapprove');
   const [returnCommentRequired, setReturnCommentRequired] = useState(false);
 
-  const rules = [
-    '被考核人', 'HRBP',
-    '能力中心负责人', '相关方', '数据提供人', '分管执委/常委'
-  ];
+  const rules = [...PERFORMANCE_EXECUTOR_RULE_OPTIONS];
 
   // 模拟人员数据
   const mockPeople = [
@@ -9637,13 +9559,11 @@ const PerformanceProcessDrawer = ({
     { id: '4', name: '赵六', empId: 'A004', deptPath: 'XXX集团/市场中心/华北区销售部' },
   ];
 
-  // 编辑与删除状态项
-  const [editingSubNode, setEditingSubNode] = useState<any>(null);
+  // 新增/编辑子节点弹窗
+  const [subNodeForm, setSubNodeForm] = useState<null | { mode: 'add' } | { mode: 'edit'; subId: string }>(null);
   const [tempNodeName, setTempNodeName] = useState('');
+  const [tempNodeOrder, setTempNodeOrder] = useState('');
   const [deletingSubNode, setDeletingSubNode] = useState<any>(null);
-  const [draggingSubId, setDraggingSubId] = useState<string | null>(null);
-  const [dropBeforeSubId, setDropBeforeSubId] = useState<string | null>(null);
-  const dragSubSourceRef = useRef<string | null>(null);
   const [drawerToast, setDrawerToast] = useState<{ message: string; type: 'error' | 'warning' } | null>(null);
   const drawerToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -9662,50 +9582,75 @@ const PerformanceProcessDrawer = ({
     };
   }, []);
 
-  const handleAddSubNode = () => {
-    const title = nextUniqueDefaultSubNodeTitle(formData.nodes, activeMainNode);
-    const newSubNode = { id: Date.now().toString(), title };
+  const openAddSubNodeModal = () => {
+    setSubNodeForm({ mode: 'add' });
+    setTempNodeOrder(String(getNextWorkflowSubNodeOrder(formData.nodes, activeMainNode)));
+    setTempNodeName('');
+  };
+
+  const openEditSubNodeModal = (sub: WorkflowSubNode) => {
+    const sorted = getSortedWorkflowSubNodes(formData.nodes, activeMainNode);
+    const idx = sorted.findIndex((s) => s.id === sub.id);
+    setSubNodeForm({ mode: 'edit', subId: sub.id });
+    setTempNodeOrder(String(sub.order ?? (idx >= 0 ? idx + 1 : 1)));
+    setTempNodeName(sub.title);
+  };
+
+  const closeSubNodeForm = () => {
+    setSubNodeForm(null);
+    setTempNodeName('');
+    setTempNodeOrder('');
+  };
+
+  const confirmSubNodeForm = () => {
+    if (!subNodeForm) return;
+    const orderTrimmed = tempNodeOrder.trim();
+    if (!orderTrimmed) {
+      showDrawerToast('请输入节点序号', 'error');
+      return;
+    }
+    const orderNum = Number(orderTrimmed);
+    if (!Number.isInteger(orderNum) || orderNum < 1) {
+      showDrawerToast('节点序号须为正整数', 'error');
+      return;
+    }
+    const titleTrimmed = tempNodeName.trim();
+    if (!titleTrimmed) {
+      showDrawerToast('请输入节点名称', 'error');
+      return;
+    }
+    const excludeId = subNodeForm.mode === 'edit' ? subNodeForm.subId : undefined;
+    if (titleExistsInPhase(formData.nodes, activeMainNode, titleTrimmed, excludeId)) {
+      showDrawerToast('当前阶段下已存在同名节点，请修改名称', 'warning');
+      return;
+    }
+    if (orderExistsInWorkflowPhase(formData.nodes, activeMainNode, orderNum, excludeId)) {
+      showDrawerToast('当前阶段下已存在相同序号的节点，请修改序号', 'warning');
+      return;
+    }
+
+    let newActiveId = excludeId ?? '';
     const updatedNodes = formData.nodes.map((node: any) => {
-      if (node.title === activeMainNode) {
-        return { ...node, subNodes: [...(node.subNodes || []), newSubNode] };
+      if (node.title !== activeMainNode) return node;
+      const list = normalizeWorkflowSubNodes(node.subNodes || []);
+      if (subNodeForm.mode === 'add') {
+        newActiveId = `${Date.now()}`;
+        const nextList = sortWorkflowSubNodesByOrder([
+          ...list,
+          { id: newActiveId, title: titleTrimmed, order: orderNum },
+        ]);
+        return { ...node, subNodes: nextList };
       }
-      return node;
+      const editId = subNodeForm.subId;
+      const nextList = sortWorkflowSubNodesByOrder(
+        list.map((sn) => (sn.id === editId ? { ...sn, title: titleTrimmed, order: orderNum } : sn))
+      );
+      newActiveId = editId;
+      return { ...node, subNodes: nextList };
     });
     setFormData({ ...formData, nodes: updatedNodes });
-    setActiveSubNodeId(newSubNode.id);
-  };
-
-  const moveSubNodeBefore = (phaseTitle: string, draggedId: string, insertBeforeId: string) => {
-    if (draggedId === insertBeforeId) return;
-    setFormData((prev: any) => ({
-      ...prev,
-      nodes: prev.nodes.map((node: any) => {
-        if (node.title !== phaseTitle) return node;
-        const list = [...(node.subNodes || [])] as { id: string; title: string }[];
-        const dragged = list.find((s) => s.id === draggedId);
-        if (!dragged) return node;
-        const rest = list.filter((s) => s.id !== draggedId);
-        const insertIdx = rest.findIndex((s) => s.id === insertBeforeId);
-        if (insertIdx < 0) return node;
-        const newList = [...rest.slice(0, insertIdx), dragged, ...rest.slice(insertIdx)];
-        return { ...node, subNodes: newList };
-      }),
-    }));
-  };
-
-  const moveSubNodeToEnd = (phaseTitle: string, draggedId: string) => {
-    setFormData((prev: any) => ({
-      ...prev,
-      nodes: prev.nodes.map((node: any) => {
-        if (node.title !== phaseTitle) return node;
-        const list = [...(node.subNodes || [])] as { id: string; title: string }[];
-        const di = list.findIndex((s) => s.id === draggedId);
-        if (di < 0) return node;
-        const [item] = list.splice(di, 1);
-        list.push(item);
-        return { ...node, subNodes: list };
-      }),
-    }));
+    setActiveSubNodeId(newActiveId);
+    closeSubNodeForm();
   };
 
   useEffect(() => {
@@ -9740,6 +9685,9 @@ const PerformanceProcessDrawer = ({
     }
     setActiveMainNode('组织绩效计划制定');
     setActiveSubNodeId('1-1');
+    setSubNodeForm(null);
+    setTempNodeName('');
+    setTempNodeOrder('');
   }, [data, isOpen]);
 
   if (!isOpen) return null;
@@ -9818,9 +9766,6 @@ const PerformanceProcessDrawer = ({
                   key={phase}
                   title={phase === '组织绩效计划变更' ? '组织绩效计划制定完成后，用于处理计划变更相关业务' : undefined}
                   onClick={() => {
-                    setDraggingSubId(null);
-                    setDropBeforeSubId(null);
-                    dragSubSourceRef.current = null;
                     setActiveMainNode(phase);
                     const currentNode = formData.nodes.find((n: { title: string }) => n.title === phase);
                     if (currentNode && currentNode.subNodes.length > 0) {
@@ -9850,135 +9795,62 @@ const PerformanceProcessDrawer = ({
                     <Plus 
                       size={14} 
                       className="text-[#2f54eb] cursor-pointer hover:scale-110 transition-transform" 
-                      onClick={handleAddSubNode}
+                      onClick={openAddSubNodeModal}
                     />
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto py-2">
-                  {formData.nodes.find(n => n.title === activeMainNode)?.subNodes.map(sub => (
+                  {getSortedWorkflowSubNodes(formData.nodes, activeMainNode).map(sub => (
                     <div
                       key={sub.id}
-                      onDragOver={(e) => {
-                        const src = dragSubSourceRef.current;
-                        if (!src || src === sub.id) return;
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        setDropBeforeSubId(sub.id);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const fromId =
-                          e.dataTransfer.getData('text/plain') || dragSubSourceRef.current || draggingSubId;
-                        if (fromId && fromId !== sub.id) {
-                          moveSubNodeBefore(activeMainNode, fromId, sub.id);
-                        }
-                        dragSubSourceRef.current = null;
-                        setDraggingSubId(null);
-                        setDropBeforeSubId(null);
-                      }}
-                      className={`mx-2 my-1 rounded-md text-[13px] flex items-stretch gap-0.5 group transition-all border border-transparent ${
+                      role="button"
+                      tabIndex={0}
+                      className={`mx-2 my-1 rounded-md text-[13px] flex items-center justify-between py-2.5 px-2 cursor-pointer group transition-all border border-transparent ${
                         activeSubNodeId === sub.id ? 'bg-[#2f54eb] text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'
-                      } ${dropBeforeSubId === sub.id && draggingSubId && draggingSubId !== sub.id ? 'ring-2 ring-[#2f54eb] ring-offset-1 border-blue-200' : ''} ${
-                        draggingSubId === sub.id ? 'opacity-60' : ''
                       }`}
+                      onClick={() => setActiveSubNodeId(sub.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setActiveSubNodeId(sub.id);
+                        }
+                      }}
                     >
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        aria-label="拖拽排序"
-                        title="拖拽调整顺序"
-                        draggable
-                        onDragStart={(e) => {
-                          e.stopPropagation();
-                          dragSubSourceRef.current = sub.id;
-                          e.dataTransfer.setData('text/plain', sub.id);
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDraggingSubId(sub.id);
-                        }}
-                        onDragEnd={() => {
-                          dragSubSourceRef.current = null;
-                          setDraggingSubId(null);
-                          setDropBeforeSubId(null);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`shrink-0 flex items-center px-1 py-2.5 cursor-grab active:cursor-grabbing rounded-l-md ${
-                          activeSubNodeId === sub.id ? 'text-white/90 hover:text-white' : 'text-gray-400 hover:text-gray-600'
+                        <span className={`truncate ${activeSubNodeId === sub.id ? 'font-bold' : ''}`}>
+                          <span className="opacity-80 mr-1">{sub.order ?? ''}.</span>
+                          {sub.title}
+                        </span>
+                      <div
+                        className={`flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${
+                          activeSubNodeId === sub.id ? 'text-white' : 'text-gray-400'
                         }`}
                       >
-                        <GripVertical size={14} />
-                      </span>
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        className="flex-1 min-w-0 flex items-center justify-between py-2.5 pr-2 pl-0 cursor-pointer"
-                        onClick={() => setActiveSubNodeId(sub.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setActiveSubNodeId(sub.id);
-                          }
-                        }}
-                      >
-                        <span className={`truncate ${activeSubNodeId === sub.id ? 'font-bold' : ''}`}>{sub.title}</span>
-                        <div
-                          className={`flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${
-                            activeSubNodeId === sub.id ? 'text-white' : 'text-gray-400'
-                          }`}
-                        >
-                          <Edit2
-                            size={12}
-                            className="hover:scale-110"
+                        <Edit2
+                          size={12}
+                          className="hover:scale-110"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingSubNode(sub);
-                              setTempNodeName(sub.title);
+                              openEditSubNodeModal(sub);
                             }}
-                          />
-                          <Trash2
-                            size={12}
-                            className="hover:scale-110"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingSubNode(sub);
-                            }}
-                          />
-                        </div>
+                        />
+                        <Trash2
+                          size={12}
+                          className="hover:scale-110"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingSubNode(sub);
+                          }}
+                        />
                       </div>
                     </div>
                   ))}
-                  {((formData.nodes.find(n => n.title === activeMainNode)?.subNodes.length ?? 0) > 1) && (
-                    <div
-                      onDragOver={(e) => {
-                        if (!dragSubSourceRef.current) return;
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        setDropBeforeSubId('__end__');
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const fromId =
-                          e.dataTransfer.getData('text/plain') || dragSubSourceRef.current || draggingSubId;
-                        if (fromId) moveSubNodeToEnd(activeMainNode, fromId);
-                        dragSubSourceRef.current = null;
-                        setDraggingSubId(null);
-                        setDropBeforeSubId(null);
-                      }}
-                      className={`mx-2 my-1 py-2 text-center text-[11px] rounded border border-dashed transition-colors select-none ${
-                        dropBeforeSubId === '__end__' && draggingSubId
-                          ? 'border-[#2f54eb] bg-blue-50 text-[#2f54eb]'
-                          : 'border-gray-200 text-gray-400 hover:border-gray-300'
-                      }`}
-                    >
-                      拖至末尾
-                    </div>
-                  )}
                   {(formData.nodes.find(n => n.title === activeMainNode)?.subNodes.length ?? 0) === 0 && (
                     <div className="px-4 py-12 text-center">
                       <div className="text-[12px] text-gray-400 italic">暂无子节点</div>
                       <button 
                         type="button"
                         className="mt-2 text-[12px] text-[#2f54eb] hover:underline"
-                        onClick={handleAddSubNode}
+                        onClick={openAddSubNodeModal}
                       >点击添加</button>
                     </div>
                   )}
@@ -10028,7 +9900,7 @@ const PerformanceProcessDrawer = ({
                       type="text" 
                       readOnly
                       placeholder={executorType === 'rule' ? "请选择执行规则" : "请选择执行人"}
-                      value={selectedExecutor}
+                      value={executorType === 'rule' ? normalizePerformanceExecutorRuleLabel(selectedExecutor) : selectedExecutor}
                       onClick={() => {
                         setPickerContext('executor');
                         if (executorType === 'rule') setShowRulePicker(true);
@@ -10161,7 +10033,7 @@ const PerformanceProcessDrawer = ({
                         type="text" 
                         readOnly
                         placeholder={ccType === 'rule' ? "请选择抄送规则" : "请选择抄送人"}
-                        value={selectedCC}
+                        value={ccType === 'rule' ? normalizePerformanceExecutorRuleLabel(selectedCC) : selectedCC}
                         onClick={() => {
                           setPickerContext('cc');
                           if (ccType === 'rule') setShowRulePicker(true);
@@ -10225,65 +10097,71 @@ const PerformanceProcessDrawer = ({
           </button>
         </div>
 
-        {/* 编辑子节点名称弹窗 */}
-        {editingSubNode && (
+        {/* 新增/编辑流程子节点 */}
+        {subNodeForm && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-              onClick={() => setEditingSubNode(null)}
+              onClick={closeSubNodeForm}
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden"
+              className="relative bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                <span className="font-bold text-gray-900">编辑节点名称</span>
-                <X size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingSubNode(null)} />
+                <span className="font-bold text-gray-900">
+                  {subNodeForm.mode === 'add' ? '新增流程节点' : '编辑流程节点'}
+                </span>
+                <X size={18} className="text-gray-400 cursor-pointer hover:text-gray-600" onClick={closeSubNodeForm} />
               </div>
-              <div className="p-6">
-                <input 
-                  type="text"
-                  autoFocus
-                  value={tempNodeName}
-                  onChange={(e) => setTempNodeName(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-2 focus:ring-blue-50 transition-all font-medium"
-                />
+              <div className="p-6 space-y-5">
+                <div>
+                  <label className="block text-[13px] font-medium text-gray-700 mb-1.5">
+                    节点序号 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    autoFocus
+                    value={tempNodeOrder}
+                    onChange={(e) => setTempNodeOrder(e.target.value)}
+                    placeholder="请输入节点序号"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-2 focus:ring-blue-50 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-medium text-gray-700 mb-1.5">
+                    节点名称 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={tempNodeName}
+                    onChange={(e) => setTempNodeName(e.target.value)}
+                    placeholder="请输入节点名称"
+                    className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-2 focus:ring-blue-50 transition-all font-medium"
+                  />
+                </div>
               </div>
               <div className="p-4 bg-gray-50 flex justify-end gap-3">
-                <button 
-                  onClick={() => setEditingSubNode(null)}
+                <button
+                  type="button"
+                  onClick={closeSubNodeForm}
                   className="px-5 py-2 text-[14px] text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-                >取消</button>
-                <button 
-                  onClick={() => {
-                    const trimmed = tempNodeName.trim();
-                    if (!trimmed) {
-                      showDrawerToast('请输入节点名称', 'error');
-                      return;
-                    }
-                    if (titleExistsInPhase(formData.nodes, activeMainNode, trimmed, editingSubNode.id)) {
-                      showDrawerToast('当前阶段下已存在同名节点，请修改名称', 'warning');
-                      return;
-                    }
-                    const updatedNodes = formData.nodes.map((node: any) => {
-                      if (node.title === activeMainNode) {
-                        return { 
-                          ...node, 
-                          subNodes: node.subNodes.map((sn: any) => 
-                            sn.id === editingSubNode.id ? { ...sn, title: trimmed } : sn
-                          ) 
-                        };
-                      }
-                      return node;
-                    });
-                    setFormData({ ...formData, nodes: updatedNodes });
-                    setEditingSubNode(null);
-                  }}
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmSubNodeForm}
                   className="px-6 py-2 text-[14px] bg-[#2f54eb] text-white font-bold rounded-lg hover:shadow-lg hover:shadow-blue-200 transition-all cursor-pointer"
-                >确定</button>
+                >
+                  确定
+                </button>
               </div>
             </motion.div>
           </div>
@@ -10321,9 +10199,11 @@ const PerformanceProcessDrawer = ({
                   onClick={() => {
                     const updatedNodes = formData.nodes.map((node: any) => {
                       if (node.title === activeMainNode) {
-                        return { 
-                          ...node, 
-                          subNodes: node.subNodes.filter((sn: any) => sn.id !== deletingSubNode.id) 
+                        return {
+                          ...node,
+                          subNodes: reindexWorkflowSubNodeOrders(
+                            node.subNodes.filter((sn: any) => sn.id !== deletingSubNode.id)
+                          ),
                         };
                       }
                       return node;
@@ -10360,7 +10240,9 @@ const PerformanceProcessDrawer = ({
               </div>
               <div className="max-h-[400px] overflow-y-auto p-2">
                 {rules.map((rule) => {
-                  const isSelected = (pickerContext === 'executor' ? selectedExecutor : selectedCC) === rule;
+                  const currentRule =
+                    pickerContext === 'executor' ? selectedExecutor : selectedCC;
+                  const isSelected = normalizePerformanceExecutorRuleLabel(currentRule) === rule;
                   return (
                     <div 
                       key={rule}
