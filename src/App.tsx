@@ -3051,6 +3051,29 @@ function orgLineToAssessmentRow(line: OrgRosterDiffLine, status: '未开始' | '
   };
 }
 
+const APPRAISAL_GRADE_OPTIONS = ['S', 'A', 'B+', 'B', 'C'] as const;
+
+type AppraisalRoundKey = 'pre' | 'formal';
+
+type AppraisalGradeAdjustment = {
+  adjustedGrade: string;
+  adjustReason: string;
+};
+
+/** 组织绩效考核 · 按轮次演示用自动计算总分/等级（未开始无结果） */
+function computeAppraisalAutoScoreGrade(item: { id: string; status: string }): { totalScore: number; calculatedGrade: string } | null {
+  if (item.status === '未开始') return null;
+  const seed = item.id.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  const totalScore = Number((3.15 + (seed % 165) / 100).toFixed(2));
+  let calculatedGrade = 'B';
+  if (totalScore >= 4.75) calculatedGrade = 'S';
+  else if (totalScore >= 4.25) calculatedGrade = 'A';
+  else if (totalScore >= 3.75) calculatedGrade = 'B+';
+  else if (totalScore >= 3.0) calculatedGrade = 'B';
+  else calculatedGrade = 'C';
+  return { totalScore, calculatedGrade };
+}
+
 const OrgAssessmentModal = ({
   isOpen,
   onClose,
@@ -3175,6 +3198,9 @@ const OrgAssessmentModal = ({
   }, [monitoringTabs1]);
 
   const midTermBounds = useMemo(() => computeMidTermBoundsFromTabs(monitoringTabs1), [monitoringTabs1]);
+
+  /** 当前为「组织绩效考核」大阶段（含预考核 / 正式考核各轮次） */
+  const isOrgAppraisalStage = steps[currentStep]?.title === '组织绩效考核';
 
   /** 步骤条：未满足前置归档时不可进入后续阶段（hover 见 title） */
   const getStepNavigationBlockTitle = (stepIndex: number): string | undefined => {
@@ -3404,7 +3430,76 @@ const OrgAssessmentModal = ({
     { id: 'D008', code: 'D008', path: '集团总部/审计监察部', level: '一级部门', orgType: '职能部门', leader: '喻审计 (M1008)', exec: '孙执委 (E1002)', hrbp: '赵BP (H1004)', node: '-', approver: '-', status: '未开始', isTimeout: false },
   ]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
+  /** 组织绩效考核 · 预考核/正式考核各轮次下的等级调整（按考核对象 id） */
+  const [appraisalGradeAdjustments, setAppraisalGradeAdjustments] = useState<
+    Record<AppraisalRoundKey, Record<string, AppraisalGradeAdjustment>>
+  >({ pre: {}, formal: {} });
+  const [gradeAdjustModal, setGradeAdjustModal] = useState<null | {
+    rowId: string;
+    originalGrade: string;
+    currentGrade: string;
+    reason: string;
+  }>(null);
+
+  const appraisalRoundKey: AppraisalRoundKey =
+    isOrgAppraisalStage && activeMonitoringTab === 'formal' ? 'formal' : 'pre';
+
+  const getAppraisalScoreView = (item: { id: string; status: string }) => {
+    const auto = computeAppraisalAutoScoreGrade(item);
+    if (!auto) {
+      return {
+        hasResult: false,
+        totalScore: '—',
+        calculatedGrade: '—',
+        adjustedGrade: '—',
+        adjustment: undefined as AppraisalGradeAdjustment | undefined,
+      };
+    }
+    const adjustment = appraisalGradeAdjustments[appraisalRoundKey]?.[item.id];
+    const adjustedGrade = adjustment?.adjustedGrade ?? auto.calculatedGrade;
+    return {
+      hasResult: true,
+      totalScore: auto.totalScore.toFixed(2),
+      calculatedGrade: auto.calculatedGrade,
+      adjustedGrade,
+      adjustment,
+    };
+  };
+
+  const openGradeAdjustModal = (item: { id: string; status: string }) => {
+    const view = getAppraisalScoreView(item);
+    if (!view.hasResult) return;
+    setGradeAdjustModal({
+      rowId: item.id,
+      originalGrade: view.calculatedGrade,
+      currentGrade: view.adjustedGrade,
+      reason: view.adjustment?.adjustReason ?? '',
+    });
+  };
+
+  const confirmGradeAdjustModal = () => {
+    if (!gradeAdjustModal) return;
+    const reason = gradeAdjustModal.reason.trim();
+    if (!reason) {
+      showToast('请填写调整原因', 'warning');
+      return;
+    }
+    const currentGrade = gradeAdjustModal.currentGrade.trim();
+    if (!currentGrade) {
+      showToast('请选择现等级', 'warning');
+      return;
+    }
+    setAppraisalGradeAdjustments((prev) => ({
+      ...prev,
+      [appraisalRoundKey]: {
+        ...(prev[appraisalRoundKey] || {}),
+        [gradeAdjustModal.rowId]: { adjustedGrade: currentGrade, adjustReason: reason },
+      },
+    }));
+    setGradeAdjustModal(null);
+    showToast('调整等级已保存', 'success');
+  };
+
   useEffect(() => {
     if (assessmentData.some(item => item.status !== '未开始')) {
       setIsPlanStarted(true);
@@ -4040,6 +4135,87 @@ const OrgAssessmentModal = ({
                     确认跳过
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {gradeAdjustModal && isOrgAppraisalStage && (
+          <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-lg shadow-2xl w-full max-w-md overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-[16px] font-semibold text-gray-900">调整等级</h3>
+                <button
+                  type="button"
+                  onClick={() => setGradeAdjustModal(null)}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={18} className="text-gray-400" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[13px] text-gray-600 font-medium">原等级</label>
+                  <div className="w-full border border-gray-100 rounded-lg px-3 py-2.5 text-[14px] bg-gray-50 text-gray-700 font-semibold">
+                    {gradeAdjustModal.originalGrade}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[13px] text-gray-600 font-medium">
+                    现等级 <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={gradeAdjustModal.currentGrade}
+                    onChange={(e) =>
+                      setGradeAdjustModal((m) => (m ? { ...m, currentGrade: e.target.value } : m))
+                    }
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[14px] outline-none focus:border-[#2f54eb] bg-white"
+                  >
+                    {APPRAISAL_GRADE_OPTIONS.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[13px] text-gray-600 font-medium">
+                    调整原因 <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={gradeAdjustModal.reason}
+                    onChange={(e) =>
+                      setGradeAdjustModal((m) => (m ? { ...m, reason: e.target.value } : m))
+                    }
+                    placeholder="请填写调整原因"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-[14px] outline-none focus:border-[#2f54eb] resize-none"
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setGradeAdjustModal(null)}
+                  className="px-4 py-2 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmGradeAdjustModal}
+                  className="px-4 py-2 bg-[#2f54eb] text-white rounded text-[13px] hover:bg-blue-600 transition-colors cursor-pointer"
+                >
+                  确定
+                </button>
               </div>
             </motion.div>
           </div>
@@ -4908,7 +5084,11 @@ const OrgAssessmentModal = ({
                 </div>
 
                 <div className="overflow-x-auto relative custom-scrollbar">
-                  <table className="w-full text-left border-collapse min-w-[1000px] table-fixed">
+                  <table
+                    className={`w-full text-left border-collapse table-fixed ${
+                      isOrgAppraisalStage ? 'min-w-[1280px]' : 'min-w-[1000px]'
+                    }`}
+                  >
                     <thead>
                       <tr className="bg-gray-50/50 text-[12px] text-gray-400 uppercase tracking-wider font-semibold">
                         {!isActivityCompleted && (
@@ -4957,6 +5137,13 @@ const OrgAssessmentModal = ({
                             状态
                           </div>
                         </th>
+                        {isOrgAppraisalStage && (
+                          <>
+                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">计算总分</th>
+                            <th className="px-6 py-4 border-b w-[90px] text-center whitespace-nowrap">计算等级</th>
+                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">调整等级</th>
+                          </>
+                        )}
                         {!isActivityCompleted && (
                         <th className="px-6 py-4 border-b w-[100px] text-center sticky right-0 bg-white shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.1)] z-20">
                           操作
@@ -4998,6 +5185,53 @@ const OrgAssessmentModal = ({
                               {getStatusText(item)}
                             </span>
                           </td>
+                          {isOrgAppraisalStage && (() => {
+                            const scoreView = getAppraisalScoreView(item);
+                            const canAdjust = scoreView.hasResult && !isActivityCompleted;
+                            return (
+                              <>
+                                <td className="px-6 py-4 text-center text-gray-700 whitespace-nowrap tabular-nums">
+                                  {scoreView.totalScore}
+                                </td>
+                                <td className="px-6 py-4 text-center whitespace-nowrap">
+                                  <span className="font-semibold text-gray-800">{scoreView.calculatedGrade}</span>
+                                </td>
+                                <td className="px-6 py-4 text-center whitespace-nowrap">
+                                  {scoreView.hasResult ? (
+                                    canAdjust ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => openGradeAdjustModal(item)}
+                                        title={
+                                          scoreView.adjustment?.adjustReason
+                                            ? `调整原因：${scoreView.adjustment.adjustReason}`
+                                            : '点击调整等级'
+                                        }
+                                        className={`font-semibold cursor-pointer hover:underline ${
+                                          scoreView.adjustment ? 'text-amber-700' : 'text-[#2f54eb]'
+                                        }`}
+                                      >
+                                        {scoreView.adjustedGrade}
+                                      </button>
+                                    ) : (
+                                      <span
+                                        className="font-semibold text-gray-800"
+                                        title={
+                                          scoreView.adjustment?.adjustReason
+                                            ? `调整原因：${scoreView.adjustment.adjustReason}`
+                                            : undefined
+                                        }
+                                      >
+                                        {scoreView.adjustedGrade}
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="text-gray-300">—</span>
+                                  )}
+                                </td>
+                              </>
+                            );
+                          })()}
                           {!isActivityCompleted && (
                           <td className="px-6 py-4 text-center sticky right-0 bg-white group-hover:bg-gray-50/80 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.1)] z-10">
                             {item.status !== '未开始' && (
