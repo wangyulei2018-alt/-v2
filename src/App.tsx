@@ -7442,6 +7442,23 @@ const PerformanceProcessMonitoringPage = ({
     setIsSendMessageDrawerOpen(true);
   };
 
+  const handlePlanChangeExport = () => {
+    const rows = getPlanChangeFilteredRows();
+    if (rows.length === 0) {
+      setToast({ message: '当前筛选条件下暂无数据可导出', type: 'info' });
+      return;
+    }
+    setToast({ message: `已导出 ${rows.length} 条计划变更监控数据`, type: 'success' });
+  };
+
+  const handlePlanChangeBatchExportForms = () => {
+    if (planChangeSelectedIds.length === 0) {
+      setToast({ message: '请至少选择一条数据', type: 'info' });
+      return;
+    }
+    setToast({ message: `已批量导出 ${planChangeSelectedIds.length} 份表单`, type: 'success' });
+  };
+
   const togglePlanChangeSelectAll = () => {
     const filtered = getPlanChangeFilteredRows().slice(0, 10);
     if (planChangeSelectedIds.length === filtered.length && filtered.length > 0) {
@@ -8209,8 +8226,24 @@ const PerformanceProcessMonitoringPage = ({
                 >
                   重置
                 </button>
+                <button
+                  type="button"
+                  onClick={handlePlanChangeExport}
+                  className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Download size={14} />
+                  导出
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePlanChangeBatchExportForms}
+                  className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Download size={14} />
+                  批量导出表单
+                </button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={handlePlanChangeSendReminder}
