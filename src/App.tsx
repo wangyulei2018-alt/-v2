@@ -2821,6 +2821,9 @@ interface MonitoringTab {
   endDate: string;
 }
 
+const MONITORING_PHASE_MID_TERM = '组织绩效中期回顾';
+const MONITORING_PHASE_APPRAISAL = '组织绩效考核';
+
 /** 根据已填写开始/结束时间的中期回顾轮次，返回整体最早开始与最晚结束；无有效轮次时为 null */
 function computeMidTermBoundsFromTabs(tabs: { startDate?: string; endDate?: string }[]): { start: string; end: string } | null {
   const filled = tabs.filter((t) => (t.startDate || '').trim() && (t.endDate || '').trim());
@@ -3082,6 +3085,7 @@ const OrgAssessmentModal = ({
   onEditActivity,
   onDeleteActivity,
   onInitiatePlanChange,
+  onActivityMonitoringSync,
   planChangeSubjectsByActivityId = {},
 }: {
   isOpen: boolean;
@@ -3095,10 +3099,28 @@ const OrgAssessmentModal = ({
   onDeleteActivity?: () => void;
   /** 中期回顾：将所选考核对象写入「组织绩效计划变更监控」列表（同一对象可多次发起，仅「进行中」不可叠发） */
   onInitiatePlanChange?: (activityId: string, subjects: any[]) => void;
+  /** 同步阶段进度与轮次配置至活动列表，供流程监控页展示多轮次 Tab */
+  onActivityMonitoringSync?: (
+    activityId: string,
+    patch: {
+      planStageArchivedToMidTerm?: boolean;
+      midTermArchivedToAppraisal?: boolean;
+      currentMidTermRoundId?: string;
+      currentAppraisalRoundId?: string;
+      phaseRoundTabs?: Record<string, MonitoringTab[]>;
+    }
+  ) => void;
   /** 各活动已发起的计划变更行（同一考核对象仅当存在「进行中」申请时不可再发起；上一申请为「已完成」后可再发起） */
   planChangeSubjectsByActivityId?: Record<string, any[]>;
 }) => {
   if (!isOpen) return null;
+
+  const syncMonitoringToActivity = (
+    patch: Parameters<NonNullable<typeof onActivityMonitoringSync>>[1]
+  ) => {
+    if (!activity?.id || !onActivityMonitoringSync) return;
+    onActivityMonitoringSync(activity.id, patch);
+  };
 
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeletePreAssessmentOpen, setIsDeletePreAssessmentOpen] = useState(false);
@@ -3157,12 +3179,52 @@ const OrgAssessmentModal = ({
   const [activeTab, setActiveTab] = useState('考核对象');
 
   const [monitoringTabs1, setMonitoringTabs1] = useState<MonitoringTab[]>([
-    { id: '1', name: '组织绩效中期回顾', isDefault: true, startDate: '', endDate: '' }
+    { id: '1', name: '第一轮回顾', isDefault: true, startDate: '', endDate: '' },
+    { id: '2', name: '第二轮回顾', isDefault: false, startDate: '', endDate: '' },
   ]);
   const [monitoringTabs2, setMonitoringTabs2] = useState<MonitoringTab[]>([
     { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
     { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' }
   ]);
+
+  useEffect(() => {
+    if (!activity?.id) return;
+    setPlanStageArchivedToMidTerm(Boolean(activity.planStageArchivedToMidTerm));
+    setMidTermArchivedToAppraisal(Boolean(activity.midTermArchivedToAppraisal));
+    const midTabs = activity?.config?.phaseRoundTabs?.[MONITORING_PHASE_MID_TERM];
+    if (Array.isArray(midTabs) && midTabs.length > 0) {
+      setMonitoringTabs1(
+        midTabs.map((t: any) => ({
+          id: String(t.id),
+          name: t.name,
+          isDefault: Boolean(t.isDefault),
+          startDate: t.startDate || '',
+          endDate: t.endDate || '',
+        }))
+      );
+      const activeMid = activity.currentMidTermRoundId;
+      if (activeMid) setActiveMonitoringTab1(String(activeMid));
+    }
+    const appraisalTabs = activity?.config?.phaseRoundTabs?.[MONITORING_PHASE_APPRAISAL];
+    if (Array.isArray(appraisalTabs) && appraisalTabs.length > 0) {
+      setMonitoringTabs2(
+        appraisalTabs.map((t: any) => ({
+          id: String(t.id),
+          name: t.name,
+          isDefault: Boolean(t.isDefault),
+          startDate: t.startDate || '',
+          endDate: t.endDate || '',
+        }))
+      );
+      const activeAppraisal = activity.currentAppraisalRoundId;
+      if (activeAppraisal) setActiveMonitoringTab2(String(activeAppraisal));
+    }
+    if (activity.midTermArchivedToAppraisal) {
+      setCurrentStep(2);
+    } else if (activity.planStageArchivedToMidTerm) {
+      setCurrentStep(1);
+    }
+  }, [activity?.id]);
 
   const [activeMonitoringTab1, setActiveMonitoringTab1] = useState('1');
   const [activeMonitoringTab2, setActiveMonitoringTab2] = useState('pre');
@@ -3405,16 +3467,39 @@ const OrgAssessmentModal = ({
 
     if (roundModalMode === 'add') {
       const newId = Date.now().toString();
-      setMonitoringTabs([...monitoringTabs, { 
-        id: newId, 
-        name: roundModalData.name, 
-        startDate: roundModalData.startDate || '', 
-        endDate: roundModalData.endDate || '',
-        isDefault: false 
-      }]);
+      const nextTabs: MonitoringTab[] = [
+        ...monitoringTabs,
+        {
+          id: newId,
+          name: roundModalData.name,
+          startDate: roundModalData.startDate || '',
+          endDate: roundModalData.endDate || '',
+          isDefault: false,
+        },
+      ];
+      setMonitoringTabs(nextTabs);
       setActiveMonitoringTab(newId);
+      if (currentStep === 1) {
+        syncMonitoringToActivity({
+          phaseRoundTabs: { [MONITORING_PHASE_MID_TERM]: nextTabs },
+          currentMidTermRoundId: newId,
+        });
+      } else if (currentStep === 2) {
+        syncMonitoringToActivity({
+          phaseRoundTabs: { [MONITORING_PHASE_APPRAISAL]: nextTabs },
+          currentAppraisalRoundId: newId,
+        });
+      }
     } else {
-      setMonitoringTabs(monitoringTabs.map(t => t.id === roundModalData.id ? { ...t, ...roundModalData } : t));
+      const nextTabs = monitoringTabs.map((t) =>
+        t.id === roundModalData.id ? { ...t, ...roundModalData } : t
+      );
+      setMonitoringTabs(nextTabs);
+      if (currentStep === 1) {
+        syncMonitoringToActivity({ phaseRoundTabs: { [MONITORING_PHASE_MID_TERM]: nextTabs } });
+      } else if (currentStep === 2) {
+        syncMonitoringToActivity({ phaseRoundTabs: { [MONITORING_PHASE_APPRAISAL]: nextTabs } });
+      }
     }
     setIsRoundModalOpen(false);
   };
@@ -3765,6 +3850,11 @@ const OrgAssessmentModal = ({
     if (currentStep === 0) {
       setPlanStageArchivedToMidTerm(true);
       setCurrentStep(1);
+      syncMonitoringToActivity({
+        planStageArchivedToMidTerm: true,
+        currentMidTermRoundId: activeMonitoringTab1 || monitoringTabs1[0]?.id,
+        phaseRoundTabs: { [MONITORING_PHASE_MID_TERM]: monitoringTabs1 },
+      });
       showToast('已进入组织绩效中期回顾', 'success');
     }
   };
@@ -3790,6 +3880,10 @@ const OrgAssessmentModal = ({
     );
     setSelectedIds([]);
     setActiveMonitoringTab1(nextTab.id);
+    syncMonitoringToActivity({
+      currentMidTermRoundId: nextTab.id,
+      phaseRoundTabs: { [MONITORING_PHASE_MID_TERM]: monitoringTabs1 },
+    });
     showToast(`已归档并进入${nextTab.name}`, 'success');
   };
 
@@ -3925,6 +4019,8 @@ const OrgAssessmentModal = ({
     const b = midTermBounds;
     const isQuarter = activity?.type !== '年度';
     const aw = QUARTER_ORG_ASSESSMENT_STAGE_WINDOWS.appraisal;
+    let nextAppraisalTabs: MonitoringTab[] = monitoringTabs2;
+    let nextAppraisalRoundId = 'pre';
 
     if (isQuarter) {
       let preEnd = addDaysIso(aw.start, 14);
@@ -3932,16 +4028,16 @@ const OrgAssessmentModal = ({
       const formalStart = addDaysIso(preEnd, 1);
       if (formalStart > aw.end) {
         showToast('组织绩效考核阶段时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
-        setMonitoringTabs2([
+        nextAppraisalTabs = [
           { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-        ]);
-        setActiveMonitoringTab2('formal');
+        ];
+        nextAppraisalRoundId = 'formal';
       } else {
-        setMonitoringTabs2([
+        nextAppraisalTabs = [
           { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
           { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-        ]);
-        setActiveMonitoringTab2('pre');
+        ];
+        nextAppraisalRoundId = 'pre';
       }
     } else if (b) {
       let preEnd = addDaysIso(b.start, 2);
@@ -3949,27 +4045,38 @@ const OrgAssessmentModal = ({
       const formalStart = addDaysIso(preEnd, 1);
       if (formalStart > b.end) {
         showToast('组织绩效中期回顾时间过短，无法拆分两轮，已仅保留组织绩效正式考核', 'warning');
-        setMonitoringTabs2([
+        nextAppraisalTabs = [
           { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-        ]);
-        setActiveMonitoringTab2('formal');
+        ];
+        nextAppraisalRoundId = 'formal';
       } else {
-        setMonitoringTabs2([
+        nextAppraisalTabs = [
           { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
           { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-        ]);
-        setActiveMonitoringTab2('pre');
+        ];
+        nextAppraisalRoundId = 'pre';
       }
     } else {
-      setMonitoringTabs2([
+      nextAppraisalTabs = [
         { id: 'pre', name: '组织绩效预考核', isDefault: true, startDate: '', endDate: '' },
         { id: 'formal', name: '组织绩效正式考核', isDefault: true, startDate: '', endDate: '' },
-      ]);
-      setActiveMonitoringTab2('pre');
+      ];
+      nextAppraisalRoundId = 'pre';
     }
+
+    setMonitoringTabs2(nextAppraisalTabs);
+    setActiveMonitoringTab2(nextAppraisalRoundId);
     setMidTermArchivedToAppraisal(true);
     setCurrentStep(2);
     setPreAssessmentPrimaryActionsLocked(false);
+    syncMonitoringToActivity({
+      midTermArchivedToAppraisal: true,
+      currentAppraisalRoundId: nextAppraisalRoundId,
+      phaseRoundTabs: {
+        [MONITORING_PHASE_MID_TERM]: monitoringTabs1,
+        [MONITORING_PHASE_APPRAISAL]: nextAppraisalTabs,
+      },
+    });
     showToast('已进入组织绩效考核', 'success');
   };
 
@@ -6002,74 +6109,91 @@ const IndicatorDimensionDrawer = ({
   );
 };
 
+/** 流程干预 · 更换办理人：节点与当前办理人（演示数据） */
+const PROCESS_INTERVENTION_HANDLER_ROWS: { nodeName: string; handler: string }[] = [
+  { nodeName: '员工发起', handler: '张三(001)' },
+  { nodeName: '直接上级审批', handler: '李四(002)' },
+  { nodeName: '部门负责人审批', handler: '王五(003)' },
+  { nodeName: '部门负责人审批', handler: '李红(004)' },
+  { nodeName: 'HR备案审批', handler: '刘猛(005)' },
+];
+
+type ProcessInterventionHandlerRow = (typeof PROCESS_INTERVENTION_HANDLER_ROWS)[number] & {
+  isFirstOfNode: boolean;
+  nodeRowSpan: number;
+};
+
+/** 连续相同节点名称合并单元格：仅首行渲染节点名称并设置 rowSpan */
+function buildProcessInterventionHandlerTableRows(
+  rows: { nodeName: string; handler: string }[]
+): ProcessInterventionHandlerRow[] {
+  return rows.map((row, idx) => {
+    const isFirstOfNode = idx === 0 || rows[idx - 1].nodeName !== row.nodeName;
+    let nodeRowSpan = 1;
+    if (isFirstOfNode) {
+      let j = idx + 1;
+      while (j < rows.length && rows[j].nodeName === row.nodeName) {
+        nodeRowSpan += 1;
+        j += 1;
+      }
+    }
+    return { ...row, isFirstOfNode, nodeRowSpan };
+  });
+}
+
+const PROCESS_INTERVENTION_HANDLER_TABLE_ROWS = buildProcessInterventionHandlerTableRows(
+  PROCESS_INTERVENTION_HANDLER_ROWS
+);
+
+/** 流程干预 · 流程退回：按节点序号选择退回目标 */
+const PROCESS_INTERVENTION_RETURN_NODES: { order: number; label: string }[] = [
+  { order: 10, label: '数据提交人、主HRBP两个节点' },
+  { order: 20, label: '一级部门负责人' },
+];
+
 const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
   const [activeTab, setActiveTab] = useState('更换办理人');
   const tabs = ['更换办理人', '流程退回'];
 
+  const renderHandlerChangeTable = (actionColumnLabel: string) => (
+    <div className="p-6">
+      <table className="w-full border border-gray-100 rounded overflow-hidden">
+        <thead>
+          <tr className="bg-gray-50 text-[13px] text-gray-500 border-b border-gray-100">
+            <th className="py-2.5 px-4 font-medium text-left">节点名称</th>
+            <th className="py-2.5 px-4 font-medium text-left">当前办理人</th>
+            <th className="py-2.5 px-4 font-medium text-left">{actionColumnLabel}</th>
+          </tr>
+        </thead>
+        <tbody className="text-[13px]">
+          {PROCESS_INTERVENTION_HANDLER_TABLE_ROWS.map((row, idx) => (
+            <tr
+              key={`${row.nodeName}-${row.handler}-${idx}`}
+              className={idx < PROCESS_INTERVENTION_HANDLER_TABLE_ROWS.length - 1 ? 'border-b border-gray-50' : ''}
+            >
+              {row.isFirstOfNode && (
+                <td
+                  rowSpan={row.nodeRowSpan}
+                  className="py-3 px-4 text-gray-900 align-middle bg-white border-r border-gray-50"
+                >
+                  {row.nodeName}
+                </td>
+              )}
+              <td className="py-3 px-4 text-gray-600">{row.handler}</td>
+              <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   const renderTabContent = () => {
     switch (activeTab) {
       case '更换办理人':
-        return (
-          <div className="p-6">
-            <table className="w-full border border-gray-100 rounded overflow-hidden">
-              <thead>
-                <tr className="bg-gray-50 text-[13px] text-gray-500 border-b border-gray-100">
-                  <th className="py-2.5 px-4 font-medium text-left">节点名称</th>
-                  <th className="py-2.5 px-4 font-medium text-left">当前办理人</th>
-                  <th className="py-2.5 px-4 font-medium text-left">更换为</th>
-                </tr>
-              </thead>
-              <tbody className="text-[13px]">
-                <tr className="border-b border-gray-50">
-                  <td className="py-3 px-4 text-gray-900">目标制定</td>
-                  <td className="py-3 px-4 text-gray-600">员工1 (本人)</td>
-                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
-                </tr>
-                <tr className="border-b border-gray-50">
-                  <td className="py-3 px-4 text-gray-900">直接上级审批</td>
-                  <td className="py-3 px-4 text-gray-600">张经理 (M001)</td>
-                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 text-gray-900">隔级上级审批</td>
-                  <td className="py-3 px-4 text-gray-600">王总监 (M002)</td>
-                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        );
+        return renderHandlerChangeTable('更换为');
       case '添加办理人':
-        return (
-          <div className="p-6">
-            <table className="w-full border border-gray-100 rounded overflow-hidden">
-              <thead>
-                <tr className="bg-gray-50 text-[13px] text-gray-500 border-b border-gray-100">
-                  <th className="py-2.5 px-4 font-medium text-left">节点名称</th>
-                  <th className="py-2.5 px-4 font-medium text-left">当前办理人</th>
-                  <th className="py-2.5 px-4 font-medium text-left">添加人</th>
-                </tr>
-              </thead>
-              <tbody className="text-[13px]">
-                <tr className="border-b border-gray-50">
-                  <td className="py-3 px-4 text-gray-900">目标制定</td>
-                  <td className="py-3 px-4 text-gray-600">员工1 (本人)</td>
-                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
-                </tr>
-                <tr className="border-b border-gray-50">
-                  <td className="py-3 px-4 text-gray-900">直接上级审批</td>
-                  <td className="py-3 px-4 text-gray-600">张经理 (M001)</td>
-                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 text-gray-900">隔级上级审批</td>
-                  <td className="py-3 px-4 text-gray-600">王总监 (M002)</td>
-                  <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        );
+        return renderHandlerChangeTable('添加人');
       case '移除办理人':
         return (
           <div className="p-6">
@@ -6082,27 +6206,25 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
                 </tr>
               </thead>
               <tbody className="text-[13px]">
-                <tr className="border-b border-gray-50">
-                  <td className="py-3 px-4 text-gray-900">目标制定</td>
-                  <td className="py-3 px-4 text-gray-600">员工1 (本人)</td>
-                  <td className="py-3 px-4 text-red-500 cursor-pointer hover:underline flex items-center gap-1">
-                    <Trash2 size={14} /> 移除
-                  </td>
-                </tr>
-                <tr className="border-b border-gray-50">
-                  <td className="py-3 px-4 text-gray-900">直接上级审批</td>
-                  <td className="py-3 px-4 text-gray-600">张经理 (M001)</td>
-                  <td className="py-3 px-4 text-red-500 cursor-pointer hover:underline flex items-center gap-1">
-                    <Trash2 size={14} /> 移除
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 text-gray-900">隔级上级审批</td>
-                  <td className="py-3 px-4 text-gray-600">王总监 (M002)</td>
-                  <td className="py-3 px-4 text-red-500 cursor-pointer hover:underline flex items-center gap-1">
-                    <Trash2 size={14} /> 移除
-                  </td>
-                </tr>
+                {PROCESS_INTERVENTION_HANDLER_TABLE_ROWS.map((row, idx) => (
+                  <tr
+                    key={`remove-${row.nodeName}-${row.handler}-${idx}`}
+                    className={idx < PROCESS_INTERVENTION_HANDLER_TABLE_ROWS.length - 1 ? 'border-b border-gray-50' : ''}
+                  >
+                    {row.isFirstOfNode && (
+                      <td
+                        rowSpan={row.nodeRowSpan}
+                        className="py-3 px-4 text-gray-900 align-middle bg-white border-r border-gray-50"
+                      >
+                        {row.nodeName}
+                      </td>
+                    )}
+                    <td className="py-3 px-4 text-gray-600">{row.handler}</td>
+                    <td className="py-3 px-4 text-red-500 cursor-pointer hover:underline flex items-center gap-1">
+                      <Trash2 size={14} /> 移除
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -6144,14 +6266,29 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
             <div className="space-y-3">
               <label className="text-[14px] font-bold text-gray-900">选择退回节点</label>
               <div className="space-y-2">
-                <label className="flex items-center gap-3 p-3 border border-blue-100 bg-blue-50/30 rounded cursor-pointer">
-                  <input type="radio" name="returnNode" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" defaultChecked />
-                  <span className="text-[13px] text-gray-700">员工本人</span>
-                </label>
-                <label className="flex items-center gap-3 p-3 border border-gray-100 rounded cursor-pointer hover:bg-gray-50">
-                  <input type="radio" name="returnNode" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
-                  <span className="text-[13px] text-gray-700">直接上级审批</span>
-                </label>
+                {PROCESS_INTERVENTION_RETURN_NODES.map((node, idx) => (
+                  <label
+                    key={`return-order-${node.order}`}
+                    className={`flex items-center gap-3 p-3 border rounded cursor-pointer ${
+                      idx === 0
+                        ? 'border-blue-100 bg-blue-50/30'
+                        : 'border-gray-100 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="returnNode"
+                      value={String(node.order)}
+                      className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
+                      defaultChecked={idx === 0}
+                    />
+                    <span className="text-[13px] text-gray-700 leading-snug">
+                      <span className="font-medium text-gray-900">序号 {node.order}</span>
+                      {' '}
+                      {node.label}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
           </div>
@@ -6283,18 +6420,7 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
   );
 };
 
-const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
-  const [activeTab, setActiveTab] = useState('组织绩效计划制定');
-  const [activeSubTab, setActiveSubTab] = useState('第一轮');
-
-  const tabs = [
-    { name: '组织绩效计划制定', hasSubTabs: false },
-    { name: '组织绩效中期回顾', hasSubTabs: true, subTabs: ['第一轮', '第二轮'] },
-    { name: '组织绩效考核', hasSubTabs: true, subTabs: ['第一轮', '第二轮', '年终'] },
-  ];
-
-  const currentTab = tabs.find(t => t.name === activeTab);
-
+const ApprovalChainModal = ({ isOpen, onClose, data: _data }: { isOpen: boolean; onClose: () => void; data: any }) => {
   return (
     <div className="fixed inset-0 z-[200] flex justify-end overflow-hidden">
       <motion.div 
@@ -6313,56 +6439,11 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h3 className="text-lg font-bold text-gray-900 tracking-tight">审批链 - {data?.currentApprover || data?.name || '刘信息 (M1001)'}</h3>
+          <h3 className="text-lg font-bold text-gray-900 tracking-tight">审批链</h3>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
-
-        {/* Parent Tabs */}
-        <div className="flex border-b border-gray-100 bg-white px-6 shrink-0 h-[56px] items-center gap-8">
-          {tabs.map(tab => (
-            <button
-              key={tab.name}
-              onClick={() => {
-                setActiveTab(tab.name);
-                if (tab.hasSubTabs && tab.subTabs) {
-                  setActiveSubTab(tab.subTabs[0]);
-                }
-              }}
-              className={`h-full text-[14px] font-bold transition-all relative ${
-                activeTab === tab.name ? 'text-[#2f54eb]' : 'text-gray-500 hover:text-gray-800'
-              }`}
-            >
-              {tab.name}
-              {activeTab === tab.name && (
-                <motion.div 
-                  layoutId="activeTabUnderline"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#2f54eb]" 
-                />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Sub Tabs (Only for stages with sub-rounds) */}
-        {currentTab?.hasSubTabs && (
-          <div className="flex bg-gray-50/50 px-6 py-3 border-b border-gray-100 shrink-0 gap-2">
-            {currentTab.subTabs?.map(subTab => (
-              <button
-                key={subTab}
-                onClick={() => setActiveSubTab(subTab)}
-                className={`px-4 py-1.5 rounded-full text-[12px] font-medium transition-all ${
-                  activeSubTab === subTab 
-                    ? 'bg-white text-[#2f54eb] shadow-sm ring-1 ring-black/5' 
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                {subTab}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Content - Timeline */}
         <div className="flex-1 overflow-y-auto p-8 bg-white">
@@ -6376,11 +6457,9 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               
               <div className="flex items-center justify-between mb-3 pt-0.5">
                 <div className="flex items-center gap-3">
-                  <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '组织绩效计划制定' ? '发起' : activeTab === '组织绩效中期回顾' ? '自评发起' : '考核发起'}
-                  </span>
+                  <span className="text-[15px] font-bold text-gray-900">发起</span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-blue-50 text-[#2f54eb] border border-blue-100 font-medium">
-                    {activeTab === '组织绩效计划制定' ? '发起' : '进行中'}
+                    发起
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-gray-400 text-[12px] font-mono">
@@ -6404,7 +6483,7 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
                 </div>
                 <div className="flex items-start gap-2.5 text-gray-600 text-[13px] pl-11">
                   <MessageSquare size={14} className="mt-0.5 shrink-0 opacity-40 text-[#2f54eb]" />
-                  <span>{activeTab === '组织绩效计划制定' ? '提交绩效目标' : '提交阶段反馈'}</span>
+                  <span>提交绩效目标</span>
                 </div>
               </div>
             </div>
@@ -6416,9 +6495,7 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               
               <div className="flex items-center justify-between mb-3 pt-0.5">
                 <div className="flex items-center gap-3">
-                  <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '组织绩效计划制定' ? '直接上级审批' : activeTab === '组织绩效中期回顾' ? '上级面谈' : '初评节点'}
-                  </span>
+                  <span className="text-[15px] font-bold text-gray-900">直接上级审批</span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-green-50 text-green-600 border border-green-100 font-medium">
                     审批通过
                   </span>
@@ -6456,12 +6533,10 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               
               <div className="flex items-center justify-between mb-3 pt-0.5">
                 <div className="flex items-center gap-3">
-                  <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '组织绩效计划制定' ? '管理员操作' : activeTab === '组织绩效中期回顾' ? '沟通确认' : '校准节点'}
-                  </span>
+                  <span className="text-[15px] font-bold text-gray-900">管理员操作</span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-orange-50 text-orange-600 border border-orange-100 font-medium flex items-center gap-1">
                     <AlertCircle size={10} />
-                    系统干预-转交
+                    系统干预-更换办理人
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 text-gray-400 text-[12px] font-mono">
@@ -6496,9 +6571,7 @@ const ApprovalChainModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClos
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-[15px] font-bold text-gray-900">
-                    {activeTab === '组织绩效计划制定' ? '隔级上级审批' : activeTab === '组织绩效中期回顾' ? '结果发布' : '结果确认'}
-                  </span>
+                  <span className="text-[15px] font-bold text-gray-900">隔级上级审批</span>
                   <span className="px-2 py-0.5 rounded-md text-[11px] bg-green-50 text-green-600 border border-green-100 font-medium">
                     审批通过
                   </span>
@@ -6881,9 +6954,77 @@ function buildPlanChangeRowFromAssessmentSubject(row: any, index: number) {
 /** 流程监控页：无活动或未配置阶段时的占位（与列表活动结构一致） */
 const DEFAULT_PERFORMANCE_MONITORING_PHASES: any[] = [
   { name: '组织绩效计划制定', date: '—', showRounds: false, rounds: [] },
-  { name: '组织绩效中期回顾', date: '—', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
-  { name: '组织绩效考核', date: '—', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] },
+  {
+    name: MONITORING_PHASE_MID_TERM,
+    date: '—',
+    showRounds: true,
+    rounds: [
+      { id: '1', name: '第一轮回顾' },
+      { id: '2', name: '第二轮回顾' },
+    ],
+  },
+  {
+    name: MONITORING_PHASE_APPRAISAL,
+    date: '—',
+    showRounds: true,
+    rounds: [
+      { id: 'pre', name: '组织绩效预考核' },
+      { id: 'formal', name: '组织绩效正式考核' },
+    ],
+  },
 ];
+
+/** 从活动配置解析某阶段下的轮次 Tab（与活动详情 monitoringTabs 对齐） */
+function resolveMonitoringPhaseRounds(activity: any, phaseName: string): { id: string; name: string }[] {
+  if (!activity) return [];
+  const phases = activity?.config?.phases;
+  const phase = Array.isArray(phases) ? phases.find((p: any) => p.name === phaseName) : undefined;
+  if (!phase?.showRounds) return [];
+
+  const tabRounds = activity?.config?.phaseRoundTabs?.[phaseName];
+  if (Array.isArray(tabRounds) && tabRounds.length > 0) {
+    return tabRounds.map((t: any) => ({
+      id: String(t.id),
+      name: (t.name || '').trim() || '未命名轮次',
+    }));
+  }
+
+  if (Array.isArray(phase.rounds) && phase.rounds.length > 0) {
+    return phase.rounds.map((r: any) => ({
+      id: String(r.id),
+      name: (r.name || '').trim() || '未命名轮次',
+    }));
+  }
+
+  if (phaseName === MONITORING_PHASE_MID_TERM && activity.planStageArchivedToMidTerm) {
+    const def = DEFAULT_PERFORMANCE_MONITORING_PHASES.find((p) => p.name === phaseName);
+    return (def?.rounds ?? []).map((r: any) => ({ id: String(r.id), name: r.name }));
+  }
+  if (phaseName === MONITORING_PHASE_APPRAISAL && activity.midTermArchivedToAppraisal) {
+    const def = DEFAULT_PERFORMANCE_MONITORING_PHASES.find((p) => p.name === phaseName);
+    return (def?.rounds ?? []).map((r: any) => ({ id: String(r.id), name: r.name }));
+  }
+
+  return [];
+}
+
+function mergeActivityPhaseRoundTabs(activity: any, phaseName: string, tabs: MonitoringTab[]) {
+  const rounds = tabs.map((t) => ({ id: String(t.id), name: t.name }));
+  const phases = (activity?.config?.phases ?? []).map((p: any) =>
+    p.name === phaseName ? { ...p, showRounds: true, rounds } : p
+  );
+  return {
+    ...activity,
+    config: {
+      ...activity.config,
+      phases,
+      phaseRoundTabs: {
+        ...(activity.config?.phaseRoundTabs ?? {}),
+        [phaseName]: tabs.map((t) => ({ ...t })),
+      },
+    },
+  };
+}
 
 type MonitoringSummaryKey = 'assessmentTotal' | 'completed' | 'inProgress' | 'stuck';
 type PlanChangeSummaryKey = 'departments' | 'completed' | 'inProgress' | 'stuck';
@@ -7088,21 +7229,28 @@ const PerformanceProcessMonitoringPage = ({
     midTermArchivedToAppraisal,
   ]);
 
-  /** 当前阶段变化或活动阶段配置变化时，同步轮次 Tab 与轮次名称（与活动数据一致） */
+  /** 当前阶段 / 活动变化时，同步轮次 Tab（优先活动详情写入的 phaseRoundTabs） */
   useEffect(() => {
     const phaseConfig = activityPhases.find((p) => p.name === selectedPhase);
-    if (phaseConfig) {
-      const newRounds = phaseConfig.showRounds ? phaseConfig.rounds || [] : [];
-      setRounds(newRounds);
-      setActiveRoundId((prev) => {
-        if (newRounds.some((r) => r.id === prev)) return prev;
-        return newRounds[0]?.id || '';
-      });
-    } else {
+    if (!phaseConfig?.showRounds) {
       setRounds([]);
       setActiveRoundId('');
+      return;
     }
-  }, [selectedPhase, activityPhases]);
+    const newRounds = resolveMonitoringPhaseRounds(selectedActivity, selectedPhase);
+    setRounds(newRounds);
+    setActiveRoundId((prev) => {
+      if (newRounds.some((r) => r.id === prev)) return prev;
+      const preferred =
+        selectedPhase === MONITORING_PHASE_MID_TERM
+          ? (selectedActivity as any)?.currentMidTermRoundId
+          : selectedPhase === MONITORING_PHASE_APPRAISAL
+            ? (selectedActivity as any)?.currentAppraisalRoundId
+            : '';
+      if (preferred && newRounds.some((r) => r.id === preferred)) return preferred;
+      return newRounds[0]?.id || '';
+    });
+  }, [selectedPhase, activityPhases, selectedActivity, selectedActivityId]);
 
   const activeRound = rounds.find(r => r.id === activeRoundId) || (rounds.length > 0 ? rounds[0] : { id: '', name: '-' });
 
@@ -7607,9 +7755,9 @@ const PerformanceProcessMonitoringPage = ({
           </div>
         </div>
 
-        {/* Rounds Tabs */}
-        {rounds.length > 0 && (
-          <div className="px-6 flex items-center gap-1">
+        {/* Rounds Tabs：中期回顾 / 组织绩效考核等多轮阶段 */}
+        {activityPhases.find((p) => p.name === selectedPhase)?.showRounds && rounds.length > 0 && (
+          <div className="px-6 flex items-center gap-1 border-b border-gray-100 bg-white">
             {rounds.map((round) => (
               <div 
                 key={round.id}
@@ -12529,6 +12677,20 @@ const PerformanceActivityPage = ({
         activity={selectedActivity}
         planChangeSubjectsByActivityId={planChangeSubjectsByActivityId}
         onInitiatePlanChange={onInitiatePlanChange}
+        onActivityMonitoringSync={(activityId, patch) => {
+          setActivities((prev) =>
+            prev.map((a) => {
+              if (a.id !== activityId) return a;
+              let next = { ...a, ...patch };
+              if (patch.phaseRoundTabs) {
+                for (const [phaseName, tabs] of Object.entries(patch.phaseRoundTabs)) {
+                  if (tabs?.length) next = mergeActivityPhaseRoundTabs(next, phaseName, tabs);
+                }
+              }
+              return next;
+            })
+          );
+        }}
         onFormalAssessmentArchived={() => {
           const id = selectedActivity?.id;
           if (id) {
@@ -12764,7 +12926,15 @@ export default function App() {
       config: {
         phases: [
           { name: '组织绩效计划制定', date: '2023/01/10 ~ 2023/01/15', showRounds: false, rounds: [] },
-          { name: '组织绩效中期回顾', date: '2023/02/15 ~ 2023/02/20', showRounds: true, rounds: [{ id: '1', name: '第一轮回顾' }] },
+          {
+            name: '组织绩效中期回顾',
+            date: '2023/02/15 ~ 2023/02/20',
+            showRounds: true,
+            rounds: [
+              { id: '1', name: '第一轮回顾' },
+              { id: '2', name: '第二轮回顾' },
+            ],
+          },
           { name: '组织绩效考核', date: '2023/03/30 ~ 2023/04/05', showRounds: true, rounds: [{ id: '1', name: '第一轮考核' }] }
         ]
       }
@@ -12825,15 +12995,30 @@ export default function App() {
       createTime: '2025-03-01 14:00:00',
       updater: '李四',
       updateTime: '2026-04-15 11:00:00',
-      planStageArchivedToMidTerm: false,
+      planStageArchivedToMidTerm: true,
       midTermArchivedToAppraisal: false,
+      currentMidTermRoundId: 'mid-1',
       config: {
         phases: [
           { name: '组织绩效计划制定', date: '2025/03/01', showRounds: false, rounds: [] },
-          { name: '组织绩效中期回顾', date: '2025/04/15', showRounds: true, rounds: [{ id: '1', name: '中期提报轮' }] },
-          { name: '组织绩效考核', date: '2025/05/30', showRounds: true, rounds: [{ id: '1', name: '最终考核轮' }] }
-        ]
-      }
+          {
+            name: '组织绩效中期回顾',
+            date: '2025/04/15',
+            showRounds: true,
+            rounds: [
+              { id: 'mid-1', name: '第一轮回顾' },
+              { id: 'mid-2', name: '第二轮回顾' },
+            ],
+          },
+          { name: '组织绩效考核', date: '2025/05/30', showRounds: true, rounds: [{ id: '1', name: '最终考核轮' }] },
+        ],
+        phaseRoundTabs: {
+          组织绩效中期回顾: [
+            { id: 'mid-1', name: '第一轮回顾', isDefault: true, startDate: '2025-03-15', endDate: '2025-04-01' },
+            { id: 'mid-2', name: '第二轮回顾', isDefault: false, startDate: '2025-04-02', endDate: '2025-04-15' },
+          ],
+        },
+      },
     },
     {
       id: '6',
