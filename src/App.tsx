@@ -7029,6 +7029,424 @@ function mergeActivityPhaseRoundTabs(activity: any, phaseName: string, tabs: Mon
 type MonitoringSummaryKey = 'assessmentTotal' | 'completed' | 'inProgress' | 'stuck';
 type PlanChangeSummaryKey = 'departments' | 'completed' | 'inProgress' | 'stuck';
 
+type MonitoringFormDetailMetric = {
+  name: string;
+  weight: number;
+  type: '定量' | '定性';
+  zeroGoal: string;
+  threeGoal: string;
+  fiveGoal: string;
+  lastYear: string;
+  yoyGrowth: string;
+  provider: string;
+  reviewer: string;
+  reviewerWeight: number;
+  formula: string;
+};
+
+type MonitoringFormDetailSection = {
+  title: string;
+  required?: boolean;
+  metrics: MonitoringFormDetailMetric[];
+};
+
+/** 组织绩效计划制定 · 查看表单只读指标（与门户端计划阶段演示数据一致） */
+const MONITORING_PLAN_FORM_DETAIL_SECTIONS: MonitoringFormDetailSection[] = [
+  {
+    title: '财务指标',
+    required: true,
+    metrics: [
+      {
+        name: '营收达成（亿）',
+        weight: 18,
+        type: '定量',
+        zeroGoal: '40',
+        threeGoal: '48',
+        fiveGoal: '60',
+        lastYear: '42',
+        yoyGrowth: '42.9%',
+        provider: '李四',
+        reviewer: '张三',
+        reviewerWeight: 100,
+        formula: '实际完成值 ÷ 目标值 × 100%',
+      },
+      {
+        name: '毛利率（%）',
+        weight: 17,
+        type: '定量',
+        zeroGoal: '22',
+        threeGoal: '26',
+        fiveGoal: '30',
+        lastYear: '24.5',
+        yoyGrowth: '22.4%',
+        provider: '李四',
+        reviewer: '张三',
+        reviewerWeight: 100,
+        formula: '(营业收入 - 营业成本) ÷ 营业收入 × 100%',
+      },
+    ],
+  },
+  {
+    title: '客户指标',
+    required: true,
+    metrics: [
+      {
+        name: '市占率（%）',
+        weight: 12,
+        type: '定量',
+        zeroGoal: '18',
+        threeGoal: '22',
+        fiveGoal: '28',
+        lastYear: '20',
+        yoyGrowth: '40.0%',
+        provider: '赵六',
+        reviewer: '王五',
+        reviewerWeight: 100,
+        formula: '本公司销售额 ÷ 行业总销售额 × 100%',
+      },
+      {
+        name: '客诉率（%）',
+        weight: 10,
+        type: '定量',
+        zeroGoal: '1.2',
+        threeGoal: '0.8',
+        fiveGoal: '0.4',
+        lastYear: '1.0',
+        yoyGrowth: '-60.0%',
+        provider: '赵六',
+        reviewer: '王五',
+        reviewerWeight: 100,
+        formula: '客诉件数 ÷ 销售订单数 × 100%',
+      },
+    ],
+  },
+  {
+    title: '运营指标',
+    required: true,
+    metrics: [
+      {
+        name: '交付及时率（%）',
+        weight: 15,
+        type: '定量',
+        zeroGoal: '90',
+        threeGoal: '95',
+        fiveGoal: '98',
+        lastYear: '92',
+        yoyGrowth: '15.2%',
+        provider: '周八',
+        reviewer: '孙七',
+        reviewerWeight: 100,
+        formula: '准时交付订单数 ÷ 总订单数 × 100%',
+      },
+      {
+        name: '库存周转（天）',
+        weight: 14,
+        type: '定量',
+        zeroGoal: '50',
+        threeGoal: '45',
+        fiveGoal: '40',
+        lastYear: '52',
+        yoyGrowth: '-26.9%',
+        provider: '周八',
+        reviewer: '孙七',
+        reviewerWeight: 100,
+        formula: '365 ÷ (销售成本 ÷ 平均库存)',
+      },
+    ],
+  },
+  {
+    title: '组织发展指标',
+    required: true,
+    metrics: [
+      {
+        name: '人效（万/人）',
+        weight: 8,
+        type: '定量',
+        zeroGoal: '80',
+        threeGoal: '100',
+        fiveGoal: '120',
+        lastYear: '95',
+        yoyGrowth: '26.3%',
+        provider: '郑十',
+        reviewer: '吴九',
+        reviewerWeight: 100,
+        formula: '营业收入 ÷ 在岗人数',
+      },
+      {
+        name: '关键人才保留',
+        weight: 7,
+        type: '定性',
+        zeroGoal: '核心人才流失率 > 20%',
+        threeGoal: '核心人才流失率 10%-20%',
+        fiveGoal: '核心人才流失率 < 10%',
+        lastYear: '达标',
+        yoyGrowth: '0%',
+        provider: '郑十',
+        reviewer: '吴九',
+        reviewerWeight: 100,
+        formula: '按定性评价规则对照目标区间打分',
+      },
+    ],
+  },
+];
+
+function getMonitoringAssessmentObjectName(row: any): string {
+  return row?.path?.replace('集团总部/', '') || row?.id || '—';
+}
+
+function clonePlanFormDetailSections(): MonitoringFormDetailSection[] {
+  return MONITORING_PLAN_FORM_DETAIL_SECTIONS.map((section) => ({
+    ...section,
+    metrics: section.metrics.map((m) => ({ ...m })),
+  }));
+}
+
+function emptyPlanFormDetailSections(): MonitoringFormDetailSection[] {
+  return MONITORING_PLAN_FORM_DETAIL_SECTIONS.map((section) => ({
+    ...section,
+    metrics: [] as MonitoringFormDetailMetric[],
+  }));
+}
+
+/** 按当前阶段 + 待办节点生成表单展示区块（计划制定阶段使用图1-4指标明细） */
+function buildMonitoringFormSections(
+  phaseName: string,
+  currentNode: string,
+  row: { status?: string; orgType?: string }
+): MonitoringFormDetailSection[] {
+  const hasNodeContent =
+    row.status !== '未开始' && currentNode && currentNode !== '-' && currentNode !== '已归档';
+
+  if (phaseName === '组织绩效计划制定' && hasNodeContent) {
+    return clonePlanFormDetailSections();
+  }
+
+  if (!hasNodeContent && phaseName === '组织绩效计划制定') {
+    return emptyPlanFormDetailSections();
+  }
+
+  if (phaseName === MONITORING_PHASE_MID_TERM && hasNodeContent) {
+    return [
+      {
+        title: '财务指标',
+        required: true,
+        metrics: [
+          {
+            name: '营收达成（亿）',
+            weight: 18,
+            type: '定量',
+            zeroGoal: '40',
+            threeGoal: '48',
+            fiveGoal: '60',
+            lastYear: '42',
+            yoyGrowth: '18.5',
+            provider: '李四',
+            reviewer: '张三',
+            reviewerWeight: 100,
+            formula: '实际完成值 ÷ 目标值 × 100%',
+          },
+        ],
+      },
+      {
+        title: '运营指标',
+        required: true,
+        metrics: [
+          {
+            name: '交付及时率（%）',
+            weight: 15,
+            type: '定量',
+            zeroGoal: '90',
+            threeGoal: '95',
+            fiveGoal: '98',
+            lastYear: '92',
+            yoyGrowth: '72%',
+            provider: '周八',
+            reviewer: '孙七',
+            reviewerWeight: 100,
+            formula: '准时交付订单数 ÷ 总订单数 × 100%',
+          },
+        ],
+      },
+    ];
+  }
+
+  if (phaseName === MONITORING_PHASE_APPRAISAL && hasNodeContent) {
+    return clonePlanFormDetailSections();
+  }
+
+  return emptyPlanFormDetailSections();
+}
+
+function getMonitoringFormEmptyHint(phaseName: string, activityYear?: string): string {
+  const year = activityYear || new Date().getFullYear();
+  if (phaseName === MONITORING_PHASE_MID_TERM) {
+    return `考核对象尚未参与 ${year} 年组织绩效中期回顾填报`;
+  }
+  if (phaseName === MONITORING_PHASE_APPRAISAL) {
+    return `考核对象尚未参与 ${year} 年组织绩效考核填报`;
+  }
+  return `被考核人未参与 ${year} 年组织绩效计划制定目标填报`;
+}
+
+const MonitoringAssessmentFormDrawer = ({
+  isOpen,
+  onClose,
+  row,
+  activityName,
+  phaseName,
+  roundName,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  row: any;
+  activityName: string;
+  phaseName: string;
+  roundName?: string;
+}) => {
+  const objectName = row ? getMonitoringAssessmentObjectName(row) : '—';
+  const currentNode = row?.currentNode || '—';
+  const activityYear = activityName?.match(/\d{4}/)?.[0];
+  const sections = useMemo(
+    () => (row ? buildMonitoringFormSections(phaseName, currentNode, row) : []),
+    [phaseName, currentNode, row]
+  );
+  const emptyHint = getMonitoringFormEmptyHint(phaseName, activityYear);
+
+  if (!isOpen || !row) return null;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex justify-end overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+        className="relative bg-[#f5f6f8] w-full max-w-[min(96vw,1400px)] shadow-2xl flex flex-col h-full"
+      >
+        <div className="flex items-start justify-between px-6 py-5 bg-white border-b border-gray-100 shrink-0">
+          <div className="min-w-0 pr-4">
+            <h2 className="text-[22px] font-bold text-gray-900 leading-tight truncate">{objectName}</h2>
+            <p className="text-[13px] text-gray-500 mt-1 truncate">
+              活动名称：<span className="text-gray-700">{activityName || '—'}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 shrink-0"
+            aria-label="关闭"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="px-6 py-3 bg-white border-b border-gray-100 shrink-0 flex flex-wrap items-center gap-2 text-[12px]">
+          <span className="px-2.5 py-1 rounded bg-blue-50 text-[#2f54eb] border border-blue-100">
+            当前阶段：{phaseName || '—'}
+          </span>
+          {roundName ? (
+            <span className="px-2.5 py-1 rounded bg-gray-50 text-gray-600 border border-gray-100">
+              当前轮次：{roundName}
+            </span>
+          ) : null}
+          <span className="px-2.5 py-1 rounded bg-orange-50 text-orange-700 border border-orange-100">
+            待办节点：{currentNode}
+          </span>
+          {row.currentApprover && row.currentApprover !== '-' ? (
+            <span className="text-gray-500">办理人：{row.currentApprover}</span>
+          ) : null}
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {sections.map((section) => (
+            <div
+              key={section.title}
+              className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
+            >
+              <div className="h-14 px-5 border-b border-blue-100 bg-[#f0f6fc] flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-1 h-4 bg-[#2f54eb] rounded-full shrink-0" />
+                  <h3 className="text-[15px] font-bold text-slate-800">{section.title}</h3>
+                  {section.required && phaseName === '组织绩效计划制定' ? (
+                    <span className="text-red-500 text-[12px] font-medium">（必选）</span>
+                  ) : null}
+                  <HelpCircle size={14} className="text-slate-400 shrink-0" />
+                </div>
+              </div>
+              {section.metrics.length === 0 ? (
+                <div className="py-14 px-6 flex flex-col items-center text-center">
+                  <div className="w-20 h-20 mb-4 rounded-full bg-gray-50 flex items-center justify-center">
+                    <FileText size={32} className="text-gray-300" />
+                  </div>
+                  <p className="text-[13px] text-gray-500 max-w-md leading-relaxed">{emptyHint}</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse table-fixed min-w-[1320px] text-[11px]">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 whitespace-nowrap">
+                        <th className="px-2 py-3 font-medium w-12 text-center">序号</th>
+                        <th className="px-2 py-3 font-medium w-[10%]">指标名称</th>
+                        <th className="px-2 py-3 font-medium w-[5%]">指标权重</th>
+                        <th className="px-2 py-3 font-medium w-[6%]">指标类型</th>
+                        <th className="px-2 py-3 font-medium w-[10%]">零分目标</th>
+                        <th className="px-2 py-3 font-medium w-[10%]">三分目标</th>
+                        <th className="px-2 py-3 font-medium w-[10%]">五分目标</th>
+                        <th className="px-2 py-3 font-medium w-[75px] text-left">上年同期</th>
+                        <th className="px-2 py-3 font-medium w-[85px] text-left">同比增长率</th>
+                        <th className="px-2 py-3 font-medium w-[7%]">数据提供人</th>
+                        <th className="px-2 py-3 font-medium w-[8%]">考核人及权重</th>
+                        <th className="px-2 py-3 font-medium w-[10%]">计算公式</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-700">
+                      {section.metrics.map((metric, idx) => (
+                        <tr key={`${section.title}-${metric.name}-${idx}`} className="border-t border-slate-100">
+                          <td className="px-2 py-3 text-center text-slate-600">{idx + 1}</td>
+                          <td className="px-2 py-3 text-slate-900 font-medium whitespace-pre-wrap break-words">
+                            {metric.name}
+                          </td>
+                          <td className="px-2 py-3 text-center">{metric.weight}</td>
+                          <td className="px-2 py-3 text-center">{metric.type}</td>
+                          <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.zeroGoal}</td>
+                          <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.threeGoal}</td>
+                          <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.fiveGoal}</td>
+                          <td className="px-2 py-3 text-left">{metric.lastYear}</td>
+                          <td className="px-2 py-3 text-left">{metric.yoyGrowth}</td>
+                          <td className="px-2 py-3">
+                            <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
+                              {metric.provider}
+                            </span>
+                          </td>
+                          <td className="px-2 py-3">
+                            <span className="text-slate-800">
+                              {metric.reviewer} {metric.reviewerWeight}
+                            </span>
+                          </td>
+                          <td className="px-2 py-3 whitespace-pre-wrap break-words text-slate-600">
+                            {metric.formula || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const PerformanceProcessMonitoringPage = ({
   activities = [],
   planChangeSubjectsByActivityId = {},
@@ -7044,6 +7462,7 @@ const PerformanceProcessMonitoringPage = ({
   const [monitoringViewTab, setMonitoringViewTab] = useState<'组织绩效考核流程监控' | '组织绩效计划变更监控'>('组织绩效考核流程监控');
   const [isInterventionModalOpen, setIsInterventionModalOpen] = useState(false);
   const [isApprovalChainModalOpen, setIsApprovalChainModalOpen] = useState(false);
+  const [isFormDrawerOpen, setIsFormDrawerOpen] = useState(false);
   const [isSendMessageDrawerOpen, setIsSendMessageDrawerOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<any>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -7302,6 +7721,11 @@ const PerformanceProcessMonitoringPage = ({
   const handleApprovalChain = (row: any) => {
     setSelectedRow(row);
     setIsApprovalChainModalOpen(true);
+  };
+
+  const handleViewForm = (row: any) => {
+    setSelectedRow(row);
+    setIsFormDrawerOpen(true);
   };
 
   const phaseNodeConfigs: Record<string, any> = {
@@ -8124,7 +8548,13 @@ const PerformanceProcessMonitoringPage = ({
                       >
                         审批链
                       </button>
-                      <button className="text-[#2f54eb] hover:underline whitespace-nowrap">查看表单</button>
+                      <button
+                        type="button"
+                        onClick={() => handleViewForm(row)}
+                        className="text-[#2f54eb] hover:underline whitespace-nowrap"
+                      >
+                        查看表单
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -8501,7 +8931,11 @@ const PerformanceProcessMonitoringPage = ({
                             >
                               审批链
                             </button>
-                            <button type="button" className="text-[#2f54eb] hover:underline whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => handleViewForm(row)}
+                              className="text-[#2f54eb] hover:underline whitespace-nowrap"
+                            >
                               查看表单
                             </button>
                           </div>
@@ -8575,6 +9009,23 @@ const PerformanceProcessMonitoringPage = ({
             isOpen={isApprovalChainModalOpen} 
             onClose={() => setIsApprovalChainModalOpen(false)} 
             data={selectedRow}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isFormDrawerOpen && selectedRow && (
+          <MonitoringAssessmentFormDrawer
+            isOpen={isFormDrawerOpen}
+            onClose={() => setIsFormDrawerOpen(false)}
+            row={selectedRow}
+            activityName={selectedActivity?.name || '—'}
+            phaseName={
+              monitoringViewTab === '组织绩效计划变更监控'
+                ? '组织绩效计划变更'
+                : selectedPhase || '组织绩效计划制定'
+            }
+            roundName={activeRound?.name}
           />
         )}
       </AnimatePresence>
