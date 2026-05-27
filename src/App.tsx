@@ -3505,7 +3505,21 @@ const OrgAssessmentModal = ({
   };
 
   const [assessmentData, setAssessmentData] = useState([
-    { id: 'D001', code: 'D001', path: '集团总部/信息化中心', level: '一级部门', orgType: '能力中心', leader: '刘信息 (M1001)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '能力中心负责人', approver: '孙七 (50001)', status: '未开始', isTimeout: false },
+    {
+      id: 'D001',
+      code: 'D001',
+      path: '集团总部/信息化中心',
+      level: '一级部门',
+      orgType: '能力中心',
+      leader: '刘信息 (M1001)',
+      exec: '赵执委 (E1001)',
+      hrbp: '李HR (H1001)',
+      node: '数据提供人',
+      approver: '王五(003)、李红(004)',
+      status: '进行中',
+      isTimeout: false,
+      interventionPendingNode: '数据提供人',
+    },
     { id: 'D002', code: 'D002', path: '集团总部/人力行政中心', level: '一级部门', orgType: '职能部门', leader: '张人力 (M1002)', exec: '赵执委 (E1001)', hrbp: '李HR (H1001)', node: '相关方', approver: '吴九 (20002)', status: '进行中', isTimeout: true },
     { id: 'D003', code: 'D003', path: '集团总部/财务管理中心', level: '一级部门', orgType: '经营单元', leader: '陈效能 (M1003)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '-', approver: '-', status: '未开始', isTimeout: false },
     { id: 'D004', code: 'D004', path: '集团总部/战略发展部', level: '一级部门', orgType: '职能部门', leader: '卫系统 (M1004)', exec: '赵执委 (E1001)', hrbp: '王HR (H1002)', node: '主BP', approver: '朱九 (20004)', status: '已完成', isTimeout: false },
@@ -5662,7 +5676,10 @@ const OrgAssessmentModal = ({
                             {item.status === '进行中' ? (
                               <div className="flex items-center justify-start gap-3 translate-x-0">
                                 <button 
-                                  onClick={() => { setSelectedRow(item); setIsInterventionModalOpen(true); }}
+                                  onClick={() => {
+                                    setSelectedRow(withProcessInterventionPendingContext(item));
+                                    setIsInterventionModalOpen(true);
+                                  }}
                                   className="text-[#2f54eb] hover:text-blue-700 transition-colors cursor-pointer text-xs font-medium"
                                 >
                                   流程干预
@@ -6109,13 +6126,21 @@ const IndicatorDimensionDrawer = ({
   );
 };
 
+type ProcessInterventionHandlerApprovalStatus = 'approved' | 'pending';
+
 /** 流程干预 · 更换办理人：节点与当前办理人（演示数据） */
-const PROCESS_INTERVENTION_HANDLER_ROWS: { nodeName: string; handler: string }[] = [
-  { nodeName: '员工发起', handler: '张三(001)' },
-  { nodeName: '直接上级审批', handler: '李四(002)' },
-  { nodeName: '部门负责人审批', handler: '王五(003)' },
-  { nodeName: '部门负责人审批', handler: '李红(004)' },
-  { nodeName: 'HR备案审批', handler: '刘猛(005)' },
+const PROCESS_INTERVENTION_HANDLER_ROWS: {
+  nodeName: string;
+  handler: string;
+  /** 当前待办节点下多名办理人时的个人审批状态 */
+  approvalStatus?: ProcessInterventionHandlerApprovalStatus;
+}[] = [
+  { nodeName: '主HRBP', handler: '张三(001)' },
+  { nodeName: '一级部门负责人', handler: '李四(002)' },
+  { nodeName: '数据提供人', handler: '王五(003)', approvalStatus: 'approved' },
+  { nodeName: '数据提供人', handler: '李红(004)', approvalStatus: 'pending' },
+  { nodeName: '能力中心负责人', handler: '' },
+  { nodeName: '分管执委/常委', handler: '' },
 ];
 
 type ProcessInterventionHandlerRow = (typeof PROCESS_INTERVENTION_HANDLER_ROWS)[number] & {
@@ -6145,6 +6170,156 @@ const PROCESS_INTERVENTION_HANDLER_TABLE_ROWS = buildProcessInterventionHandlerT
   PROCESS_INTERVENTION_HANDLER_ROWS
 );
 
+/** 流程干预 · 更换办理人：节点顺序（用于判断当前待办及是否可更换） */
+const PROCESS_INTERVENTION_NODE_SEQUENCE = [
+  '主HRBP',
+  '一级部门负责人',
+  '数据提供人',
+  '能力中心负责人',
+  '分管执委/常委',
+] as const;
+
+/** 流程刚启动且未到达时，不允许预更换办理人的节点 */
+const INTERVENTION_NODES_NO_CHANGE_WHEN_UPCOMING = new Set(['数据提供人']);
+
+const PROCESS_INTERVENTION_DEFAULT_PENDING_NODE: (typeof PROCESS_INTERVENTION_NODE_SEQUENCE)[number] =
+  '数据提供人';
+
+function resolveProcessInterventionPendingNode(data: any): (typeof PROCESS_INTERVENTION_NODE_SEQUENCE)[number] {
+  const explicit = data?.interventionPendingNode;
+  if (explicit && (PROCESS_INTERVENTION_NODE_SEQUENCE as readonly string[]).includes(explicit)) {
+    return explicit;
+  }
+  const current = data?.currentNode ?? data?.node;
+  if (current && (PROCESS_INTERVENTION_NODE_SEQUENCE as readonly string[]).includes(current)) {
+    return current as (typeof PROCESS_INTERVENTION_NODE_SEQUENCE)[number];
+  }
+  return PROCESS_INTERVENTION_DEFAULT_PENDING_NODE;
+}
+
+function withProcessInterventionPendingContext(row: any) {
+  if (!row) return row;
+  const pending =
+    row.interventionPendingNode &&
+    (PROCESS_INTERVENTION_NODE_SEQUENCE as readonly string[]).includes(row.interventionPendingNode)
+      ? row.interventionPendingNode
+      : PROCESS_INTERVENTION_DEFAULT_PENDING_NODE;
+  return {
+    ...row,
+    interventionPendingNode: pending,
+    currentNode: pending,
+  };
+}
+
+/** 流程干预标题下考核对象：取列表部门名称（去掉「集团总部/」前缀） */
+function getProcessInterventionAssessmentObjectName(data: any): string {
+  if (!data) return '—';
+  if (typeof data.path === 'string' && data.path.trim()) {
+    return data.path.replace(/^集团总部\//, '').trim() || data.path;
+  }
+  if (typeof data.dept === 'string' && data.dept.trim()) return data.dept.trim();
+  return data.code || data.id || '—';
+}
+
+function getInterventionNodeStepStatus(
+  nodeName: string,
+  pendingNodeName: string
+): 'completed' | 'current' | 'upcoming' {
+  const pendingIdx = PROCESS_INTERVENTION_NODE_SEQUENCE.indexOf(
+    pendingNodeName as (typeof PROCESS_INTERVENTION_NODE_SEQUENCE)[number]
+  );
+  const nodeIdx = PROCESS_INTERVENTION_NODE_SEQUENCE.indexOf(
+    nodeName as (typeof PROCESS_INTERVENTION_NODE_SEQUENCE)[number]
+  );
+  if (pendingIdx < 0 || nodeIdx < 0) return 'upcoming';
+  if (nodeIdx < pendingIdx) return 'completed';
+  if (nodeIdx === pendingIdx) return 'current';
+  return 'upcoming';
+}
+
+function groupProcessInterventionHandlersByNode() {
+  return PROCESS_INTERVENTION_NODE_SEQUENCE.map((nodeName) => ({
+    nodeName,
+    handlers: PROCESS_INTERVENTION_HANDLER_ROWS.filter((r) => r.nodeName === nodeName),
+  }));
+}
+
+function hasInterventionHandler(handler?: string): boolean {
+  const value = (handler ?? '').trim();
+  return (
+    value.length > 0 &&
+    value !== '-' &&
+    value !== '—' &&
+    value !== '--' &&
+    value !== '待配置' &&
+    value !== '未配置'
+  );
+}
+
+function formatInterventionHandlerDisplay(handler?: string): string {
+  return hasInterventionHandler(handler) ? (handler as string).trim() : '—';
+}
+
+function canChangeInterventionHandler(
+  stepStatus: 'completed' | 'current' | 'upcoming',
+  handlerRow: (typeof PROCESS_INTERVENTION_HANDLER_ROWS)[number]
+): boolean {
+  if (stepStatus === 'completed') return false;
+  if (!hasInterventionHandler(handlerRow.handler)) return false;
+  if (handlerRow.approvalStatus === 'approved') return false;
+  if (
+    stepStatus === 'upcoming' &&
+    INTERVENTION_NODES_NO_CHANGE_WHEN_UPCOMING.has(handlerRow.nodeName)
+  ) {
+    return false;
+  }
+  if (stepStatus === 'upcoming') return true;
+  return true;
+}
+
+function renderInterventionHandlerApprovalBadge(
+  stepStatus: 'completed' | 'current' | 'upcoming',
+  handlerRow: (typeof PROCESS_INTERVENTION_HANDLER_ROWS)[number]
+) {
+  if (stepStatus !== 'current') {
+    return <span className="text-gray-300">—</span>;
+  }
+  if (handlerRow.approvalStatus === 'approved') {
+    return (
+      <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-100">
+        已通过
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-700 border border-orange-100">
+      待处理
+    </span>
+  );
+}
+
+function renderInterventionNodeStatusBadge(status: 'completed' | 'current' | 'upcoming') {
+  if (status === 'current') {
+    return (
+      <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#2f54eb] text-white">
+        当前待办
+      </span>
+    );
+  }
+  if (status === 'completed') {
+    return (
+      <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">
+        已完成
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-500">
+      未到达
+    </span>
+  );
+}
+
 /** 流程干预 · 流程退回：按节点序号选择退回目标 */
 const PROCESS_INTERVENTION_RETURN_NODES: { order: number; label: string }[] = [
   { order: 10, label: '数据提交人、主HRBP两个节点' },
@@ -6153,38 +6328,122 @@ const PROCESS_INTERVENTION_RETURN_NODES: { order: number; label: string }[] = [
 
 const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
   const [activeTab, setActiveTab] = useState('更换办理人');
+  const [selectedReturnOrder, setSelectedReturnOrder] = useState<number | null>(null);
+  const [returnNodeError, setReturnNodeError] = useState('');
   const tabs = ['更换办理人', '流程退回'];
 
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab('更换办理人');
+      setSelectedReturnOrder(null);
+      setReturnNodeError('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (activeTab === '流程退回') {
+      setSelectedReturnOrder(null);
+      setReturnNodeError('');
+    }
+  }, [activeTab]);
+
+  const handleConfirm = () => {
+    if (activeTab === '流程退回' && selectedReturnOrder === null) {
+      setReturnNodeError('请选择退回节点');
+      return;
+    }
+    onClose();
+  };
+
+  const handleInterventionTabChange = (tab: string) => {
+    setActiveTab(tab);
+  };
+
+  const pendingNodeName = useMemo(
+    () => resolveProcessInterventionPendingNode(data),
+    [data?.interventionPendingNode, data?.currentNode, data?.id]
+  );
+
   const renderHandlerChangeTable = (actionColumnLabel: string) => (
-    <div className="p-6">
-      <table className="w-full border border-gray-100 rounded overflow-hidden">
-        <thead>
-          <tr className="bg-gray-50 text-[13px] text-gray-500 border-b border-gray-100">
-            <th className="py-2.5 px-4 font-medium text-left">节点名称</th>
-            <th className="py-2.5 px-4 font-medium text-left">当前办理人</th>
-            <th className="py-2.5 px-4 font-medium text-left">{actionColumnLabel}</th>
-          </tr>
-        </thead>
-        <tbody className="text-[13px]">
-          {PROCESS_INTERVENTION_HANDLER_TABLE_ROWS.map((row, idx) => (
-            <tr
-              key={`${row.nodeName}-${row.handler}-${idx}`}
-              className={idx < PROCESS_INTERVENTION_HANDLER_TABLE_ROWS.length - 1 ? 'border-b border-gray-50' : ''}
-            >
-              {row.isFirstOfNode && (
-                <td
-                  rowSpan={row.nodeRowSpan}
-                  className="py-3 px-4 text-gray-900 align-middle bg-white border-r border-gray-50"
-                >
-                  {row.nodeName}
-                </td>
-              )}
-              <td className="py-3 px-4 text-gray-600">{row.handler}</td>
-              <td className="py-3 px-4 text-[#2f54eb] cursor-pointer hover:underline">+ 选择人员</td>
+    <div className="p-6 space-y-4">
+      <div className="flex flex-wrap items-center gap-2 text-[12px] text-gray-600 bg-blue-50/60 border border-blue-100 rounded-lg px-3 py-2">
+        <span className="text-gray-500">当前待办节点</span>
+        <span className="font-semibold text-[#2f54eb]">{pendingNodeName}</span>
+        <span className="text-gray-400">· 已完成节点、已通过办理人不可更换</span>
+      </div>
+      <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+        <table className="w-full border-collapse text-[13px]">
+          <thead>
+            <tr className="bg-[#fafafa] text-gray-500 border-b border-gray-200">
+              <th className="py-3 px-4 font-medium text-left w-[26%] border-r border-gray-100">
+                节点名称
+              </th>
+              <th className="py-3 px-4 font-medium text-left w-[24%] border-r border-gray-100">
+                当前办理人
+              </th>
+              <th className="py-3 px-4 font-medium text-left w-[18%] border-r border-gray-100">
+                审批状态
+              </th>
+              <th className="py-3 px-4 font-medium text-left w-[32%]">{actionColumnLabel}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {groupProcessInterventionHandlersByNode().map((nodeGroup) => {
+              const stepStatus = getInterventionNodeStepStatus(nodeGroup.nodeName, pendingNodeName);
+              const isCurrentStep = stepStatus === 'current';
+              const rowSpan = nodeGroup.handlers.length;
+
+              return nodeGroup.handlers.map((handlerRow, handlerIdx) => {
+                const canChange = canChangeInterventionHandler(stepStatus, handlerRow);
+                return (
+                  <tr
+                    key={`${nodeGroup.nodeName}-${handlerRow.handler}-${handlerIdx}`}
+                    className={`border-b border-gray-100 last:border-b-0 ${
+                      isCurrentStep ? 'bg-blue-50/35' : 'bg-white'
+                    }`}
+                  >
+                    {handlerIdx === 0 && (
+                      <td
+                        rowSpan={rowSpan}
+                        className={`py-3 px-4 align-top border-r border-gray-100 ${
+                          isCurrentStep ? 'bg-blue-50/50' : 'bg-white'
+                        }`}
+                      >
+                        <div className="flex flex-col gap-1.5">
+                          <span className="font-medium text-gray-900">{nodeGroup.nodeName}</span>
+                          {renderInterventionNodeStatusBadge(stepStatus)}
+                        </div>
+                      </td>
+                    )}
+                    <td
+                      className={`py-3 px-4 border-r border-gray-100 ${
+                        isCurrentStep ? 'text-gray-900' : 'text-gray-600'
+                      }`}
+                    >
+                      {formatInterventionHandlerDisplay(handlerRow.handler)}
+                    </td>
+                    <td className="py-3 px-4 border-r border-gray-100">
+                      {renderInterventionHandlerApprovalBadge(stepStatus, handlerRow)}
+                    </td>
+                    <td className="py-3 px-4">
+                      {canChange ? (
+                        <button
+                          type="button"
+                          className="text-[#2f54eb] hover:underline cursor-pointer font-medium"
+                        >
+                          + 选择人员
+                        </button>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              });
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
@@ -6264,23 +6523,32 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
         return (
           <div className="p-6 space-y-6">
             <div className="space-y-3">
-              <label className="text-[14px] font-bold text-gray-900">选择退回节点</label>
+              <label className="text-[14px] font-bold text-gray-900">
+                <span className="text-red-500 mr-1">*</span>
+                选择退回节点
+              </label>
               <div className="space-y-2">
-                {PROCESS_INTERVENTION_RETURN_NODES.map((node, idx) => (
+                {PROCESS_INTERVENTION_RETURN_NODES.map((node) => (
                   <label
                     key={`return-order-${node.order}`}
-                    className={`flex items-center gap-3 p-3 border rounded cursor-pointer ${
-                      idx === 0
+                    className={`flex items-center gap-3 p-3 border rounded cursor-pointer hover:bg-gray-50 ${
+                      selectedReturnOrder === node.order
                         ? 'border-blue-100 bg-blue-50/30'
-                        : 'border-gray-100 hover:bg-gray-50'
+                        : returnNodeError
+                          ? 'border-red-200'
+                          : 'border-gray-100'
                     }`}
                   >
                     <input
                       type="radio"
-                      name="returnNode"
+                      name="processInterventionReturnNode"
                       value={String(node.order)}
+                      checked={selectedReturnOrder === node.order}
+                      onChange={() => {
+                        setSelectedReturnOrder(node.order);
+                        setReturnNodeError('');
+                      }}
                       className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
-                      defaultChecked={idx === 0}
                     />
                     <span className="text-[13px] text-gray-700 leading-snug">
                       <span className="font-medium text-gray-900">序号 {node.order}</span>
@@ -6290,6 +6558,9 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
                   </label>
                 ))}
               </div>
+              {returnNodeError ? (
+                <p className="text-[12px] text-red-500">{returnNodeError}</p>
+              ) : null}
             </div>
           </div>
         );
@@ -6367,7 +6638,10 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div className="space-y-0.5">
             <h2 className="text-[18px] font-bold text-gray-900">流程干预</h2>
-            <p className="text-[12px] text-gray-400">针对: {data?.path || '员工1'}</p>
+            <p className="text-[12px] text-gray-400">
+              考核对象：
+              <span className="text-gray-600">{getProcessInterventionAssessmentObjectName(data)}</span>
+            </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <X size={20} className="text-gray-400" />
@@ -6379,7 +6653,8 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
           {tabs.map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              type="button"
+              onClick={() => handleInterventionTabChange(tab)}
               className={`px-4 py-3 text-[14px] font-medium transition-all relative ${
                 activeTab === tab ? 'text-[#2f54eb]' : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -6408,8 +6683,9 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
           >
             取消
           </button>
-          <button 
-            onClick={onClose}
+          <button
+            type="button"
+            onClick={handleConfirm}
             className="px-8 py-2 bg-[#2f54eb] text-white rounded text-[14px] font-medium shadow-lg shadow-blue-200 hover:bg-blue-600 transition-all active:scale-95"
           >
             确认
@@ -7714,7 +7990,7 @@ const PerformanceProcessMonitoringPage = ({
   };
 
   const handleIntervention = (row: any) => {
-    setSelectedRow(row);
+    setSelectedRow(withProcessInterventionPendingContext(row));
     setIsInterventionModalOpen(true);
   };
 
@@ -7745,7 +8021,18 @@ const PerformanceProcessMonitoringPage = ({
   };
 
   const baseTableData = [
-    { id: 'D001', path: '集团总部/信息化中心', level: '一级部门', leader: '刘信息 (M1001)', hrbp: '李HR (H1001)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '能力中心', status: '进行中' },
+    {
+      id: 'D001',
+      path: '集团总部/信息化中心',
+      level: '一级部门',
+      leader: '刘信息 (M1001)',
+      hrbp: '李HR (H1001)',
+      exec: '赵执委 (E1001)',
+      standing: '钱常委 (S1001)',
+      orgType: '能力中心',
+      status: '进行中',
+      interventionPendingNode: '数据提供人',
+    },
     { id: 'D002', path: '集团总部/人力行政中心', level: '一级部门', leader: '张研发 (M1002)', hrbp: '李HR (H1001)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '职能部门', status: '滞留/超时' },
     { id: 'D003', path: '集团总部/财务管理中心', level: '一级部门', leader: '陈效能 (M1003)', hrbp: '王HR (H1002)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '职能部门', status: '未开始' },
     { id: 'D004', path: '集团总部/战略发展部', level: '一级部门', leader: '卫系统 (M1004)', hrbp: '王HR (H1002)', exec: '赵执委 (E1001)', standing: '钱常委 (S1001)', orgType: '职能部门', status: '已完成' },
@@ -7765,6 +8052,23 @@ const PerformanceProcessMonitoringPage = ({
         }
         if (row.status === '已完成') {
           return { ...row, currentNode: '已归档', currentApprover: '-' };
+        }
+
+        if (row.interventionPendingNode) {
+          const pending = row.interventionPendingNode;
+          const approver =
+            pending === '数据提供人'
+              ? '王五(003)、李红(004)'
+              : pending === '一级部门负责人'
+                ? '李四(002)'
+                : pending === '主HRBP'
+                  ? row.hrbp || '张三(001)'
+                  : pending === '能力中心负责人'
+                      ? '-'
+                      : pending === '分管执委/常委'
+                        ? '-'
+                        : row.leader;
+          return { ...row, currentNode: pending, currentApprover: approver };
         }
 
         const configs = phaseNodeConfigs[selectedPhase] || [];
