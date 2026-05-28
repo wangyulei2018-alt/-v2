@@ -9638,7 +9638,7 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
     receivers: ['当前审批人'],
     methods: ['企微消息'],
     methodTemplates: {
-      '企微消息': ''
+      '企微消息': 'default',
     },
     title: '',
     content: ''
@@ -9662,66 +9662,6 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
       title: '【紧急任务】请尽快处理您的组织绩效考核待办',
       content: '紧急通知：您在 {@考核周期} 中的考核任务即将关闭。请务必在 {@阶段窗口期结束日期} 之前登录系统完成。'
     },
-    '': {
-      title: '（未选择模板）',
-      content: '请在上方选择消息模板以预览具体内容'
-    }
-  };
-
-  const toggleMethod = (method: string) => {
-    setFormData(prev => {
-      const isRemoving = prev.methods.includes(method);
-      const newMethods = isRemoving 
-        ? prev.methods.filter(m => m !== method) 
-        : [...prev.methods, method];
-      
-      // Keep at least one method
-      if (newMethods.length === 0) return prev;
-
-      // Update active tab if removing active one
-      if (isRemoving && activeMethodTab === method) {
-        setActiveMethodTab(newMethods[0]);
-      } else if (!isRemoving && prev.methods.length === 0) {
-        setActiveMethodTab(method);
-      }
-
-      return {
-        ...prev,
-        methods: newMethods,
-        methodTemplates: {
-          ...prev.methodTemplates,
-          [method]: isRemoving ? '' : prev.methodTemplates[method]
-        }
-      };
-    });
-  };
-
-  const updateMethodTemplate = (method: string, template: string) => {
-    setFormData(prev => ({
-      ...prev,
-      methodTemplates: {
-        ...prev.methodTemplates,
-        [method]: template
-      }
-    }));
-  };
-
-  const templateOptions = [
-    { value: 'default', label: '默认催办模板' },
-    { value: 'timeout', label: '超时提醒模板' },
-    { value: 'mail_urgent', label: '紧急通知模板' }
-  ];
-
-  const [searchTerms, setSearchTerms] = useState<{ [key: string]: string }>({
-    '企微消息': ''
-  });
-
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-
-  const getFilteredOptions = (methodId: string) => {
-    const term = searchTerms[methodId].toLowerCase();
-    const options = templateOptions.filter(o => o.value !== 'mail_urgent');
-    return options.filter(o => o.label.toLowerCase().includes(term));
   };
 
   return (
@@ -9775,66 +9715,6 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
                   <div className="text-[12px] text-gray-500">将通过企业微信工作通知发送给相关人员</div>
                 </div>
               </div>
-
-              <div className="pt-2">
-                <div className="text-[13px] font-medium text-gray-700 mb-2">选择消息模板</div>
-                <div className="relative max-w-md">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenDropdown(openDropdown === '企微消息' ? null : '企微消息');
-                    }}
-                    className={`w-full h-10 px-3 flex items-center justify-between text-[13px] bg-white border rounded-lg shadow-sm hover:border-[#2f54eb] transition-all
-                      ${openDropdown === '企微消息' ? 'border-[#2f54eb] ring-2 ring-blue-50' : 'border-gray-200'}
-                      ${!formData.methodTemplates['企微消息'] ? 'text-gray-400 italic' : 'text-gray-700'}
-                    `}
-                  >
-                    <span className="truncate">
-                      {templateOptions.find(t => t.value === formData.methodTemplates['企微消息'])?.label || '点击选择消息通知模板...'}
-                    </span>
-                    <ChevronDown size={14} className={`transition-transform duration-200 ${openDropdown === '企微消息' ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  <AnimatePresence>
-                    {openDropdown === '企微消息' && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 4, scale: 1 }}
-                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                        className="absolute top-full left-0 right-0 bg-white border border-gray-100 shadow-xl rounded-xl overflow-hidden flex flex-col z-[100]"
-                      >
-                        <div className="p-2.5 border-b border-gray-50 flex items-center gap-2 bg-gray-50">
-                          <Search size={14} className="text-gray-400 shrink-0" />
-                          <input 
-                            autoFocus
-                            placeholder="搜索模板名称..."
-                            className="bg-transparent text-[12px] outline-none w-full py-1"
-                            value={searchTerms['企微消息']}
-                            onChange={(e) => setSearchTerms(p => ({ ...p, ['企微消息']: e.target.value }))}
-                          />
-                        </div>
-                        <div className="max-h-60 overflow-y-auto py-1">
-                          {getFilteredOptions('企微消息').map(tmpl => (
-                            <div
-                              key={tmpl.value}
-                              onClick={() => {
-                                updateMethodTemplate('企微消息', tmpl.value);
-                                setOpenDropdown(null);
-                              }}
-                              className={`px-4 py-2.5 text-[13px] cursor-pointer flex items-center justify-between transition-colors
-                                ${formData.methodTemplates['企微消息'] === tmpl.value ? 'bg-blue-50 text-[#2f54eb] font-medium' : 'text-gray-600 hover:bg-gray-50'}
-                              `}
-                            >
-                              <span>{tmpl.label}</span>
-                              {formData.methodTemplates['企微消息'] === tmpl.value && <FileCheck size={14} />}
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -9848,7 +9728,7 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
               </div>
               <div className="text-[12px] text-gray-400 bg-gray-50 px-3 py-1 rounded-full flex items-center gap-1.5 border border-gray-100">
                 <Info size={12} />
-                <span>下方内容仅用于内容预览，由所选模板生成，不可编辑</span>
+                <span>下方内容仅用于内容预览，由默认催办模板生成，不可编辑</span>
               </div>
             </div>
 
@@ -9890,7 +9770,7 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
                     消息详细内容 <span className="text-[11px] bg-blue-50 text-blue-400 px-1.5 py-0.5 rounded ml-2 font-normal">内容已根据参数自动填充</span>
                   </label>
                   <div className="px-4 py-4 bg-white border border-gray-100 rounded-lg text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap min-h-[120px] shadow-sm">
-                    {templateMockData[formData.methodTemplates[activeMethodTab] || ''].content}
+                    {templateMockData[formData.methodTemplates[activeMethodTab] || 'default'].content}
                   </div>
                 </div>
               </motion.div>
