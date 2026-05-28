@@ -2530,17 +2530,17 @@ const ActivityDrawer = ({
                     </div>
                   </div>
 
-                  {/* 绩效流程规则 */}
+                  {/* 组织绩效流程规则 */}
                   <div className="space-y-1.5">
                     <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
-                      <span className="text-red-500">*</span>绩效流程规则
+                      <span className="text-red-500">*</span>组织绩效流程规则
                     </label>
                     <div className="relative group">
                       <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
                           type="text"
-                          placeholder="搜索并选择已启用的绩效流程规则"
+                          placeholder="搜索并选择已启用的组织绩效流程规则"
                           value={searchTerms.process}
                           onChange={(e) => setSearchTerms(prev => ({ ...prev, process: e.target.value }))}
                           className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
