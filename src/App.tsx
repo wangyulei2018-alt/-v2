@@ -7635,12 +7635,6 @@ function readMonitoringAssessmentFormViewFromUrl(): MonitoringAssessmentFormView
   return readMonitoringAssessmentFormPayload(viewId);
 }
 
-const MONITORING_PLAN_FORM_PROCESS_STEPS = [
-  '组织绩效计划制定',
-  '组织绩效中期回顾',
-  '组织绩效考核',
-] as const;
-
 function MonitoringReadOnlyFieldCell({
   children,
   className = '',
@@ -7657,46 +7651,6 @@ function MonitoringReadOnlyFieldCell({
       } ${className}`}
     >
       {children}
-    </div>
-  );
-}
-
-function MonitoringPlanFormProcessStageBar({ activeStep }: { activeStep: number }) {
-  return (
-    <div className="h-12 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
-      <div className="max-w-[1400px] mx-auto w-full flex items-center justify-center h-full">
-        <div className="flex items-center bg-slate-50/80 p-1 rounded-xl border border-slate-100 shadow-inner pointer-events-none">
-          {MONITORING_PLAN_FORM_PROCESS_STEPS.map((step, i) => (
-            <React.Fragment key={step}>
-              <div
-                className={`flex items-center gap-2.5 px-4 py-1.5 rounded-lg ${
-                  i === activeStep
-                    ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
-                    : i < activeStep
-                      ? 'text-blue-500'
-                      : 'text-slate-400'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                    i === activeStep
-                      ? 'bg-blue-600 text-white'
-                      : i < activeStep
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'bg-slate-200 text-slate-500'
-                  }`}
-                >
-                  {i + 1}
-                </div>
-                <span className="text-[12px] font-bold whitespace-nowrap tracking-wide">{step}</span>
-              </div>
-              {i < MONITORING_PLAN_FORM_PROCESS_STEPS.length - 1 && (
-                <div className="w-10 h-px bg-slate-200/60 mx-1" />
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -7818,11 +7772,8 @@ function MonitoringPlanFormReadOnlyContent({
   sections: MonitoringFormDetailSection[];
   phaseName: string;
 }) {
-  const activeStep = phaseName === '组织绩效计划制定' ? 0 : phaseName === MONITORING_PHASE_MID_TERM ? 1 : 2;
-
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-[#f8fafc]">
-      <MonitoringPlanFormProcessStageBar activeStep={activeStep} />
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-[1400px] mx-auto space-y-1 pb-6">
           {sections.map((section) => (
@@ -7952,11 +7903,11 @@ function MonitoringAssessmentFormStandalonePage({
   activityName,
   phaseName,
 }: MonitoringAssessmentFormViewPayload) {
-  const orgLabel = String(row.path || row.departmentPath || '—');
+  const deptName = getProcessInterventionAssessmentObjectName(row);
 
   useEffect(() => {
-    document.title = `查看表单 - ${orgLabel}`;
-  }, [orgLabel]);
+    document.title = `查看表单 - ${deptName}`;
+  }, [deptName]);
 
   return (
     <div className="h-screen flex flex-col bg-[#f5f6f8] font-sans text-gray-800 overflow-hidden">
