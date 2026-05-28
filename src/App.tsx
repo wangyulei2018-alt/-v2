@@ -2491,14 +2491,14 @@ const ActivityDrawer = ({
                   {/* 考核维度 */}
                   <div className="space-y-1.5">
                     <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
-                      <span className="text-red-500">*</span>考核指标维度方案
+                      <span className="text-red-500">*</span>考核指标维度规则
                     </label>
                     <div className="relative group">
                       <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
                           type="text"
-                          placeholder="搜索并选择考核指标维度方案"
+                          placeholder="搜索并选择考核指标维度规则"
                           value={searchTerms.dept}
                           onChange={(e) => setSearchTerms(prev => ({ ...prev, dept: e.target.value }))}
                           className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
@@ -2530,17 +2530,17 @@ const ActivityDrawer = ({
                     </div>
                   </div>
 
-                  {/* 绩效流程方案 */}
+                  {/* 绩效流程规则 */}
                   <div className="space-y-1.5">
                     <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
-                      <span className="text-red-500">*</span>绩效流程方案
+                      <span className="text-red-500">*</span>绩效流程规则
                     </label>
                     <div className="relative group">
                       <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
                           type="text"
-                          placeholder="搜索并选择已启用的绩效流程方案"
+                          placeholder="搜索并选择已启用的绩效流程规则"
                           value={searchTerms.process}
                           onChange={(e) => setSearchTerms(prev => ({ ...prev, process: e.target.value }))}
                           className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
@@ -2565,7 +2565,7 @@ const ActivityDrawer = ({
                             </div>
                           ))}
                         {enabledProcessConfigs.filter(c => c.name.toLowerCase().includes(searchTerms.process.toLowerCase())).length === 0 && (
-                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用方案</div>
+                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用规则</div>
                         )}
                       </div>
                     </div>
@@ -2574,14 +2574,14 @@ const ActivityDrawer = ({
                   {/* 等级分数区间 */}
                   <div className="space-y-1.5">
                     <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
-                      <span className="text-red-500">*</span>等级分数区间方案
+                      <span className="text-red-500">*</span>等级分数区间规则
                     </label>
                     <div className="relative group">
                       <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
                           type="text"
-                          placeholder="搜索并选择等级分数区间方案"
+                          placeholder="搜索并选择等级分数区间规则"
                           value={searchTerms.level}
                           onChange={(e) => setSearchTerms(prev => ({ ...prev, level: e.target.value }))}
                           className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
@@ -2606,7 +2606,7 @@ const ActivityDrawer = ({
                             </div>
                           ))}
                         {enabledLevelConfigs.filter(c => c.name.toLowerCase().includes(searchTerms.level.toLowerCase())).length === 0 && (
-                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用方案</div>
+                          <div className="px-4 py-8 text-center text-gray-400 text-[12px] italic">未查找到匹配的已启用规则</div>
                         )}
                       </div>
                     </div>
@@ -2615,14 +2615,14 @@ const ActivityDrawer = ({
                   {/* 通知规则 */}
                   <div className="space-y-1.5">
                     <label className="text-[13px] text-gray-600 font-medium flex items-center gap-1">
-                      <span className="text-red-500">*</span>通知规则方案
+                      <span className="text-red-500">*</span>通知规则
                     </label>
                     <div className="relative group">
                       <div className="relative">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input 
                           type="text"
-                          placeholder="搜索并选择通知规则方案"
+                          placeholder="搜索并选择通知规则"
                           value={searchTerms.notify}
                           onChange={(e) => setSearchTerms(prev => ({ ...prev, notify: e.target.value }))}
                           className="w-full border border-gray-200 rounded pl-9 pr-10 py-2 text-[14px] outline-none focus:border-[#2f54eb] transition-all bg-white"
@@ -9714,7 +9714,7 @@ const NOTIFICATION_PHASE_DEFAULT_TEMPLATE: Record<(typeof NOTIFICATION_DRAWER_PH
   组织绩效计划变更: '绩效方案启动通知',
 };
 
-// --- 通知规则方案抽屉组件 ---
+// --- 通知规则抽屉组件 ---
 const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
   const [activePhase, setActivePhase] = useState('组织绩效计划制定');
   const [openRecipientDropdownId, setOpenRecipientDropdownId] = useState<string | null>(null);
