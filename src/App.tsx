@@ -56,7 +56,8 @@ import {
   MessageSquare,
   MessageCircle,
   Mail,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ChevronUp
 } from 'lucide-react';
 
 // --- Types ---
@@ -7564,13 +7565,412 @@ function getMonitoringFormEmptyHint(phaseName: string, activityYear?: string): s
   return `被考核人未参与 ${year} 年组织绩效计划制定目标填报`;
 }
 
+const MONITORING_ASSESSMENT_FORM_VIEW = 'monitoring-assessment-form';
+/** 使用 localStorage：sessionStorage 不跨浏览器页签共享，新页签无法读取 */
+const MONITORING_ASSESSMENT_FORM_STORAGE_PREFIX = 'hr-monitoring-form:';
+const MONITORING_ASSESSMENT_FORM_STORAGE_TTL_MS = 30 * 60 * 1000;
+
+type MonitoringAssessmentFormViewPayload = {
+  row: Record<string, unknown>;
+  activityName: string;
+  phaseName: string;
+  roundName?: string;
+};
+
+type MonitoringAssessmentFormStoredRecord = {
+  payload: MonitoringAssessmentFormViewPayload;
+  expiresAt: number;
+};
+
+function getMonitoringAssessmentFormStorageKey(viewId: string) {
+  return `${MONITORING_ASSESSMENT_FORM_STORAGE_PREFIX}${viewId}`;
+}
+
+function writeMonitoringAssessmentFormPayload(viewId: string, payload: MonitoringAssessmentFormViewPayload) {
+  const record: MonitoringAssessmentFormStoredRecord = {
+    payload,
+    expiresAt: Date.now() + MONITORING_ASSESSMENT_FORM_STORAGE_TTL_MS,
+  };
+  localStorage.setItem(getMonitoringAssessmentFormStorageKey(viewId), JSON.stringify(record));
+}
+
+function readMonitoringAssessmentFormPayload(viewId: string): MonitoringAssessmentFormViewPayload | null {
+  const key = getMonitoringAssessmentFormStorageKey(viewId);
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const record = JSON.parse(raw) as MonitoringAssessmentFormStoredRecord;
+    if (!record?.payload || typeof record.expiresAt !== 'number') return null;
+    if (Date.now() > record.expiresAt) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return record.payload;
+  } catch {
+    localStorage.removeItem(key);
+    return null;
+  }
+}
+
+function openMonitoringAssessmentFormInNewTab(payload: MonitoringAssessmentFormViewPayload): boolean {
+  const viewId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  try {
+    writeMonitoringAssessmentFormPayload(viewId, payload);
+  } catch {
+    return false;
+  }
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('view', MONITORING_ASSESSMENT_FORM_VIEW);
+  url.searchParams.set('id', viewId);
+  window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  return true;
+}
+
+function readMonitoringAssessmentFormViewFromUrl(): MonitoringAssessmentFormViewPayload | null {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('view') !== MONITORING_ASSESSMENT_FORM_VIEW) return null;
+  const viewId = params.get('id');
+  if (!viewId) return null;
+  return readMonitoringAssessmentFormPayload(viewId);
+}
+
+const MONITORING_PLAN_FORM_PROCESS_STEPS = [
+  '组织绩效计划制定',
+  '组织绩效中期回顾',
+  '组织绩效考核',
+] as const;
+
+function MonitoringReadOnlyFieldCell({
+  children,
+  className = '',
+  align = 'left',
+}: {
+  children: React.ReactNode;
+  className?: string;
+  align?: 'left' | 'center';
+}) {
+  return (
+    <div
+      className={`w-full min-h-[70px] h-[70px] border border-slate-200 rounded p-1.5 text-[11px] bg-slate-50 text-slate-700 overflow-auto whitespace-pre-wrap break-words ${
+        align === 'center' ? 'text-center flex items-center justify-center' : ''
+      } ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function MonitoringPlanFormProcessStageBar({ activeStep }: { activeStep: number }) {
+  return (
+    <div className="h-12 bg-white border-b border-slate-200 flex items-center px-6 flex-shrink-0">
+      <div className="max-w-[1400px] mx-auto w-full flex items-center justify-center h-full">
+        <div className="flex items-center bg-slate-50/80 p-1 rounded-xl border border-slate-100 shadow-inner pointer-events-none">
+          {MONITORING_PLAN_FORM_PROCESS_STEPS.map((step, i) => (
+            <React.Fragment key={step}>
+              <div
+                className={`flex items-center gap-2.5 px-4 py-1.5 rounded-lg ${
+                  i === activeStep
+                    ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
+                    : i < activeStep
+                      ? 'text-blue-500'
+                      : 'text-slate-400'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    i === activeStep
+                      ? 'bg-blue-600 text-white'
+                      : i < activeStep
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  {i + 1}
+                </div>
+                <span className="text-[12px] font-bold whitespace-nowrap tracking-wide">{step}</span>
+              </div>
+              {i < MONITORING_PLAN_FORM_PROCESS_STEPS.length - 1 && (
+                <div className="w-10 h-px bg-slate-200/60 mx-1" />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MonitoringPlanFormReadOnlySection({
+  section,
+  showRequiredTag,
+}: {
+  section: MonitoringFormDetailSection;
+  showRequiredTag: boolean;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-4">
+      <div className="h-16 px-6 border-b border-blue-100 bg-[#f0f6fc] flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-1 h-4 bg-blue-600 rounded-full shrink-0" />
+          <h2 className="text-[15px] font-bold text-slate-800">{section.title}</h2>
+          {showRequiredTag && section.required ? (
+            <span className="text-red-500 text-[12px] font-medium">（必选）</span>
+          ) : null}
+          <HelpCircle size={14} className="text-slate-400 shrink-0" />
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="p-1 text-slate-400 hover:text-slate-600"
+          aria-label={collapsed ? '展开' : '收起'}
+        >
+          <ChevronUp size={20} className={collapsed ? 'rotate-180 transition-transform' : 'transition-transform'} />
+        </button>
+      </div>
+      {!collapsed && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse table-fixed min-w-[1400px]">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider whitespace-nowrap">
+                <th className="px-1 py-3 font-medium w-12 text-center">序号</th>
+                <th className="px-1 py-3 font-medium w-[9%]">指标名称</th>
+                <th className="px-1 py-3 font-medium w-[5%]">指标权重</th>
+                <th className="px-1 py-3 font-medium w-[6%]">指标类型</th>
+                <th className="px-1 py-3 font-medium w-[10%]">零分目标</th>
+                <th className="px-1 py-3 font-medium w-[10%]">三分目标</th>
+                <th className="px-1 py-3 font-medium w-[10%]">五分目标</th>
+                <th className="px-1 py-3 font-medium w-[75px]">上年同期</th>
+                <th className="px-1 py-3 font-medium w-[95px]">同比增长率</th>
+                <th className="px-1 py-3 font-medium w-[6%]">数据提供人</th>
+                <th className="px-1 py-3 font-medium w-[7%]">考核人及权重</th>
+                <th className="px-1 py-3 font-medium w-[6%]">计算公式</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {section.metrics.map((metric, index) => (
+                <tr key={`${section.title}-${metric.name}-${index}`} className="align-top hover:bg-slate-50/50">
+                  <td className="px-1 py-3 text-center align-top">
+                    <div className="flex items-start justify-center h-[70px] pt-1.5">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-50 text-blue-600 font-medium text-[11px]">
+                        {index + 1}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell>{metric.name}</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell align="center">{metric.weight}%</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell align="center">{metric.type}</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell>{metric.zeroGoal}</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell>{metric.threeGoal}</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell>{metric.fiveGoal}</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell>{metric.lastYear}</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell>{metric.yoyGrowth}</MonitoringReadOnlyFieldCell>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <div className="min-h-[70px] h-[70px] flex flex-col justify-start pt-1.5">
+                      <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded text-[9px] inline-flex w-fit border border-blue-100">
+                        {metric.provider}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <div className="min-h-[70px] h-[70px] flex flex-col justify-start pt-1.5">
+                      <div className="flex items-center justify-between bg-slate-50 px-1 py-0.5 rounded border border-slate-100">
+                        <span className="text-[10px] font-bold text-slate-700 truncate">{metric.reviewer}</span>
+                        <span className="text-[9px] font-bold text-blue-600 shrink-0">{metric.reviewerWeight}%</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-1 py-3 align-top">
+                    <MonitoringReadOnlyFieldCell>{metric.formula || '—'}</MonitoringReadOnlyFieldCell>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonitoringPlanFormReadOnlyContent({
+  sections,
+  phaseName,
+}: {
+  sections: MonitoringFormDetailSection[];
+  phaseName: string;
+}) {
+  const activeStep = phaseName === '组织绩效计划制定' ? 0 : phaseName === MONITORING_PHASE_MID_TERM ? 1 : 2;
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 bg-[#f8fafc]">
+      <MonitoringPlanFormProcessStageBar activeStep={activeStep} />
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="max-w-[1400px] mx-auto space-y-1 pb-6">
+          {sections.map((section) => (
+            <MonitoringPlanFormReadOnlySection
+              key={section.title}
+              section={section}
+              showRequiredTag={phaseName === '组织绩效计划制定'}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MonitoringAssessmentFormBody({
+  row,
+  activityName,
+  phaseName,
+}: {
+  row: Record<string, unknown>;
+  activityName: string;
+  phaseName: string;
+}) {
+  const currentNode = (row?.currentNode as string) || '—';
+  const activityYear = activityName?.match(/\d{4}/)?.[0];
+  const sections = useMemo(
+    () => buildMonitoringFormSections(phaseName, currentNode, row),
+    [phaseName, currentNode, row]
+  );
+  const emptyHint = getMonitoringFormEmptyHint(phaseName, activityYear);
+
+  if (sections.every((section) => section.metrics.length === 0)) {
+    return (
+      <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center text-center min-h-0">
+        <div className="w-20 h-20 mb-4 rounded-full bg-gray-50 flex items-center justify-center">
+          <FileText size={32} className="text-gray-300" />
+        </div>
+        <p className="text-[13px] text-gray-500 max-w-md leading-relaxed">{emptyHint}</p>
+      </div>
+    );
+  }
+
+  if (phaseName === '组织绩效计划制定' || phaseName === MONITORING_PHASE_APPRAISAL) {
+    return (
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <MonitoringPlanFormReadOnlyContent sections={sections} phaseName={phaseName} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 w-full">
+      {sections.map((section) => (
+        <div
+          key={section.title}
+          className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
+        >
+          <div className="h-14 px-5 border-b border-blue-100 bg-[#f0f6fc] flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-1 h-4 bg-[#2f54eb] rounded-full shrink-0" />
+              <h3 className="text-[15px] font-bold text-slate-800">{section.title}</h3>
+              {section.required ? (
+                <span className="text-red-500 text-[12px] font-medium">（必选）</span>
+              ) : null}
+              <HelpCircle size={14} className="text-slate-400 shrink-0" />
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse table-fixed min-w-[1320px] text-[11px]">
+              <thead>
+                <tr className="bg-slate-50 text-slate-500 whitespace-nowrap">
+                  <th className="px-2 py-3 font-medium w-12 text-center">序号</th>
+                  <th className="px-2 py-3 font-medium w-[10%]">指标名称</th>
+                  <th className="px-2 py-3 font-medium w-[5%]">指标权重</th>
+                  <th className="px-2 py-3 font-medium w-[6%]">指标类型</th>
+                  <th className="px-2 py-3 font-medium w-[10%]">零分目标</th>
+                  <th className="px-2 py-3 font-medium w-[10%]">三分目标</th>
+                  <th className="px-2 py-3 font-medium w-[10%]">五分目标</th>
+                  <th className="px-2 py-3 font-medium w-[75px] text-left">上年同期</th>
+                  <th className="px-2 py-3 font-medium w-[85px] text-left">同比增长率</th>
+                  <th className="px-2 py-3 font-medium w-[7%]">数据提供人</th>
+                  <th className="px-2 py-3 font-medium w-[8%]">考核人及权重</th>
+                  <th className="px-2 py-3 font-medium w-[10%]">计算公式</th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-700">
+                {section.metrics.map((metric, idx) => (
+                  <tr key={`${section.title}-${metric.name}-${idx}`} className="border-t border-slate-100">
+                    <td className="px-2 py-3 text-center text-slate-600">{idx + 1}</td>
+                    <td className="px-2 py-3 text-slate-900 font-medium whitespace-pre-wrap break-words">
+                      {metric.name}
+                    </td>
+                    <td className="px-2 py-3 text-center">{metric.weight}</td>
+                    <td className="px-2 py-3 text-center">{metric.type}</td>
+                    <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.zeroGoal}</td>
+                    <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.threeGoal}</td>
+                    <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.fiveGoal}</td>
+                    <td className="px-2 py-3 text-left">{metric.lastYear}</td>
+                    <td className="px-2 py-3 text-left">{metric.yoyGrowth}</td>
+                    <td className="px-2 py-3">
+                      <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
+                        {metric.provider}
+                      </span>
+                    </td>
+                    <td className="px-2 py-3">
+                      <span className="text-slate-800">
+                        {metric.reviewer} {metric.reviewerWeight}
+                      </span>
+                    </td>
+                    <td className="px-2 py-3 whitespace-pre-wrap break-words text-slate-600">
+                      {metric.formula || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MonitoringAssessmentFormStandalonePage({
+  row,
+  activityName,
+  phaseName,
+}: MonitoringAssessmentFormViewPayload) {
+  const orgLabel = String(row.path || row.departmentPath || '—');
+
+  useEffect(() => {
+    document.title = `查看表单 - ${orgLabel}`;
+  }, [orgLabel]);
+
+  return (
+    <div className="h-screen flex flex-col bg-[#f5f6f8] font-sans text-gray-800 overflow-hidden">
+      <MonitoringAssessmentFormBody row={row} activityName={activityName} phaseName={phaseName} />
+    </div>
+  );
+}
+
 const MonitoringAssessmentFormDrawer = ({
   isOpen,
   onClose,
   row,
   activityName,
   phaseName,
-  roundName,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -7579,15 +7979,6 @@ const MonitoringAssessmentFormDrawer = ({
   phaseName: string;
   roundName?: string;
 }) => {
-  const objectName = row ? getMonitoringAssessmentObjectName(row) : '—';
-  const currentNode = row?.currentNode || '—';
-  const activityYear = activityName?.match(/\d{4}/)?.[0];
-  const sections = useMemo(
-    () => (row ? buildMonitoringFormSections(phaseName, currentNode, row) : []),
-    [phaseName, currentNode, row]
-  );
-  const emptyHint = getMonitoringFormEmptyHint(phaseName, activityYear);
-
   if (!isOpen || !row) return null;
 
   return (
@@ -7606,117 +7997,17 @@ const MonitoringAssessmentFormDrawer = ({
         transition={{ type: 'spring', damping: 28, stiffness: 220 }}
         className="relative bg-[#f5f6f8] w-full max-w-[min(96vw,1400px)] shadow-2xl flex flex-col h-full"
       >
-        <div className="flex items-start justify-between px-6 py-5 bg-white border-b border-gray-100 shrink-0">
-          <div className="min-w-0 pr-4">
-            <h2 className="text-[22px] font-bold text-gray-900 leading-tight truncate">{objectName}</h2>
-            <p className="text-[13px] text-gray-500 mt-1 truncate">
-              活动名称：<span className="text-gray-700">{activityName || '—'}</span>
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600 shrink-0"
-            aria-label="关闭"
-          >
-            <X size={20} />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-3 right-4 z-30 p-2 bg-white/90 hover:bg-white border border-slate-200 rounded-full shadow-sm text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="关闭"
+        >
+          <X size={20} />
+        </button>
 
-        <div className="px-6 py-3 bg-white border-b border-gray-100 shrink-0 flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="px-2.5 py-1 rounded bg-blue-50 text-[#2f54eb] border border-blue-100">
-            当前阶段：{phaseName || '—'}
-          </span>
-          {roundName ? (
-            <span className="px-2.5 py-1 rounded bg-gray-50 text-gray-600 border border-gray-100">
-              当前轮次：{roundName}
-            </span>
-          ) : null}
-          <span className="px-2.5 py-1 rounded bg-orange-50 text-orange-700 border border-orange-100">
-            待办节点：{currentNode}
-          </span>
-          {row.currentApprover && row.currentApprover !== '-' ? (
-            <span className="text-gray-500">办理人：{row.currentApprover}</span>
-          ) : null}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {sections.map((section) => (
-            <div
-              key={section.title}
-              className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
-            >
-              <div className="h-14 px-5 border-b border-blue-100 bg-[#f0f6fc] flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-1 h-4 bg-[#2f54eb] rounded-full shrink-0" />
-                  <h3 className="text-[15px] font-bold text-slate-800">{section.title}</h3>
-                  {section.required && phaseName === '组织绩效计划制定' ? (
-                    <span className="text-red-500 text-[12px] font-medium">（必选）</span>
-                  ) : null}
-                  <HelpCircle size={14} className="text-slate-400 shrink-0" />
-                </div>
-              </div>
-              {section.metrics.length === 0 ? (
-                <div className="py-14 px-6 flex flex-col items-center text-center">
-                  <div className="w-20 h-20 mb-4 rounded-full bg-gray-50 flex items-center justify-center">
-                    <FileText size={32} className="text-gray-300" />
-                  </div>
-                  <p className="text-[13px] text-gray-500 max-w-md leading-relaxed">{emptyHint}</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse table-fixed min-w-[1320px] text-[11px]">
-                    <thead>
-                      <tr className="bg-slate-50 text-slate-500 whitespace-nowrap">
-                        <th className="px-2 py-3 font-medium w-12 text-center">序号</th>
-                        <th className="px-2 py-3 font-medium w-[10%]">指标名称</th>
-                        <th className="px-2 py-3 font-medium w-[5%]">指标权重</th>
-                        <th className="px-2 py-3 font-medium w-[6%]">指标类型</th>
-                        <th className="px-2 py-3 font-medium w-[10%]">零分目标</th>
-                        <th className="px-2 py-3 font-medium w-[10%]">三分目标</th>
-                        <th className="px-2 py-3 font-medium w-[10%]">五分目标</th>
-                        <th className="px-2 py-3 font-medium w-[75px] text-left">上年同期</th>
-                        <th className="px-2 py-3 font-medium w-[85px] text-left">同比增长率</th>
-                        <th className="px-2 py-3 font-medium w-[7%]">数据提供人</th>
-                        <th className="px-2 py-3 font-medium w-[8%]">考核人及权重</th>
-                        <th className="px-2 py-3 font-medium w-[10%]">计算公式</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-slate-700">
-                      {section.metrics.map((metric, idx) => (
-                        <tr key={`${section.title}-${metric.name}-${idx}`} className="border-t border-slate-100">
-                          <td className="px-2 py-3 text-center text-slate-600">{idx + 1}</td>
-                          <td className="px-2 py-3 text-slate-900 font-medium whitespace-pre-wrap break-words">
-                            {metric.name}
-                          </td>
-                          <td className="px-2 py-3 text-center">{metric.weight}</td>
-                          <td className="px-2 py-3 text-center">{metric.type}</td>
-                          <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.zeroGoal}</td>
-                          <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.threeGoal}</td>
-                          <td className="px-2 py-3 whitespace-pre-wrap break-words">{metric.fiveGoal}</td>
-                          <td className="px-2 py-3 text-left">{metric.lastYear}</td>
-                          <td className="px-2 py-3 text-left">{metric.yoyGrowth}</td>
-                          <td className="px-2 py-3">
-                            <span className="inline-flex px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px]">
-                              {metric.provider}
-                            </span>
-                          </td>
-                          <td className="px-2 py-3">
-                            <span className="text-slate-800">
-                              {metric.reviewer} {metric.reviewerWeight}
-                            </span>
-                          </td>
-                          <td className="px-2 py-3 whitespace-pre-wrap break-words text-slate-600">
-                            {metric.formula || '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          ))}
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+          <MonitoringAssessmentFormBody row={row} activityName={activityName} phaseName={phaseName} />
         </div>
       </motion.div>
     </div>
@@ -8000,6 +8291,21 @@ const PerformanceProcessMonitoringPage = ({
   };
 
   const handleViewForm = (row: any) => {
+    if (monitoringViewTab === '组织绩效考核流程监控') {
+      const opened = openMonitoringAssessmentFormInNewTab({
+        row,
+        activityName: selectedActivity?.name || '—',
+        phaseName: selectedPhase || '组织绩效计划制定',
+        roundName: activeRound?.name !== '-' ? activeRound?.name : undefined,
+      });
+      if (!opened) {
+        setToast({
+          message: '无法打开新页签，请允许浏览器弹窗或稍后重试',
+          type: 'warning',
+        });
+      }
+      return;
+    }
     setSelectedRow(row);
     setIsFormDrawerOpen(true);
   };
@@ -9387,15 +9693,6 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
     content: ''
   });
 
-  const availableParams = ['员工姓名', '直接上级姓名', '员工部门', '考核周期', '阶段窗口期开始日期', '阶段窗口期结束日期', '节点窗口期开始日期', '节点窗口期结束日期'];
-
-  const insertParam = (param: string) => {
-    setFormData(prev => ({
-      ...prev,
-      content: prev.content + `@${param} `
-    }));
-  };
-
   const methodOptions = [
     { id: '企微消息', label: '发企微', icon: <MessageCircle size={18} /> }
   ];
@@ -9635,15 +9932,8 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.2 }}
-                className="space-y-6 p-6 bg-gray-50/50 rounded-xl border border-gray-100"
+                className="p-6 bg-gray-50/50 rounded-xl border border-gray-100"
               >
-                <div className="space-y-2">
-                  <label className="text-[13px] text-gray-400 font-medium ml-1">消息标题</label>
-                  <div className="px-4 py-3 bg-white border border-gray-100 rounded-lg text-[14px] text-gray-700 font-medium shadow-sm">
-                    {templateMockData[formData.methodTemplates[activeMethodTab] || ''].title || '（未配置标题）'}
-                  </div>
-                </div>
-
                 <div className="space-y-2">
                   <label className="text-[13px] text-gray-400 font-medium ml-1">
                     消息详细内容 <span className="text-[11px] bg-blue-50 text-blue-400 px-1.5 py-0.5 rounded ml-2 font-normal">内容已根据参数自动填充</span>
@@ -9651,18 +9941,6 @@ const SendMessageReminderDrawer = ({ isOpen, onClose, selectedCount }: any) => {
                   <div className="px-4 py-4 bg-white border border-gray-100 rounded-lg text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap min-h-[120px] shadow-sm">
                     {templateMockData[formData.methodTemplates[activeMethodTab] || ''].content}
                   </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <span className="text-[11px] text-gray-400 w-full mb-1 ml-1">关联参数标识：</span>
-                  {availableParams.filter(p => templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`@${p}`) || templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`{${p}}`)).map(p => (
-                    <span key={p} className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px] border border-gray-200/50">
-                      @{p}
-                    </span>
-                  ))}
-                  {availableParams.filter(p => templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`@${p}`) || templateMockData[formData.methodTemplates[activeMethodTab] || ''].content.includes(`{${p}}`)).length === 0 && (
-                    <span className="text-[11px] text-gray-300 italic ml-1">无关联参数</span>
-                  )}
                 </div>
               </motion.div>
             </AnimatePresence>
@@ -13663,7 +13941,7 @@ const PerformanceActivityPage = ({
   );
 };
 
-export default function App() {
+function App() {
   const [activities, setActivities] = useState([
     { 
       id: '1', 
@@ -14073,3 +14351,43 @@ export default function App() {
     </div>
   );
 }
+
+function MonitoringAssessmentFormViewEntry() {
+  const isFormView = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === MONITORING_ASSESSMENT_FORM_VIEW;
+  }, []);
+
+  const [payload, setPayload] = useState<MonitoringAssessmentFormViewPayload | null>(() =>
+    isFormView ? readMonitoringAssessmentFormViewFromUrl() : null
+  );
+
+  useEffect(() => {
+    if (!isFormView) return;
+    setPayload(readMonitoringAssessmentFormViewFromUrl());
+  }, [isFormView]);
+
+  if (!isFormView) {
+    return <App />;
+  }
+
+  if (payload) {
+    return <MonitoringAssessmentFormStandalonePage {...payload} />;
+  }
+
+  return (
+    <div className="h-screen flex flex-col items-center justify-center bg-[#f5f6f8] text-slate-600 gap-3 px-6 text-center">
+      <FileText size={40} className="text-slate-300" />
+      <p className="text-[14px]">表单数据已失效或不存在，请从流程监控列表重新打开。</p>
+      <button
+        type="button"
+        onClick={() => window.close()}
+        className="px-4 py-2 text-[13px] border border-slate-200 rounded bg-white hover:bg-slate-50"
+      >
+        关闭页签
+      </button>
+    </div>
+  );
+}
+
+export default MonitoringAssessmentFormViewEntry;
