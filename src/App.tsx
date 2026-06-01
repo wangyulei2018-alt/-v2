@@ -263,6 +263,411 @@ const LIST_OPTIONAL_FILTER_LABELS: Record<ListOptionalFilterKey, string> = {
   scopeStage: '适用组织阶段',
 };
 
+const INDICATOR_IMPORT_HISTORY_MOCK = [
+  { id: 'IMP2026040601', time: '2026-04-06 10:00:23', operator: 'HR管理员', count: 12, status: '成功' },
+  { id: 'IMP2026031502', time: '2026-03-15 09:15:44', operator: 'HR管理员', count: 8, status: '成功' },
+  { id: 'IMP2026022003', time: '2026-02-20 14:22:10', operator: '张三', count: 0, status: '失败' },
+];
+
+const IndicatorLibraryImportDrawer = ({
+  isOpen,
+  onClose,
+  onOpenHistory,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onOpenHistory: () => void;
+}) => {
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const maxFiles = 1;
+
+  useEffect(() => {
+    if (!isOpen) {
+      setImportFile(null);
+      setIsDragOver(false);
+    }
+  }, [isOpen]);
+
+  const handleFile = (file: File | null) => {
+    if (!file) return;
+    setImportFile(file);
+  };
+
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    handleFile(file);
+    e.target.value = '';
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0] ?? null;
+    handleFile(file);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[500] flex justify-end overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+        className="relative bg-white w-full max-w-[480px] shadow-2xl flex flex-col h-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h2 className="text-[17px] font-bold text-gray-900">导入</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded"
+            aria-label="关闭"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <p className="text-[13px] text-gray-500 mb-4">导入符合模板规范的数据文件</p>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={onFileInputChange}
+          />
+
+          <div
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setIsDragOver(false);
+            }}
+            onDrop={onDrop}
+            className={`border border-dashed rounded-lg py-10 px-6 flex flex-col items-center justify-center cursor-pointer transition-colors ${
+              isDragOver
+                ? 'border-[#2f54eb] bg-blue-50/30'
+                : 'border-gray-200 bg-gray-50/30 hover:border-gray-300 hover:bg-gray-50/50'
+            }`}
+          >
+            <div className="relative mb-3">
+              <FileText size={40} className="text-gray-300" strokeWidth={1.25} />
+              <div className="absolute -right-1 -bottom-1 w-5 h-5 rounded-full bg-teal-500 flex items-center justify-center text-white shadow-sm">
+                <Upload size={12} strokeWidth={2.5} />
+              </div>
+            </div>
+            <p className="text-[13px] text-gray-600 mb-1">拖拽或点击此处选择文件</p>
+            <p className="text-[12px] text-gray-400">
+              {importFile ? 1 : 0}/{maxFiles}
+            </p>
+            {importFile ? (
+              <p className="text-[12px] text-[#2f54eb] mt-2 max-w-full truncate px-2">{importFile.name}</p>
+            ) : null}
+          </div>
+
+          <div className="mt-5 flex items-center gap-2 text-[13px] text-gray-600">
+            <span>下载模板</span>
+            <button
+              type="button"
+              onClick={() => window.alert('模板下载功能演示')}
+              className="text-[#2f54eb] hover:underline inline-flex items-center gap-1"
+            >
+              下载模板
+              <Download size={14} />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            导入历史
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8] transition-colors shadow-sm"
+          >
+            关闭
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+type IndicatorExportColumnNode = {
+  id: string;
+  label: string;
+  children?: IndicatorExportColumnNode[];
+};
+
+const INDICATOR_EXPORT_COLUMN_TREE: IndicatorExportColumnNode[] = [
+  {
+    id: 'metric-export',
+    label: '指标导出',
+    children: [
+      { id: 'metric-library', label: '指标库' },
+      { id: 'metric', label: '指标' },
+    ],
+  },
+];
+
+function collectExportColumnIds(nodes: IndicatorExportColumnNode[]): string[] {
+  const ids: string[] = [];
+  const walk = (list: IndicatorExportColumnNode[]) => {
+    for (const node of list) {
+      ids.push(node.id);
+      if (node.children?.length) walk(node.children);
+    }
+  };
+  walk(nodes);
+  return ids;
+}
+
+const INDICATOR_EXPORT_DEFAULT_COLUMN_IDS = collectExportColumnIds(INDICATOR_EXPORT_COLUMN_TREE);
+
+const IndicatorLibraryExportDrawer = ({
+  isOpen,
+  onClose,
+  onConfirm,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => {
+  const [customFileName, setCustomFileName] = useState('');
+  const [exportFormat, setExportFormat] = useState('Excel 2007');
+  const [exportType, setExportType] = useState('头行分sheet导出');
+  const [maxRowsPerSheet, setMaxRowsPerSheet] = useState('1048575');
+  const [maxSheetsPerFile, setMaxSheetsPerFile] = useState('5');
+  const [checkedColumnIds, setCheckedColumnIds] = useState<string[]>(INDICATOR_EXPORT_DEFAULT_COLUMN_IDS);
+  const [expandedColumnIds, setExpandedColumnIds] = useState<string[]>(['metric-export']);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setCustomFileName('');
+    setExportFormat('Excel 2007');
+    setExportType('头行分sheet导出');
+    setMaxRowsPerSheet('1048575');
+    setMaxSheetsPerFile('5');
+    setCheckedColumnIds(INDICATOR_EXPORT_DEFAULT_COLUMN_IDS);
+    setExpandedColumnIds(['metric-export']);
+  }, [isOpen]);
+
+  const toggleColumnExpand = (id: string) => {
+    setExpandedColumnIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const setNodeChecked = (node: IndicatorExportColumnNode, checked: boolean) => {
+    const ids = [node.id, ...(node.children ? collectExportColumnIds(node.children) : [])];
+    setCheckedColumnIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => (checked ? next.add(id) : next.delete(id)));
+      return Array.from(next);
+    });
+  };
+
+  const renderColumnTree = (nodes: IndicatorExportColumnNode[], depth = 0) =>
+    nodes.map((node) => {
+      const hasChildren = Boolean(node.children?.length);
+      const isExpanded = expandedColumnIds.includes(node.id);
+      const isChecked = checkedColumnIds.includes(node.id);
+
+      return (
+        <div key={node.id}>
+          <div
+            className="flex items-center gap-1 py-1.5 hover:bg-gray-50/80 rounded"
+            style={{ paddingLeft: depth * 20 }}
+          >
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={() => toggleColumnExpand(node.id)}
+                className="p-0.5 text-gray-400 hover:text-gray-600 shrink-0"
+                aria-label={isExpanded ? '收起' : '展开'}
+              >
+                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+            ) : (
+              <span className="w-[18px] shrink-0" />
+            )}
+            <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+              <input
+                type="checkbox"
+                checked={isChecked}
+                onChange={(e) => setNodeChecked(node, e.target.checked)}
+                className="rounded border-gray-300 text-[#2f54eb] focus:ring-[#2f54eb]"
+              />
+              <span className="text-[13px] text-gray-800 truncate">{node.label}</span>
+            </label>
+          </div>
+          {hasChildren && isExpanded ? renderColumnTree(node.children!, depth + 1) : null}
+        </div>
+      );
+    });
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[500] flex justify-end overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+        className="relative bg-white w-full max-w-[560px] shadow-2xl flex flex-col h-full"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h2 className="text-[17px] font-bold text-gray-900">导出Excel</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-50 rounded"
+            aria-label="关闭"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+            <div className="space-y-1.5">
+              <label className="text-[13px] text-gray-700">自定义文件名</label>
+              <input
+                type="text"
+                value={customFileName}
+                onChange={(e) => setCustomFileName(e.target.value)}
+                className="w-full h-9 border border-gray-200 rounded px-3 text-[13px] outline-none focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[13px] text-gray-700">格式</label>
+              <select
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value)}
+                className="w-full h-9 border border-gray-200 rounded px-3 text-[13px] outline-none focus:border-[#2f54eb] bg-white"
+              >
+                <option>Excel 2007</option>
+                <option>Excel 2003</option>
+                <option>CSV</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[13px] text-gray-700">导出类型</label>
+              <select
+                value={exportType}
+                onChange={(e) => setExportType(e.target.value)}
+                className="w-full h-9 border border-gray-200 rounded px-3 text-[13px] outline-none focus:border-[#2f54eb] bg-white"
+              >
+                <option>头行分sheet导出</option>
+                <option>单sheet导出</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[13px] text-gray-700">异步</label>
+              <select
+                disabled
+                value="否"
+                className="w-full h-9 border border-gray-200 rounded px-3 text-[13px] bg-gray-50 text-gray-400 cursor-not-allowed"
+              >
+                <option>否</option>
+                <option>是</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[13px] text-gray-700 inline-flex items-center gap-1">
+                单sheet最大行数
+                <HelpCircle size={14} className="text-gray-400" title="单个工作表允许的最大数据行数" />
+              </label>
+              <input
+                type="text"
+                value={maxRowsPerSheet}
+                onChange={(e) => setMaxRowsPerSheet(e.target.value)}
+                className="w-full h-9 border border-gray-200 rounded px-3 text-[13px] outline-none focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-50"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[13px] text-gray-700 inline-flex items-center gap-1">
+                文件最大sheet数
+                <HelpCircle size={14} className="text-gray-400" title="单个导出文件允许的最大工作表数量" />
+              </label>
+              <input
+                type="text"
+                value={maxSheetsPerFile}
+                onChange={(e) => setMaxSheetsPerFile(e.target.value)}
+                className="w-full h-9 border border-gray-200 rounded px-3 text-[13px] outline-none focus:border-[#2f54eb] focus:ring-1 focus:ring-blue-50"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-[14px] font-medium text-gray-900 mb-3">选择要导出的列</h3>
+            <div className="border border-gray-100 rounded-lg p-3 bg-gray-50/30 max-h-[280px] overflow-y-auto">
+              {renderColumnTree(INDICATOR_EXPORT_COLUMN_TREE)}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-5 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8] transition-colors shadow-sm"
+          >
+            确定
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const IndicatorLibraryPage = () => {
   const [selectedCategory, setSelectedCategory] = useState('全部指标分类');
   const [listFilterCodeNameDept, setListFilterCodeNameDept] = useState('');
@@ -291,7 +696,10 @@ const IndicatorLibraryPage = () => {
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
   const [selectedIndicatorIds, setSelectedIndicatorIds] = useState<string[]>([]);
   const [deleteMode, setDeleteMode] = useState<'single' | 'batch'>('single');
-  
+  const [isImportDrawerOpen, setIsImportDrawerOpen] = useState(false);
+  const [isImportHistoryOpen, setIsImportHistoryOpen] = useState(false);
+  const [isExportDrawerOpen, setIsExportDrawerOpen] = useState(false);
+
   // -- Multi-language state for category modal --
   const [categoryLanguages, setCategoryLanguages] = useState<{ zh: string; en: string }>({ zh: '', en: '' });
   const [showEnInput, setShowEnInput] = useState(false);
@@ -800,11 +1208,19 @@ const IndicatorLibraryPage = () => {
                 <Plus size={14} />
                 <span>新建指标</span>
               </button>
-              <button className="flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-600 h-8 px-3 rounded text-[12px] hover:bg-gray-50 hover:border-gray-400 transition-all font-medium whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => setIsImportDrawerOpen(true)}
+                className="flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-600 h-8 px-3 rounded text-[12px] hover:bg-gray-50 hover:border-gray-400 transition-all font-medium whitespace-nowrap"
+              >
                 <Upload size={14} className="text-gray-400" />
                 <span>导入</span>
               </button>
-              <button className="flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-600 h-8 px-3 rounded text-[12px] hover:bg-gray-50 hover:border-gray-400 transition-all font-medium whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => setIsExportDrawerOpen(true)}
+                className="flex items-center justify-center gap-1.5 bg-white border border-gray-300 text-gray-600 h-8 px-3 rounded text-[12px] hover:bg-gray-50 hover:border-gray-400 transition-all font-medium whitespace-nowrap"
+              >
                 <Download size={14} className="text-gray-400" />
                 <span>导出</span>
               </button>
@@ -1917,6 +2333,105 @@ const IndicatorLibraryPage = () => {
                   className="px-8 py-2 bg-red-500 text-white rounded-lg text-[14px] font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20 active:scale-[0.98] select-none"
                 >
                   确认删除
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isImportDrawerOpen && (
+          <IndicatorLibraryImportDrawer
+            isOpen={isImportDrawerOpen}
+            onClose={() => setIsImportDrawerOpen(false)}
+            onOpenHistory={() => {
+              setIsImportDrawerOpen(false);
+              setIsImportHistoryOpen(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isExportDrawerOpen && (
+          <IndicatorLibraryExportDrawer
+            isOpen={isExportDrawerOpen}
+            onClose={() => setIsExportDrawerOpen(false)}
+            onConfirm={() => {
+              setIsExportDrawerOpen(false);
+              window.alert('导出任务已提交（演示）');
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isImportHistoryOpen && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-xl shadow-2xl w-[800px] max-w-full max-h-[80vh] overflow-hidden flex flex-col"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 shrink-0">
+                <div className="flex items-center gap-2">
+                  <History size={20} className="text-[#2f54eb]" />
+                  <h3 className="text-[16px] font-bold text-gray-900">导入历史</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsImportHistoryOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                  aria-label="关闭"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto">
+                <div className="border border-gray-100 rounded overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">批次编号</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">导入时间</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">操作人</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">数据量</th>
+                        <th className="px-4 py-3 text-[12px] font-medium text-gray-500">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {INDICATOR_IMPORT_HISTORY_MOCK.map((row) => (
+                        <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                          <td className="px-4 py-3 text-[13px] font-mono text-gray-600">{row.id}</td>
+                          <td className="px-4 py-3 text-[13px] text-gray-600">{row.time}</td>
+                          <td className="px-4 py-3 text-[13px] text-gray-600">{row.operator}</td>
+                          <td className="px-4 py-3 text-[13px] text-gray-600">{row.count} 条</td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[11px] ${
+                                row.status === '成功'
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-600'
+                              }`}
+                            >
+                              {row.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-100 flex justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsImportHistoryOpen(false)}
+                  className="px-5 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8]"
+                >
+                  关闭
                 </button>
               </div>
             </motion.div>
