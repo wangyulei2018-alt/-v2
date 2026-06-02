@@ -424,13 +424,13 @@ const IndicatorLibraryImportDrawer = ({
   );
 };
 
-type IndicatorExportColumnNode = {
+type ExportColumnNode = {
   id: string;
   label: string;
-  children?: IndicatorExportColumnNode[];
+  children?: ExportColumnNode[];
 };
 
-const INDICATOR_EXPORT_COLUMN_TREE: IndicatorExportColumnNode[] = [
+const INDICATOR_EXPORT_COLUMN_TREE: ExportColumnNode[] = [
   {
     id: 'metric-export',
     label: '指标导出',
@@ -441,9 +441,26 @@ const INDICATOR_EXPORT_COLUMN_TREE: IndicatorExportColumnNode[] = [
   },
 ];
 
-function collectExportColumnIds(nodes: IndicatorExportColumnNode[]): string[] {
+const ASSESSMENT_OBJECT_EXPORT_COLUMN_TREE: ExportColumnNode[] = [
+  {
+    id: 'assessment-object-export',
+    label: '考核对象导出',
+    children: [
+      { id: 'dept-code', label: '部门编码' },
+      { id: 'dept-name', label: '部门名称' },
+      { id: 'org-type', label: '组织类型' },
+      { id: 'org-level', label: '组织层级' },
+      { id: 'org-leader', label: '组织负责人' },
+      { id: 'exec-standing', label: '分管执委/常委' },
+      { id: 'hrbp', label: '主HRBP' },
+      { id: 'status', label: '状态' },
+    ],
+  },
+];
+
+function collectExportColumnIds(nodes: ExportColumnNode[]): string[] {
   const ids: string[] = [];
-  const walk = (list: IndicatorExportColumnNode[]) => {
+  const walk = (list: ExportColumnNode[]) => {
     for (const node of list) {
       ids.push(node.id);
       if (node.children?.length) walk(node.children);
@@ -453,24 +470,28 @@ function collectExportColumnIds(nodes: IndicatorExportColumnNode[]): string[] {
   return ids;
 }
 
-const INDICATOR_EXPORT_DEFAULT_COLUMN_IDS = collectExportColumnIds(INDICATOR_EXPORT_COLUMN_TREE);
-
-const IndicatorLibraryExportDrawer = ({
+const ExcelExportDrawer = ({
   isOpen,
   onClose,
   onConfirm,
+  columnTree,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  columnTree: ExportColumnNode[];
 }) => {
+  const defaultColumnIds = useMemo(() => collectExportColumnIds(columnTree), [columnTree]);
+  const defaultExpandedRootId = columnTree[0]?.id ?? '';
   const [customFileName, setCustomFileName] = useState('');
   const [exportFormat, setExportFormat] = useState('Excel 2007');
   const [exportType, setExportType] = useState('头行分sheet导出');
   const [maxRowsPerSheet, setMaxRowsPerSheet] = useState('1048575');
   const [maxSheetsPerFile, setMaxSheetsPerFile] = useState('5');
-  const [checkedColumnIds, setCheckedColumnIds] = useState<string[]>(INDICATOR_EXPORT_DEFAULT_COLUMN_IDS);
-  const [expandedColumnIds, setExpandedColumnIds] = useState<string[]>(['metric-export']);
+  const [checkedColumnIds, setCheckedColumnIds] = useState<string[]>(defaultColumnIds);
+  const [expandedColumnIds, setExpandedColumnIds] = useState<string[]>(
+    defaultExpandedRootId ? [defaultExpandedRootId] : []
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -479,9 +500,9 @@ const IndicatorLibraryExportDrawer = ({
     setExportType('头行分sheet导出');
     setMaxRowsPerSheet('1048575');
     setMaxSheetsPerFile('5');
-    setCheckedColumnIds(INDICATOR_EXPORT_DEFAULT_COLUMN_IDS);
-    setExpandedColumnIds(['metric-export']);
-  }, [isOpen]);
+    setCheckedColumnIds(defaultColumnIds);
+    setExpandedColumnIds(defaultExpandedRootId ? [defaultExpandedRootId] : []);
+  }, [isOpen, defaultColumnIds, defaultExpandedRootId]);
 
   const toggleColumnExpand = (id: string) => {
     setExpandedColumnIds((prev) =>
@@ -489,7 +510,7 @@ const IndicatorLibraryExportDrawer = ({
     );
   };
 
-  const setNodeChecked = (node: IndicatorExportColumnNode, checked: boolean) => {
+  const setNodeChecked = (node: ExportColumnNode, checked: boolean) => {
     const ids = [node.id, ...(node.children ? collectExportColumnIds(node.children) : [])];
     setCheckedColumnIds((prev) => {
       const next = new Set(prev);
@@ -498,7 +519,7 @@ const IndicatorLibraryExportDrawer = ({
     });
   };
 
-  const renderColumnTree = (nodes: IndicatorExportColumnNode[], depth = 0) =>
+  const renderColumnTree = (nodes: ExportColumnNode[], depth = 0) =>
     nodes.map((node) => {
       const hasChildren = Boolean(node.children?.length);
       const isExpanded = expandedColumnIds.includes(node.id);
@@ -642,7 +663,7 @@ const IndicatorLibraryExportDrawer = ({
           <div className="border-t border-gray-100 pt-5">
             <h3 className="text-[14px] font-medium text-gray-900 mb-3">选择要导出的列</h3>
             <div className="border border-gray-100 rounded-lg p-3 bg-gray-50/30 max-h-[280px] overflow-y-auto">
-              {renderColumnTree(INDICATOR_EXPORT_COLUMN_TREE)}
+              {renderColumnTree(columnTree)}
             </div>
           </div>
         </div>
@@ -2355,13 +2376,14 @@ const IndicatorLibraryPage = () => {
 
       <AnimatePresence>
         {isExportDrawerOpen && (
-          <IndicatorLibraryExportDrawer
+          <ExcelExportDrawer
             isOpen={isExportDrawerOpen}
             onClose={() => setIsExportDrawerOpen(false)}
             onConfirm={() => {
               setIsExportDrawerOpen(false);
               window.alert('导出任务已提交（演示）');
             }}
+            columnTree={INDICATOR_EXPORT_COLUMN_TREE}
           />
         )}
       </AnimatePresence>
@@ -3687,6 +3709,9 @@ const OrgAssessmentModal = ({
   const [selectedRow, setSelectedRow] = useState<any>(null);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isAssessmentImportDrawerOpen, setIsAssessmentImportDrawerOpen] = useState(false);
+  const [isAssessmentExportDrawerOpen, setIsAssessmentExportDrawerOpen] = useState(false);
+  const [isAssessmentImportHistoryOpen, setIsAssessmentImportHistoryOpen] = useState(false);
   const [reviewFrequency, setReviewFrequency] = useState('季度');
   const [reviewStages, setReviewStages] = useState([{ name: '第一轮回顾' }, { name: '第二轮回顾' }]);
   
@@ -5685,6 +5710,16 @@ const OrgAssessmentModal = ({
                                     setIsMoreMenuOpen(false);
                                     return;
                                   }
+                                  if (item.label === '导入') {
+                                    setIsAssessmentImportDrawerOpen(true);
+                                    setIsMoreMenuOpen(false);
+                                    return;
+                                  }
+                                  if (item.label === '导出') {
+                                    setIsAssessmentExportDrawerOpen(true);
+                                    setIsMoreMenuOpen(false);
+                                    return;
+                                  }
                                   if (item.onClick) {
                                     item.onClick();
                                   }
@@ -6245,6 +6280,106 @@ const OrgAssessmentModal = ({
               onClose={() => setIsApprovalChainModalOpen(false)} 
               data={selectedRow}
             />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isAssessmentImportDrawerOpen && (
+            <IndicatorLibraryImportDrawer
+              isOpen={isAssessmentImportDrawerOpen}
+              onClose={() => setIsAssessmentImportDrawerOpen(false)}
+              onOpenHistory={() => {
+                setIsAssessmentImportDrawerOpen(false);
+                setIsAssessmentImportHistoryOpen(true);
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isAssessmentExportDrawerOpen && (
+            <ExcelExportDrawer
+              isOpen={isAssessmentExportDrawerOpen}
+              onClose={() => setIsAssessmentExportDrawerOpen(false)}
+              onConfirm={() => {
+                setIsAssessmentExportDrawerOpen(false);
+                showToast('导出任务已提交', 'success');
+              }}
+              columnTree={ASSESSMENT_OBJECT_EXPORT_COLUMN_TREE}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {isAssessmentImportHistoryOpen && (
+            <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white rounded-xl shadow-2xl w-[800px] max-w-full max-h-[80vh] overflow-hidden flex flex-col"
+              >
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <History size={20} className="text-[#2f54eb]" />
+                    <h3 className="text-[16px] font-bold text-gray-900">导入历史</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAssessmentImportHistoryOpen(false)}
+                    className="text-gray-400 hover:text-gray-600 p-1"
+                    aria-label="关闭"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-6 overflow-y-auto">
+                  <div className="border border-gray-100 rounded overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-100">
+                          <th className="px-4 py-3 text-[12px] font-medium text-gray-500">批次编号</th>
+                          <th className="px-4 py-3 text-[12px] font-medium text-gray-500">导入时间</th>
+                          <th className="px-4 py-3 text-[12px] font-medium text-gray-500">操作人</th>
+                          <th className="px-4 py-3 text-[12px] font-medium text-gray-500">数据量</th>
+                          <th className="px-4 py-3 text-[12px] font-medium text-gray-500">状态</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {INDICATOR_IMPORT_HISTORY_MOCK.map((row) => (
+                          <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                            <td className="px-4 py-3 text-[13px] font-mono text-gray-600">{row.id}</td>
+                            <td className="px-4 py-3 text-[13px] text-gray-600">{row.time}</td>
+                            <td className="px-4 py-3 text-[13px] text-gray-600">{row.operator}</td>
+                            <td className="px-4 py-3 text-[13px] text-gray-600">{row.count} 条</td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[11px] ${
+                                  row.status === '成功'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-red-100 text-red-600'
+                                }`}
+                              >
+                                {row.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 flex justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsAssessmentImportHistoryOpen(false)}
+                    className="px-5 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8]"
+                  >
+                    关闭
+                  </button>
+                </div>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
       </motion.div>
