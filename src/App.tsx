@@ -6971,35 +6971,36 @@ function renderInterventionNodeStatusBadge(status: 'completed' | 'current' | 'up
   );
 }
 
-/** 流程干预 · 流程退回：按节点序号选择退回目标 */
-const PROCESS_INTERVENTION_RETURN_NODES: { order: number; label: string }[] = [
-  { order: 10, label: '数据提交人、主HRBP两个节点' },
-  { order: 20, label: '一级部门负责人' },
+/** 流程干预 · 流程退回：按节点序号选择退回目标（同序号表示并发节点，需分别单选） */
+const PROCESS_INTERVENTION_RETURN_NODES: { id: string; order: number; label: string }[] = [
+  { id: 'return-data-submitter', order: 10, label: '数据提交人' },
+  { id: 'return-hrbp', order: 10, label: '主HRBP' },
+  { id: 'return-dept-head', order: 20, label: '一级部门负责人' },
 ];
 
 const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
   const [activeTab, setActiveTab] = useState('更换办理人');
-  const [selectedReturnOrder, setSelectedReturnOrder] = useState<number | null>(null);
+  const [selectedReturnNodeId, setSelectedReturnNodeId] = useState<string | null>(null);
   const [returnNodeError, setReturnNodeError] = useState('');
   const tabs = ['更换办理人', '流程退回'];
 
   useEffect(() => {
     if (isOpen) {
       setActiveTab('更换办理人');
-      setSelectedReturnOrder(null);
+      setSelectedReturnNodeId(null);
       setReturnNodeError('');
     }
   }, [isOpen]);
 
   useEffect(() => {
     if (activeTab === '流程退回') {
-      setSelectedReturnOrder(null);
+      setSelectedReturnNodeId(null);
       setReturnNodeError('');
     }
   }, [activeTab]);
 
   const handleConfirm = () => {
-    if (activeTab === '流程退回' && selectedReturnOrder === null) {
+    if (activeTab === '流程退回' && selectedReturnNodeId === null) {
       setReturnNodeError('请选择退回节点');
       return;
     }
@@ -7181,9 +7182,9 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
               <div className="space-y-2">
                 {PROCESS_INTERVENTION_RETURN_NODES.map((node) => (
                   <label
-                    key={`return-order-${node.order}`}
+                    key={node.id}
                     className={`flex items-center gap-3 p-3 border rounded cursor-pointer hover:bg-gray-50 ${
-                      selectedReturnOrder === node.order
+                      selectedReturnNodeId === node.id
                         ? 'border-blue-100 bg-blue-50/30'
                         : returnNodeError
                           ? 'border-red-200'
@@ -7193,10 +7194,10 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
                     <input
                       type="radio"
                       name="processInterventionReturnNode"
-                      value={String(node.order)}
-                      checked={selectedReturnOrder === node.order}
+                      value={node.id}
+                      checked={selectedReturnNodeId === node.id}
                       onChange={() => {
-                        setSelectedReturnOrder(node.order);
+                        setSelectedReturnNodeId(node.id);
                         setReturnNodeError('');
                       }}
                       className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
