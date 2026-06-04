@@ -10474,12 +10474,337 @@ const NOTIFICATION_PHASE_DEFAULT_TEMPLATE: Record<(typeof NOTIFICATION_DRAWER_PH
   组织绩效计划变更: '绩效方案启动通知',
 };
 
+const NOTIFICATION_STATIC_RECIPIENT_OPTIONS = [
+  { value: '员工', label: '员工本人' },
+  { value: '直接上级', label: '直接上级' },
+  { value: '隔级上级', label: '隔级上级' },
+] as const;
+
+type NotificationProcessRulePhaseNodes = {
+  ruleId: string;
+  ruleName: string;
+  nodes: { id: string; title: string }[];
+};
+
+function buildNotificationProcessRecipientKey(ruleId: string, nodeId: string) {
+  return `node:${ruleId}:${nodeId}`;
+}
+
+function parseNotificationProcessRecipientKey(key: string): { ruleId: string; nodeId: string } | null {
+  if (!key.startsWith('node:')) return null;
+  const parts = key.split(':');
+  if (parts.length < 3) return null;
+  return { ruleId: parts[1], nodeId: parts[2] };
+}
+
+function getEnabledProcessRulesPhaseNodes(
+  processConfigs: any[] | undefined,
+  phaseName: string
+): NotificationProcessRulePhaseNodes[] {
+  return (processConfigs || [])
+    .filter((config) => config?.status !== false)
+    .map((config) => {
+      const nodes =
+        Array.isArray(config.nodes) && config.nodes.length > 0
+          ? mergeSavedProcessNodesWithDefaults(config.nodes)
+          : cloneDefaultPerformanceProcessNodes();
+      return {
+        ruleId: String(config.id),
+        ruleName: String(config.name || '未命名流程规则'),
+        nodes: getPhaseSubNodes(nodes, phaseName),
+      };
+    })
+    .filter((item) => item.nodes.length > 0);
+}
+
+function formatNotificationRecipientLabel(
+  key: string,
+  processConfigs: any[] | undefined
+): string {
+  const staticHit = NOTIFICATION_STATIC_RECIPIENT_OPTIONS.find((opt) => opt.value === key);
+  if (staticHit) return staticHit.label;
+  const parsed = parseNotificationProcessRecipientKey(key);
+  if (!parsed) return key;
+  for (const config of processConfigs || []) {
+    if (String(config.id) !== parsed.ruleId) continue;
+    const nodes =
+      Array.isArray(config.nodes) && config.nodes.length > 0
+        ? mergeSavedProcessNodesWithDefaults(config.nodes)
+        : cloneDefaultPerformanceProcessNodes();
+    for (const phase of NOTIFICATION_DRAWER_PHASE_ORDER) {
+      const hit = getPhaseSubNodes(nodes, phase).find((n) => n.id === parsed.nodeId);
+      if (hit) {
+        return `${config.name || '流程规则'}/${hit.title}`;
+      }
+    }
+  }
+  return key;
+}
+
+function getEnabledProcessRulesForPhase(
+  processConfigs: any[] | undefined,
+  phaseName: string
+): NotificationProcessRulePhaseNodes[] {
+  return getEnabledProcessRulesPhaseNodes(processConfigs, phaseName);
+}
+
+function extractNotificationRecipientSelection(selectedKeys: string[]) {
+  const processKeys = selectedKeys.filter((key) => key.startsWith('node:'));
+  if (processKeys.length === 0) {
+    return { processRuleId: null as string | null, processNodeIds: [] as string[] };
+  }
+  const parsedList = processKeys
+    .map(parseNotificationProcessRecipientKey)
+    .filter((parsed): parsed is { ruleId: string; nodeId: string } => parsed !== null);
+  const processRuleId = parsedList[0]?.ruleId ?? null;
+  const processNodeIds = parsedList
+    .filter((parsed) => parsed.ruleId === processRuleId)
+    .map((parsed) => parsed.nodeId);
+  return { processRuleId, processNodeIds };
+}
+
+function NotificationRecipientPickerModal({
+  isOpen,
+  phaseName,
+  processConfigs,
+  selectedKeys,
+  onClose,
+  onConfirm,
+}: {
+  isOpen: boolean;
+  phaseName: string;
+  processConfigs: any[] | undefined;
+  selectedKeys: string[];
+  onClose: () => void;
+  onConfirm: (keys: string[]) => void;
+}) {
+  const enabledRules = useMemo(
+    () => getEnabledProcessRulesForPhase(processConfigs, phaseName),
+    [processConfigs, phaseName]
+  );
+  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  const [ruleSearchTerm, setRuleSearchTerm] = useState('');
+  const [isRuleDropdownOpen, setIsRuleDropdownOpen] = useState(false);
+  const rulePickerRef = useRef<HTMLDivElement>(null);
+
+  const filteredRules = useMemo(() => {
+    const query = ruleSearchTerm.trim().toLowerCase();
+    if (!query) return enabledRules;
+    return enabledRules.filter((rule) => rule.ruleName.toLowerCase().includes(query));
+  }, [enabledRules, ruleSearchTerm]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const parsed = extractNotificationRecipientSelection(selectedKeys);
+    setSelectedRuleId(parsed.processRuleId);
+    setSelectedNodeIds(parsed.processNodeIds);
+    const selectedRule = enabledRules.find((rule) => rule.ruleId === parsed.processRuleId);
+    setRuleSearchTerm(selectedRule?.ruleName ?? '');
+    setIsRuleDropdownOpen(false);
+  }, [isOpen, selectedKeys, enabledRules]);
+
+  useEffect(() => {
+    if (!isRuleDropdownOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (rulePickerRef.current && !rulePickerRef.current.contains(event.target as Node)) {
+        setIsRuleDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isRuleDropdownOpen]);
+
+  const activeRule = enabledRules.find((rule) => rule.ruleId === selectedRuleId) ?? null;
+  const activeRuleNodes = activeRule?.nodes ?? [];
+
+  const handleSelectRule = (rule: NotificationProcessRulePhaseNodes) => {
+    setSelectedRuleId(rule.ruleId);
+    setSelectedNodeIds([]);
+    setRuleSearchTerm(rule.ruleName);
+    setIsRuleDropdownOpen(false);
+  };
+
+  const toggleNodeId = (nodeId: string) => {
+    setSelectedNodeIds((prev) =>
+      prev.includes(nodeId) ? prev.filter((id) => id !== nodeId) : [...prev, nodeId]
+    );
+  };
+
+  const handleRuleSearchChange = (value: string) => {
+    setRuleSearchTerm(value);
+    setIsRuleDropdownOpen(true);
+    if (!selectedRuleId) return;
+    const matchedRule = enabledRules.find((rule) => rule.ruleId === selectedRuleId);
+    if (matchedRule && value !== matchedRule.ruleName) {
+      setSelectedRuleId(null);
+      setSelectedNodeIds([]);
+    }
+  };
+
+  const handleConfirm = () => {
+    const keys: string[] = [];
+    if (selectedRuleId && selectedNodeIds.length > 0) {
+      selectedNodeIds.forEach((nodeId) => {
+        keys.push(buildNotificationProcessRecipientKey(selectedRuleId, nodeId));
+      });
+    }
+    onConfirm(keys);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/45 border-0 cursor-default"
+        aria-label="关闭"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative z-[221] w-full max-w-[640px] max-h-[min(80vh,720px)] rounded-xl bg-white shadow-2xl border border-gray-100 flex flex-col overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h3 className="text-[16px] font-bold text-gray-900">选择接收对象</h3>
+            <p className="text-[12px] text-gray-500 mt-0.5">当前阶段：{phaseName}</p>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#2f54eb] text-white text-[11px] font-bold">
+                1
+              </span>
+              <span className="text-[13px] font-medium text-gray-800">选择已启用的组织绩效流程规则</span>
+            </div>
+            {enabledRules.length === 0 ? (
+              <div className="border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center text-[13px] text-gray-400">
+                当前阶段暂无已启用的流程规则，请先在「组织绩效流程规则」中启用规则并配置节点。
+              </div>
+            ) : (
+              <div ref={rulePickerRef} className="relative">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="搜索并选择已启用的组织绩效流程规则"
+                    value={ruleSearchTerm}
+                    onChange={(e) => handleRuleSearchChange(e.target.value)}
+                    onFocus={() => setIsRuleDropdownOpen(true)}
+                    className="w-full border border-gray-200 rounded pl-9 pr-10 py-2.5 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white"
+                  />
+                  <ChevronDown
+                    size={14}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${
+                      isRuleDropdownOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </div>
+                {isRuleDropdownOpen && (
+                  <div
+                    className="absolute left-0 right-0 top-[calc(100%+4px)] bg-white border border-gray-100 rounded-lg shadow-xl z-10 max-h-52 overflow-y-auto py-1"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    {filteredRules.map((rule) => (
+                      <button
+                        key={rule.ruleId}
+                        type="button"
+                        onClick={() => handleSelectRule(rule)}
+                        className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors ${
+                          selectedRuleId === rule.ruleId ? 'bg-blue-50/60' : ''
+                        }`}
+                      >
+                        <span className="text-[13px] text-gray-800">{rule.ruleName}</span>
+                      </button>
+                    ))}
+                    {filteredRules.length === 0 && (
+                      <div className="px-4 py-8 text-center text-gray-400 text-[12px]">未查找到匹配的已启用规则</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span
+                className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${
+                  selectedRuleId ? 'bg-[#2f54eb] text-white' : 'bg-gray-200 text-gray-500'
+                }`}
+              >
+                2
+              </span>
+              <span className="text-[13px] font-medium text-gray-800">选择当前阶段下的流程节点</span>
+            </div>
+            {!selectedRuleId ? (
+              <div className="border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center text-[13px] text-gray-400">
+                请先选择组织绩效流程规则
+              </div>
+            ) : activeRuleNodes.length === 0 ? (
+              <div className="border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center text-[13px] text-gray-400">
+                该规则在当前阶段暂无可用节点
+              </div>
+            ) : (
+              <div className="border border-gray-100 rounded-lg divide-y divide-gray-50 max-h-52 overflow-y-auto">
+                {activeRuleNodes.map((node, index) => (
+                  <label
+                    key={node.id}
+                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50/80 ${
+                      selectedNodeIds.includes(node.id) ? 'bg-blue-50/40' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedNodeIds.includes(node.id)}
+                      onChange={() => toggleNodeId(node.id)}
+                      className="w-4 h-4 accent-[#2f54eb]"
+                    />
+                    <span className="text-[13px] text-gray-700">
+                      {index + 1}. {node.title}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            className="px-5 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8]"
+          >
+            确定
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- 通知规则抽屉组件 ---
-const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
+const NotificationDrawer = ({ isOpen, onClose, data, onSave, performanceProcessConfigs = [] }: any) => {
   const [activePhase, setActivePhase] = useState('组织绩效计划制定');
-  const [openRecipientDropdownId, setOpenRecipientDropdownId] = useState<string | null>(null);
   const [openMethodsDropdownId, setOpenMethodsDropdownId] = useState<string | null>(null);
   const [templatePreview, setTemplatePreview] = useState<{ title: string; body: string } | null>(null);
+  const [recipientPickerRuleId, setRecipientPickerRuleId] = useState<string | null>(null);
 
   const createDefaultRule = (id: string, template: string) => ({
     id,
@@ -10553,7 +10878,10 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
   }, [data, isOpen]);
 
   useEffect(() => {
-    if (!isOpen) setTemplatePreview(null);
+    if (!isOpen) {
+      setTemplatePreview(null);
+      setRecipientPickerRuleId(null);
+    }
   }, [isOpen]);
 
   const handleRemoveRule = (id: string) => {
@@ -10567,6 +10895,10 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
   };
 
   if (!isOpen) return null;
+
+  const recipientPickerRule = recipientPickerRuleId
+    ? (formData.phases[activePhase] || []).find((r: any) => r.id === recipientPickerRuleId)
+    : null;
 
   return (
     <>
@@ -10635,8 +10967,8 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
                 <button
                   key={phase}
                   onClick={() => {
-                    setOpenRecipientDropdownId(null);
                     setOpenMethodsDropdownId(null);
+                    setRecipientPickerRuleId(null);
                     setActivePhase(phase);
                   }}
                   className={`px-6 py-3 text-[13px] font-medium transition-all relative ${
@@ -10753,111 +11085,59 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
                         </td>
                         <td className="px-3 py-4">
                           <div className="relative">
-                            <div 
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  setOpenMethodsDropdownId(null);
+                                  setRecipientPickerRuleId(rule.id);
+                                }
+                              }}
                               onClick={() => {
                                 setOpenMethodsDropdownId(null);
-                                setOpenRecipientDropdownId(openRecipientDropdownId === rule.id ? null : rule.id);
+                                setRecipientPickerRuleId(rule.id);
                               }}
-                              className="w-full border border-gray-200 rounded px-2 py-1 min-h-[32px] flex items-center gap-1.5 bg-white cursor-pointer hover:border-blue-300"
+                              className="w-full border border-gray-200 rounded px-2 py-1 min-h-[32px] flex flex-wrap items-center gap-1.5 bg-white cursor-pointer hover:border-blue-300"
                             >
                               {rule.recipients.map((r: string) => (
-                                <span key={r} className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] text-[12px] rounded border border-blue-100 font-medium whitespace-nowrap flex items-center gap-1">
-                                  {r === '员工' ? '员工本人' : r}
-                                  <X 
-                                    size={10} 
-                                    className="cursor-pointer hover:text-red-500" 
+                                <span
+                                  key={r}
+                                  className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] text-[12px] rounded border border-blue-100 font-medium whitespace-nowrap flex items-center gap-1"
+                                >
+                                  {formatNotificationRecipientLabel(r, performanceProcessConfigs)}
+                                  <X
+                                    size={10}
+                                    className="cursor-pointer hover:text-red-500"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       const newPhases = { ...formData.phases };
-                                      newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
-                                        r2.id === rule.id ? { ...r2, recipients: r2.recipients.filter((item: string) => item !== r) } : r2
+                                      newPhases[activePhase] = newPhases[activePhase].map((r2: any) =>
+                                        r2.id === rule.id
+                                          ? {
+                                              ...r2,
+                                              recipients: r2.recipients.filter((item: string) => item !== r),
+                                            }
+                                          : r2
                                       );
                                       setFormData({ ...formData, phases: newPhases });
                                     }}
                                   />
                                 </span>
                               ))}
-                              {rule.recipients.length === 0 && <span className="text-gray-300 text-[13px]">请选择</span>}
-                              <ChevronDown size={14} className="ml-auto text-gray-400" />
+                              {rule.recipients.length === 0 && (
+                                <span className="text-gray-300 text-[13px]">请选择</span>
+                              )}
+                              <ChevronDown size={14} className="ml-auto text-gray-400 shrink-0" />
                             </div>
-
-                            {/* 接收对象下拉框 */}
-                            {openRecipientDropdownId === rule.id && (
-                              <>
-                                <div className="fixed inset-0 z-40" onClick={() => setOpenRecipientDropdownId(null)} />
-                                <div className="absolute top-full left-0 mt-1 w-[220px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 p-2 animate-in fade-in zoom-in duration-200">
-                                  <div className="flex border-b border-gray-100 pb-2 mb-2 gap-3 px-1">
-                                    <button 
-                                      onClick={() => {
-                                        const newPhases = { ...formData.phases };
-                                        newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
-                                          r2.id === rule.id ? { ...r2, recipients: ['员工', '直接上级', '隔级上级'] } : r2
-                                        );
-                                        setFormData({ ...formData, phases: newPhases });
-                                      }}
-                                      className="text-[12px] text-[#2f54eb] hover:opacity-80"
-                                    >
-                                      全选
-                                    </button>
-                                    <button 
-                                      onClick={() => {
-                                        const newPhases = { ...formData.phases };
-                                        const all = ['员工', '直接上级', '隔级上级'];
-                                        newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
-                                          r2.id === rule.id ? { ...r2, recipients: all.filter(a => !r2.recipients.includes(a)) } : r2
-                                        );
-                                        setFormData({ ...formData, phases: newPhases });
-                                      }}
-                                      className="text-[12px] text-[#2f54eb] hover:opacity-80"
-                                    >
-                                      反选
-                                    </button>
-                                    <button 
-                                      onClick={() => {
-                                        const newPhases = { ...formData.phases };
-                                        newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
-                                          r2.id === rule.id ? { ...r2, recipients: [] } : r2
-                                        );
-                                        setFormData({ ...formData, phases: newPhases });
-                                      }}
-                                      className="text-[12px] text-[#2f54eb] hover:opacity-80"
-                                    >
-                                      无
-                                    </button>
-                                  </div>
-                                  <div className="space-y-1">
-                                    {['员工', '直接上级', '隔级上级'].map(opt => (
-                                      <label key={opt} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded cursor-pointer group">
-                                        <input 
-                                          type="checkbox" 
-                                          checked={rule.recipients.includes(opt)}
-                                          onChange={(e) => {
-                                            const newPhases = { ...formData.phases };
-                                            const currentRecipients = rule.recipients;
-                                            const updated = e.target.checked 
-                                              ? [...currentRecipients, opt]
-                                              : currentRecipients.filter((i: string) => i !== opt);
-                                            newPhases[activePhase] = newPhases[activePhase].map((r2: any) => 
-                                              r2.id === rule.id ? { ...r2, recipients: updated } : r2
-                                            );
-                                            setFormData({ ...formData, phases: newPhases });
-                                          }}
-                                          className="w-3.5 h-3.5 accent-[#2f54eb]" 
-                                        />
-                                        <span className="text-[13px] text-gray-600 group-hover:text-[#2f54eb]">{opt === '员工' ? '员工本人' : opt}</span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                </div>
-                              </>
-                            )}
                           </div>
                         </td>
                         <td className="px-3 py-4">
                           <div className="relative">
                             <div
                               onClick={() => {
-                                setOpenRecipientDropdownId(null);
+                                setRecipientPickerRuleId(null);
                                 setOpenMethodsDropdownId(openMethodsDropdownId === rule.id ? null : rule.id);
                               }}
                               className="w-full border border-gray-200 rounded px-2 py-1 min-h-[32px] flex items-center gap-1.5 bg-white cursor-pointer hover:border-blue-300"
@@ -11058,6 +11338,23 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave }: any) => {
           </div>
         </div>
       )}
+
+      <NotificationRecipientPickerModal
+        isOpen={Boolean(recipientPickerRuleId && recipientPickerRule)}
+        phaseName={activePhase}
+        processConfigs={performanceProcessConfigs}
+        selectedKeys={recipientPickerRule?.recipients || []}
+        onClose={() => setRecipientPickerRuleId(null)}
+        onConfirm={(keys) => {
+          if (!recipientPickerRuleId) return;
+          const newPhases = { ...formData.phases };
+          newPhases[activePhase] = newPhases[activePhase].map((r2: any) =>
+            r2.id === recipientPickerRuleId ? { ...r2, recipients: keys } : r2
+          );
+          setFormData({ ...formData, phases: newPhases });
+          setRecipientPickerRuleId(null);
+        }}
+      />
     </>
   );
 };
@@ -13104,6 +13401,7 @@ const BasicRuleSettingsPage = ({
               onClose={() => setIsNotificationDrawerOpen(false)}
               data={currentNotificationData}
               onSave={handleNotificationSave}
+              performanceProcessConfigs={performanceProcessConfigs}
             />
           </div>
         )}
