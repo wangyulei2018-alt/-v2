@@ -10482,9 +10482,20 @@ const NOTIFICATION_STATIC_RECIPIENT_OPTIONS = [
 
 type NotificationProcessRulePhaseNodes = {
   ruleId: string;
+  ruleCode: string;
   ruleName: string;
   nodes: { id: string; title: string }[];
 };
+
+function getPerformanceProcessRuleCode(config: any): string {
+  if (config?.code) return String(config.code);
+  const rawId = String(config?.id ?? '');
+  const idNum = parseInt(rawId, 10);
+  const suffix = Number.isFinite(idNum)
+    ? String(idNum).padStart(6, '0')
+    : rawId.padStart(6, '0').slice(-6);
+  return `JXLC${suffix}`;
+}
 
 function buildNotificationProcessRecipientKey(ruleId: string, nodeId: string) {
   return `node:${ruleId}:${nodeId}`;
@@ -10510,6 +10521,7 @@ function getEnabledProcessRulesPhaseNodes(
           : cloneDefaultPerformanceProcessNodes();
       return {
         ruleId: String(config.id),
+        ruleCode: getPerformanceProcessRuleCode(config),
         ruleName: String(config.name || '未命名流程规则'),
         nodes: getPhaseSubNodes(nodes, phaseName),
       };
@@ -10548,20 +10560,14 @@ function getEnabledProcessRulesForPhase(
   return getEnabledProcessRulesPhaseNodes(processConfigs, phaseName);
 }
 
-function extractNotificationRecipientSelection(selectedKeys: string[]) {
-  const processKeys = selectedKeys.filter((key) => key.startsWith('node:'));
-  if (processKeys.length === 0) {
-    return { processRuleId: null as string | null, processNodeIds: [] as string[] };
-  }
-  const parsedList = processKeys
-    .map(parseNotificationProcessRecipientKey)
-    .filter((parsed): parsed is { ruleId: string; nodeId: string } => parsed !== null);
-  const processRuleId = parsedList[0]?.ruleId ?? null;
-  const processNodeIds = parsedList
-    .filter((parsed) => parsed.ruleId === processRuleId)
-    .map((parsed) => parsed.nodeId);
-  return { processRuleId, processNodeIds };
-}
+type NotificationRecipientRow = {
+  key: string;
+  ruleId: string;
+  ruleName: string;
+  phaseName: string;
+  nodeId: string;
+  nodeTitle: string;
+};
 
 function NotificationRecipientPickerModal({
   isOpen,
@@ -10582,75 +10588,101 @@ function NotificationRecipientPickerModal({
     () => getEnabledProcessRulesForPhase(processConfigs, phaseName),
     [processConfigs, phaseName]
   );
-  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
-  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
-  const [ruleSearchTerm, setRuleSearchTerm] = useState('');
-  const [isRuleDropdownOpen, setIsRuleDropdownOpen] = useState(false);
-  const rulePickerRef = useRef<HTMLDivElement>(null);
+  const recipientRows = useMemo<NotificationRecipientRow[]>(
+    () =>
+      enabledRules.flatMap((rule) =>
+        rule.nodes.map((node) => ({
+          key: buildNotificationProcessRecipientKey(rule.ruleId, node.id),
+          ruleId: rule.ruleId,
+          ruleName: rule.ruleName,
+          phaseName,
+          nodeId: node.id,
+          nodeTitle: node.title,
+        }))
+      ),
+    [enabledRules, phaseName]
+  );
 
-  const filteredRules = useMemo(() => {
-    const query = ruleSearchTerm.trim().toLowerCase();
-    if (!query) return enabledRules;
-    return enabledRules.filter((rule) => rule.ruleName.toLowerCase().includes(query));
-  }, [enabledRules, ruleSearchTerm]);
+  const [selectedRecipientKeys, setSelectedRecipientKeys] = useState<string[]>([]);
+  const [processNameSearch, setProcessNameSearch] = useState('');
+  const [nodeNameSearch, setNodeNameSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     if (!isOpen) return;
-    const parsed = extractNotificationRecipientSelection(selectedKeys);
-    setSelectedRuleId(parsed.processRuleId);
-    setSelectedNodeIds(parsed.processNodeIds);
-    const selectedRule = enabledRules.find((rule) => rule.ruleId === parsed.processRuleId);
-    setRuleSearchTerm(selectedRule?.ruleName ?? '');
-    setIsRuleDropdownOpen(false);
-  }, [isOpen, selectedKeys, enabledRules]);
+    setSelectedRecipientKeys(selectedKeys.filter((key) => key.startsWith('node:')));
+    setProcessNameSearch('');
+    setNodeNameSearch('');
+    setPage(1);
+  }, [isOpen, selectedKeys]);
 
   useEffect(() => {
-    if (!isRuleDropdownOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      if (rulePickerRef.current && !rulePickerRef.current.contains(event.target as Node)) {
-        setIsRuleDropdownOpen(false);
+    setPage(1);
+  }, [processNameSearch, nodeNameSearch, pageSize]);
+
+  const filteredRows = useMemo(() => {
+    const processQuery = processNameSearch.trim().toLowerCase();
+    const nodeQuery = nodeNameSearch.trim().toLowerCase();
+    return recipientRows.filter((row) => {
+      const processName = row.ruleName.toLowerCase();
+      const nodeName = row.nodeTitle.toLowerCase();
+      return (!processQuery || processName.includes(processQuery)) && (!nodeQuery || nodeName.includes(nodeQuery));
+    });
+  }, [recipientRows, processNameSearch, nodeNameSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pagedRows = filteredRows.slice((page - 1) * pageSize, page * pageSize);
+
+  const selectedRuleId = useMemo(() => {
+    const firstKey = selectedRecipientKeys.find((key) => key.startsWith('node:'));
+    return firstKey ? parseNotificationProcessRecipientKey(firstKey)?.ruleId ?? null : null;
+  }, [selectedRecipientKeys]);
+
+  const toggleRow = (row: NotificationRecipientRow) => {
+    setSelectedRecipientKeys((prev) => {
+      if (prev.includes(row.key)) {
+        return prev.filter((key) => key !== row.key);
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isRuleDropdownOpen]);
-
-  const activeRule = enabledRules.find((rule) => rule.ruleId === selectedRuleId) ?? null;
-  const activeRuleNodes = activeRule?.nodes ?? [];
-
-  const handleSelectRule = (rule: NotificationProcessRulePhaseNodes) => {
-    setSelectedRuleId(rule.ruleId);
-    setSelectedNodeIds([]);
-    setRuleSearchTerm(rule.ruleName);
-    setIsRuleDropdownOpen(false);
+      if (selectedRuleId && selectedRuleId !== row.ruleId) {
+        return [row.key];
+      }
+      return [...prev, row.key];
+    });
   };
 
-  const toggleNodeId = (nodeId: string) => {
-    setSelectedNodeIds((prev) =>
-      prev.includes(nodeId) ? prev.filter((id) => id !== nodeId) : [...prev, nodeId]
-    );
-  };
-
-  const handleRuleSearchChange = (value: string) => {
-    setRuleSearchTerm(value);
-    setIsRuleDropdownOpen(true);
-    if (!selectedRuleId) return;
-    const matchedRule = enabledRules.find((rule) => rule.ruleId === selectedRuleId);
-    if (matchedRule && value !== matchedRule.ruleName) {
-      setSelectedRuleId(null);
-      setSelectedNodeIds([]);
+  const toggleAllVisibleRows = (checked: boolean) => {
+    const visibleRows = pagedRows;
+    const visibleKeys = visibleRows.map((row) => row.key);
+    if (!checked) {
+      setSelectedRecipientKeys((prev) => prev.filter((key) => !visibleKeys.includes(key)));
+      return;
     }
-  };
-
-  const handleConfirm = () => {
-    const keys: string[] = [];
-    if (selectedRuleId && selectedNodeIds.length > 0) {
-      selectedNodeIds.forEach((nodeId) => {
-        keys.push(buildNotificationProcessRecipientKey(selectedRuleId, nodeId));
+    const targetRuleId = selectedRuleId ?? visibleRows[0]?.ruleId;
+    if (!targetRuleId) return;
+    const keysToAdd = visibleRows.filter((row) => row.ruleId === targetRuleId).map((row) => row.key);
+    setSelectedRecipientKeys((prev) => {
+      const kept = prev.filter((key) => {
+        const parsed = parseNotificationProcessRecipientKey(key);
+        return parsed?.ruleId === targetRuleId;
       });
-    }
-    onConfirm(keys);
+      return [...new Set([...kept, ...keysToAdd])];
+    });
   };
+
+  const resetSearch = () => {
+    setProcessNameSearch('');
+    setNodeNameSearch('');
+    setPage(1);
+  };
+
+  const allVisibleRowsSelected =
+    pagedRows.length > 0 &&
+    pagedRows
+      .filter((row) => !selectedRuleId || row.ruleId === selectedRuleId)
+      .every((row) => selectedRecipientKeys.includes(row.key));
+  const someVisibleRowsSelected =
+    pagedRows.some((row) => selectedRecipientKeys.includes(row.key)) && !allVisibleRowsSelected;
 
   if (!isOpen) return null;
 
@@ -10658,138 +10690,195 @@ function NotificationRecipientPickerModal({
     <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45 border-0 cursor-default"
+        className="absolute inset-0 bg-black/40 border-0 cursor-default backdrop-blur-[2px]"
         aria-label="关闭"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-[221] w-full max-w-[640px] max-h-[min(80vh,720px)] rounded-xl bg-white shadow-2xl border border-gray-100 flex flex-col overflow-hidden"
+        className="relative z-[221] w-full max-w-[820px] rounded-xl bg-white shadow-2xl border border-gray-100 flex flex-col overflow-hidden"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div>
-            <h3 className="text-[16px] font-bold text-gray-900">选择接收对象</h3>
-            <p className="text-[12px] text-gray-500 mt-0.5">当前阶段：{phaseName}</p>
+            <h3 className="text-[16px] font-bold text-gray-900">接收对象</h3>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400"
+          >
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#2f54eb] text-white text-[11px] font-bold">
-                1
-              </span>
-              <span className="text-[13px] font-medium text-gray-800">选择已启用的组织绩效流程规则</span>
+        <div className="p-5 space-y-4">
+          {recipientRows.length === 0 ? (
+            <div className="border border-dashed border-gray-200 rounded-lg px-4 py-10 text-center text-[13px] text-gray-400">
+              当前阶段暂无已启用的流程规则，请先在「组织绩效流程规则」中启用规则并配置节点。
             </div>
-            {enabledRules.length === 0 ? (
-              <div className="border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center text-[13px] text-gray-400">
-                当前阶段暂无已启用的流程规则，请先在「组织绩效流程规则」中启用规则并配置节点。
-              </div>
-            ) : (
-              <div ref={rulePickerRef} className="relative">
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="搜索并选择已启用的组织绩效流程规则"
-                    value={ruleSearchTerm}
-                    onChange={(e) => handleRuleSearchChange(e.target.value)}
-                    onFocus={() => setIsRuleDropdownOpen(true)}
-                    className="w-full border border-gray-200 rounded pl-9 pr-10 py-2.5 text-[13px] outline-none focus:border-[#2f54eb] transition-all bg-white"
-                  />
-                  <ChevronDown
-                    size={14}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${
-                      isRuleDropdownOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </div>
-                {isRuleDropdownOpen && (
-                  <div
-                    className="absolute left-0 right-0 top-[calc(100%+4px)] bg-white border border-gray-100 rounded-lg shadow-xl z-10 max-h-52 overflow-y-auto py-1"
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    {filteredRules.map((rule) => (
-                      <button
-                        key={rule.ruleId}
-                        type="button"
-                        onClick={() => handleSelectRule(rule)}
-                        className={`w-full px-4 py-2.5 text-left hover:bg-blue-50 transition-colors ${
-                          selectedRuleId === rule.ruleId ? 'bg-blue-50/60' : ''
-                        }`}
-                      >
-                        <span className="text-[13px] text-gray-800">{rule.ruleName}</span>
-                      </button>
-                    ))}
-                    {filteredRules.length === 0 && (
-                      <div className="px-4 py-8 text-center text-gray-400 text-[12px]">未查找到匹配的已启用规则</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold ${
-                  selectedRuleId ? 'bg-[#2f54eb] text-white' : 'bg-gray-200 text-gray-500'
-                }`}
-              >
-                2
-              </span>
-              <span className="text-[13px] font-medium text-gray-800">选择当前阶段下的流程节点</span>
-            </div>
-            {!selectedRuleId ? (
-              <div className="border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center text-[13px] text-gray-400">
-                请先选择组织绩效流程规则
-              </div>
-            ) : activeRuleNodes.length === 0 ? (
-              <div className="border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center text-[13px] text-gray-400">
-                该规则在当前阶段暂无可用节点
-              </div>
-            ) : (
-              <div className="border border-gray-100 rounded-lg divide-y divide-gray-50 max-h-52 overflow-y-auto">
-                {activeRuleNodes.map((node, index) => (
-                  <label
-                    key={node.id}
-                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50/80 ${
-                      selectedNodeIds.includes(node.id) ? 'bg-blue-50/40' : ''
-                    }`}
-                  >
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative group">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-focus-within:text-[#2f54eb]">
+                      <Search size={14} />
+                    </div>
                     <input
-                      type="checkbox"
-                      checked={selectedNodeIds.includes(node.id)}
-                      onChange={() => toggleNodeId(node.id)}
-                      className="w-4 h-4 accent-[#2f54eb]"
+                      type="text"
+                      placeholder="流程名称"
+                      value={processNameSearch}
+                      onChange={(e) => setProcessNameSearch(e.target.value)}
+                      className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 w-[180px] transition-all"
                     />
-                    <span className="text-[13px] text-gray-700">
-                      {index + 1}. {node.title}
-                    </span>
-                  </label>
-                ))}
+                  </div>
+                  <div className="relative group">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-focus-within:text-[#2f54eb]">
+                      <Search size={14} />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="节点名称"
+                      value={nodeNameSearch}
+                      onChange={(e) => setNodeNameSearch(e.target.value)}
+                      className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-[13px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 w-[180px] transition-all"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetSearch}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+                  aria-label="刷新"
+                >
+                  <RefreshCw size={16} />
+                </button>
               </div>
-            )}
-          </div>
+
+              <div className="border border-gray-100 rounded-lg overflow-hidden bg-[#fbfcfd]">
+                <div className="max-h-[280px] overflow-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="sticky top-0 z-10 bg-white border-b border-gray-100">
+                      <tr>
+                        <th className="px-3 py-2.5 w-10">
+                          <input
+                            type="checkbox"
+                            checked={allVisibleRowsSelected}
+                            ref={(el) => {
+                              if (el) el.indeterminate = someVisibleRowsSelected;
+                            }}
+                            onChange={(e) => toggleAllVisibleRows(e.target.checked)}
+                            className="w-4 h-4 accent-[#2f54eb]"
+                          />
+                        </th>
+                        <th className="px-3 py-2.5 text-[12px] font-bold text-gray-400 uppercase tracking-wider">
+                          组织绩效流程规则
+                        </th>
+                        <th className="px-3 py-2.5 text-[12px] font-bold text-gray-400 uppercase tracking-wider w-[140px]">
+                          当前阶段
+                        </th>
+                        <th className="px-3 py-2.5 text-[12px] font-bold text-gray-400 uppercase tracking-wider">
+                          节点名称
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {pagedRows.map((row) => (
+                        <tr
+                          key={row.key}
+                          onClick={() => toggleRow(row)}
+                          className={`cursor-pointer transition-all ${
+                            selectedRecipientKeys.includes(row.key) ? 'bg-blue-50/80' : 'hover:bg-blue-50/50'
+                          }`}
+                        >
+                          <td className="px-3 py-2.5">
+                            <input
+                              type="checkbox"
+                              checked={selectedRecipientKeys.includes(row.key)}
+                              onChange={() => toggleRow(row)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 accent-[#2f54eb]"
+                            />
+                          </td>
+                          <td className="px-3 py-2.5 text-[13px] text-gray-900 font-medium">{row.ruleName}</td>
+                          <td className="px-3 py-2.5 text-[13px] text-gray-600">{row.phaseName}</td>
+                          <td className="px-3 py-2.5 text-[13px] text-gray-900">{row.nodeTitle}</td>
+                        </tr>
+                      ))}
+                      {pagedRows.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-10 text-center text-[13px] text-gray-400">
+                            未查找到匹配的接收对象
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="px-4 py-3 bg-white border-t border-gray-50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="relative group">
+                      <select
+                        value={pageSize}
+                        onChange={(e) => setPageSize(Number(e.target.value))}
+                        className="appearance-none bg-white border border-gray-200 rounded px-3 py-1 pr-8 text-[12px] text-gray-600 outline-none focus:border-[#2f54eb] cursor-pointer"
+                      >
+                        <option value={10}>10 条 / 页</option>
+                        <option value={20}>20 条 / 页</option>
+                        <option value={50}>50 条 / 页</option>
+                      </select>
+                      <ChevronDown
+                        size={10}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+                      />
+                    </div>
+                    <span className="text-[12px] text-gray-400">共 {filteredRows.length} 条</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((current) => Math.max(1, current - 1))}
+                      className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 hover:text-[#2f54eb] hover:bg-blue-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="w-8 h-8 flex items-center justify-center bg-[#2f54eb] text-white rounded text-[13px] font-bold shadow-sm"
+                    >
+                      {page}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                      className="w-8 h-8 flex items-center justify-center border border-gray-200 rounded text-gray-400 hover:text-[#2f54eb] hover:bg-blue-50 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-3 shrink-0">
+        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0 bg-gray-50/30">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50"
+            className="px-5 py-2 border border-gray-200 text-gray-600 rounded text-[13px] font-medium hover:bg-white transition-all"
           >
             取消
           </button>
           <button
             type="button"
-            onClick={handleConfirm}
-            className="px-5 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8]"
+            onClick={() => onConfirm(selectedRecipientKeys)}
+            disabled={selectedRecipientKeys.length === 0}
+            className="px-6 py-2 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             确定
           </button>
@@ -11085,51 +11174,63 @@ const NotificationDrawer = ({ isOpen, onClose, data, onSave, performanceProcessC
                         </td>
                         <td className="px-3 py-4">
                           <div className="relative">
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
+                            <div className="w-full border border-gray-200 rounded flex transition-all min-h-[32px] overflow-hidden hover:border-blue-300 focus-within:border-[#2f54eb] bg-white">
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    setOpenMethodsDropdownId(null);
+                                    setRecipientPickerRuleId(rule.id);
+                                  }
+                                }}
+                                onClick={() => {
                                   setOpenMethodsDropdownId(null);
                                   setRecipientPickerRuleId(rule.id);
-                                }
-                              }}
-                              onClick={() => {
-                                setOpenMethodsDropdownId(null);
-                                setRecipientPickerRuleId(rule.id);
-                              }}
-                              className="w-full border border-gray-200 rounded px-2 py-1 min-h-[32px] flex flex-wrap items-center gap-1.5 bg-white cursor-pointer hover:border-blue-300"
-                            >
-                              {rule.recipients.map((r: string) => (
-                                <span
-                                  key={r}
-                                  className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] text-[12px] rounded border border-blue-100 font-medium whitespace-nowrap flex items-center gap-1"
-                                >
-                                  {formatNotificationRecipientLabel(r, performanceProcessConfigs)}
-                                  <X
-                                    size={10}
-                                    className="cursor-pointer hover:text-red-500"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const newPhases = { ...formData.phases };
-                                      newPhases[activePhase] = newPhases[activePhase].map((r2: any) =>
-                                        r2.id === rule.id
-                                          ? {
-                                              ...r2,
-                                              recipients: r2.recipients.filter((item: string) => item !== r),
-                                            }
-                                          : r2
-                                      );
-                                      setFormData({ ...formData, phases: newPhases });
-                                    }}
-                                  />
-                                </span>
-                              ))}
-                              {rule.recipients.length === 0 && (
-                                <span className="text-gray-300 text-[13px]">请选择</span>
-                              )}
-                              <ChevronDown size={14} className="ml-auto text-gray-400 shrink-0" />
+                                }}
+                                className="flex-1 px-2 py-1 flex flex-wrap items-center gap-1.5 cursor-pointer min-h-[30px]"
+                              >
+                                {rule.recipients.map((r: string) => (
+                                  <span
+                                    key={r}
+                                    className="px-2 py-0.5 bg-blue-50 text-[#2f54eb] text-[12px] rounded border border-blue-100 font-medium whitespace-nowrap flex items-center gap-1"
+                                  >
+                                    {formatNotificationRecipientLabel(r, performanceProcessConfigs)}
+                                    <X
+                                      size={10}
+                                      className="cursor-pointer hover:text-red-500"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const newPhases = { ...formData.phases };
+                                        newPhases[activePhase] = newPhases[activePhase].map((r2: any) =>
+                                          r2.id === rule.id
+                                            ? {
+                                                ...r2,
+                                                recipients: r2.recipients.filter((item: string) => item !== r),
+                                              }
+                                            : r2
+                                        );
+                                        setFormData({ ...formData, phases: newPhases });
+                                      }}
+                                    />
+                                  </span>
+                                ))}
+                                {rule.recipients.length === 0 && (
+                                  <span className="text-gray-300 text-[13px]">请选择接收对象</span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMethodsDropdownId(null);
+                                  setRecipientPickerRuleId(rule.id);
+                                }}
+                                className="px-2.5 border-l border-gray-100 flex items-center justify-center text-gray-400 hover:text-[#2f54eb] hover:bg-gray-50 transition-all cursor-pointer shrink-0"
+                                aria-label="选择接收对象"
+                              >
+                                <Search size={16} />
+                              </button>
                             </div>
                           </div>
                         </td>
@@ -14968,8 +15069,8 @@ function App() {
   ]);
 
   const [performanceProcessConfigs, setPerformanceProcessConfigs] = useState([
-    { id: '1', name: '标准部门考核规则', status: true, creator: '管理员', createTime: '2024-03-20 10:00', updater: '管理员', updateTime: '2024-03-22 14:30' },
-    { id: '2', name: '职能体系通用规则', status: true, creator: '管理员', createTime: '2024-03-21 09:00', updater: '张某某', updateTime: '2024-03-25 11:20' },
+    { id: '1', code: 'JXLC000001', name: '标准部门考核规则', status: true, creator: '管理员', createTime: '2024-03-20 10:00', updater: '管理员', updateTime: '2024-03-22 14:30' },
+    { id: '2', code: 'JXLC000002', name: '职能体系通用规则', status: true, creator: '管理员', createTime: '2024-03-21 09:00', updater: '张某某', updateTime: '2024-03-25 11:20' },
   ]);
 
   const addRow = () => {
