@@ -6971,16 +6971,54 @@ function renderInterventionNodeStatusBadge(status: 'completed' | 'current' | 'up
   );
 }
 
+interface ReturnNodeApprover {
+  id: string;
+  name: string;
+  dept?: string;
+}
+
+interface ReturnNode {
+  id: string;
+  order: number;
+  label: string;
+  approvers: ReturnNodeApprover[];
+}
+
 /** 流程干预 · 流程退回：按节点序号选择退回目标（同序号表示并发节点，需分别单选） */
-const PROCESS_INTERVENTION_RETURN_NODES: { id: string; order: number; label: string }[] = [
-  { id: 'return-data-submitter', order: 10, label: '数据提交人' },
-  { id: 'return-hrbp', order: 10, label: '主HRBP' },
-  { id: 'return-dept-head', order: 20, label: '一级部门负责人' },
+const PROCESS_INTERVENTION_RETURN_NODES: ReturnNode[] = [
+  { 
+    id: 'return-data-submitter', 
+    order: 10, 
+    label: '数据提交人',
+    approvers: [
+      { id: 'app-1', name: '张三', dept: '信息化中心' },
+      { id: 'app-2', name: '李四', dept: '人力行政中心' },
+      { id: 'app-3', name: '王五', dept: '财务管理中心' },
+    ]
+  },
+  { 
+    id: 'return-hrbp', 
+    order: 10, 
+    label: '主HRBP',
+    approvers: [
+      { id: 'app-4', name: '赵六', dept: '人力资源部' },
+    ]
+  },
+  { 
+    id: 'return-dept-head', 
+    order: 20, 
+    label: '一级部门负责人',
+    approvers: [
+      { id: 'app-5', name: '孙七', dept: '技术中心' },
+      { id: 'app-6', name: '周八', dept: '营销中心' },
+    ]
+  },
 ];
 
 const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
   const [activeTab, setActiveTab] = useState('更换办理人');
   const [selectedReturnNodeId, setSelectedReturnNodeId] = useState<string | null>(null);
+  const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
   const [returnNodeError, setReturnNodeError] = useState('');
   const tabs = ['更换办理人', '流程退回'];
 
@@ -6988,6 +7026,7 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
     if (isOpen) {
       setActiveTab('更换办理人');
       setSelectedReturnNodeId(null);
+      setSelectedApproverIds([]);
       setReturnNodeError('');
     }
   }, [isOpen]);
@@ -6995,14 +7034,34 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
   useEffect(() => {
     if (activeTab === '流程退回') {
       setSelectedReturnNodeId(null);
+      setSelectedApproverIds([]);
       setReturnNodeError('');
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    if (selectedReturnNodeId) {
+      const node = PROCESS_INTERVENTION_RETURN_NODES.find(n => n.id === selectedReturnNodeId);
+      if (node && node.approvers.length === 1) {
+        setSelectedApproverIds([node.approvers[0].id]);
+      } else {
+        setSelectedApproverIds([]);
+      }
+    } else {
+      setSelectedApproverIds([]);
+    }
+  }, [selectedReturnNodeId]);
+
   const handleConfirm = () => {
-    if (activeTab === '流程退回' && selectedReturnNodeId === null) {
-      setReturnNodeError('请选择退回节点');
-      return;
+    if (activeTab === '流程退回') {
+      if (!selectedReturnNodeId) {
+        setReturnNodeError('请选择退回节点');
+        return;
+      }
+      if (selectedApproverIds.length === 0) {
+        setReturnNodeError('请选择退回审批人');
+        return;
+      }
     }
     onClose();
   };
@@ -7181,33 +7240,88 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
               </label>
               <div className="space-y-2">
                 {PROCESS_INTERVENTION_RETURN_NODES.map((node) => (
-                  <label
+                  <div
                     key={node.id}
-                    className={`flex items-center gap-3 p-3 border rounded cursor-pointer hover:bg-gray-50 ${
+                    className={`border rounded overflow-hidden ${
                       selectedReturnNodeId === node.id
-                        ? 'border-blue-100 bg-blue-50/30'
-                        : returnNodeError
+                        ? 'border-blue-200 bg-blue-50/30'
+                        : returnNodeError && !selectedReturnNodeId
                           ? 'border-red-200'
                           : 'border-gray-100'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="processInterventionReturnNode"
-                      value={node.id}
-                      checked={selectedReturnNodeId === node.id}
-                      onChange={() => {
-                        setSelectedReturnNodeId(node.id);
-                        setReturnNodeError('');
-                      }}
-                      className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
-                    />
-                    <span className="text-[13px] text-gray-700 leading-snug">
-                      <span className="font-medium text-gray-900">序号 {node.order}</span>
-                      {' '}
-                      {node.label}
-                    </span>
-                  </label>
+                    <label
+                      className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        selectedReturnNodeId === node.id ? 'bg-blue-50/30' : ''
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="processInterventionReturnNode"
+                        value={node.id}
+                        checked={selectedReturnNodeId === node.id}
+                        onChange={() => {
+                          setSelectedReturnNodeId(node.id);
+                          setReturnNodeError('');
+                        }}
+                        className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
+                      />
+                      <span className="text-[13px] text-gray-700 leading-snug">
+                        <span className="font-medium text-gray-900">序号 {node.order}</span>
+                        {' '}
+                        {node.label}
+                        {node.approvers.length > 1 && (
+                          <span className="ml-2 text-[11px] text-gray-400">({node.approvers.length}人)</span>
+                        )}
+                      </span>
+                    </label>
+                    {selectedReturnNodeId === node.id && (
+                      <div className="px-3 pb-3">
+                        <div className="pl-7 space-y-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[12px] text-gray-500 font-medium">选择退回审批人</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedApproverIds(node.approvers.map(a => a.id));
+                              }}
+                              className="text-[11px] text-[#2f54eb] hover:text-blue-700"
+                            >
+                              全选
+                            </button>
+                          </div>
+                          {node.approvers.map((approver) => (
+                            <label
+                              key={approver.id}
+                              className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-blue-50/50 transition-colors ${
+                                selectedApproverIds.includes(approver.id) ? 'bg-blue-50/50' : ''
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedApproverIds.includes(approver.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedApproverIds([...selectedApproverIds, approver.id]);
+                                  } else {
+                                    setSelectedApproverIds(selectedApproverIds.filter(id => id !== approver.id));
+                                  }
+                                  setReturnNodeError('');
+                                }}
+                                className="w-3.5 h-3.5 text-[#2f54eb] rounded border-gray-300 focus:ring-[#2f54eb] shrink-0"
+                              />
+                              <div className="flex flex-col">
+                                <span className="text-[13px] text-gray-700 font-medium">{approver.name}</span>
+                                {approver.dept && (
+                                  <span className="text-[11px] text-gray-400">{approver.dept}</span>
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
               {returnNodeError ? (
@@ -12766,6 +12880,13 @@ const BasicRuleSettingsPage = ({
   const [dashboardSearch, setDashboardSearch] = useState('');
   const [isDashboardsOpen, setIsDashboardsOpen] = useState(false);
   const [isPortalButtonEnabled, setIsPortalButtonEnabled] = useState(false);
+  const [portalButtonConfig, setPortalButtonConfig] = useState({
+    buttonName: '组织绩效计划变更',
+    referencePhase: '组织绩效计划制定',
+    offsetDirection: '向前',
+    offsetAmount: 1,
+    offsetUnit: '周',
+  });
   const [showFormErrors, setShowFormErrors] = useState(false);
 
   /** 复制规则时规则名称默认加「（副本）」，与纯新增共用抽屉，保存走新增逻辑 */
@@ -13644,7 +13765,7 @@ const BasicRuleSettingsPage = ({
                                   }}
                                   className="text-red-500 hover:text-red-700 text-[13px] transition-colors cursor-pointer font-bold"
                                 >
-                                  删除
+                                  移除
                                 </button>
                               </div>
                             </td>
@@ -13683,94 +13804,158 @@ const BasicRuleSettingsPage = ({
                 {/* 按钮权限设置的内容 */}
                 <div className="max-w-7xl mx-auto w-full space-y-6">
                   <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-                    <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between">
+                    <div className="px-8 py-5 border-b border-gray-50 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-5 bg-[#2f54eb] rounded-full" />
                         <h3 className="text-[16px] font-bold text-gray-900 tracking-tight">门户按钮显示控制</h3>
                       </div>
-                      <div className="flex items-center gap-3 bg-gray-50/50 px-4 py-2 rounded-lg">
-                        <span className="text-[13px] text-gray-600 font-medium">启用状态</span>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
-                            checked={isPortalButtonEnabled}
-                            onChange={(e) => setIsPortalButtonEnabled(e.target.checked)}
-                          />
-                          <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2f54eb]"></div>
-                        </label>
-                      </div>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 px-5 py-2 bg-[#2f54eb] text-white rounded-lg text-[14px] font-medium hover:bg-blue-600 transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        <Save size={16} />
+                        <span>保存</span>
+                      </button>
                     </div>
 
-                    <div className={`p-8 transition-opacity duration-300 ${!isPortalButtonEnabled ? 'opacity-50 grayscale-[0.2]' : ''}`}>
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
-                        <div className="md:col-span-3 space-y-3">
-                          <label className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">功能按钮名称</label>
-                          <div className={`w-full px-4 py-2.5 bg-gray-50 text-gray-800 font-bold border border-gray-100 rounded-lg text-[14px] ${!isPortalButtonEnabled ? 'bg-gray-100/80 text-gray-400' : ''}`}>
-                            组织绩效计划变更
-                          </div>
-                        </div>
-
-                        <div className="md:col-span-4 space-y-3">
-                          <label className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">显示截止参考阶段</label>
-                          <div className="relative group">
-                            <select 
-                              disabled={!isPortalButtonEnabled}
-                              className={`w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] text-gray-900 outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all ${!isPortalButtonEnabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : 'cursor-pointer'}`}
-                            >
-                              <option>绩效制定计划</option>
-                              <option>绩效中期考核</option>
-                              <option>组织绩效考核</option>
-                            </select>
-                            <ChevronDown size={14} className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isPortalButtonEnabled ? 'group-focus-within:text-[#2f54eb]' : ''}`} />
-                          </div>
-                        </div>
-
-                        <div className="md:col-span-5 space-y-3">
-                          <label className="text-[12px] font-bold text-gray-400 block uppercase tracking-wider">截止时间偏移配置</label>
-                          <div className="flex items-center gap-3 w-full">
-                            <span className="text-[13px] text-gray-500 font-medium whitespace-nowrap">参考阶段开始前</span>
-                            <input 
-                              type="number" 
-                              disabled={!isPortalButtonEnabled}
-                              defaultValue={1}
-                              className={`w-16 border border-gray-200 rounded-lg px-2 py-2.5 text-[14px] text-center font-bold text-[#2f54eb] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all ${!isPortalButtonEnabled ? 'cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200' : 'bg-white'}`}
-                            />
-                            <div className="relative group flex-1">
-                              <select 
-                                disabled={!isPortalButtonEnabled}
-                                className={`w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-[14px] text-gray-900 outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all ${!isPortalButtonEnabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : 'cursor-pointer'}`}
-                              >
-                                <option>周</option>
-                                <option>天</option>
-                                <option>工作日</option>
-                              </select>
-                              <ChevronDown size={14} className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isPortalButtonEnabled ? 'group-focus-within:text-[#2f54eb]' : ''}`} />
-                            </div>
-                            <span className="text-[13px] text-gray-500 font-medium whitespace-nowrap">停止显示</span>
-                          </div>
-                        </div>
+                    <div className="p-8">
+                      <div className="border border-gray-100 rounded-lg overflow-hidden">
+                        <table className="w-full text-left border-collapse table-fixed">
+                          <thead className="bg-gray-50/80 border-b border-gray-100">
+                            <tr>
+                              <th className="px-4 py-3 text-[12px] font-bold text-gray-400 uppercase tracking-wider w-[18%]">
+                                功能按钮名称
+                              </th>
+                              <th className="px-4 py-3 text-[12px] font-bold text-gray-400 uppercase tracking-wider w-[22%]">
+                                显示截止参考阶段
+                              </th>
+                              <th className="px-4 py-3 text-[12px] font-bold text-gray-400 uppercase tracking-wider w-[16%]">
+                                参考阶段偏移方向
+                              </th>
+                              <th className="px-4 py-3 text-[12px] font-bold text-gray-400 uppercase tracking-wider w-[10%]">
+                                数量
+                              </th>
+                              <th className="px-4 py-3 text-[12px] font-bold text-gray-400 uppercase tracking-wider w-[10%]">
+                                单位
+                              </th>
+                              <th className="px-4 py-3 text-[12px] font-bold text-gray-400 uppercase tracking-wider w-[12%] text-center">
+                                操作
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="bg-white">
+                              <td className="px-4 py-3 align-middle">
+                                <input
+                                  type="text"
+                                  value={portalButtonConfig.buttonName}
+                                  onChange={(e) =>
+                                    setPortalButtonConfig((prev) => ({ ...prev, buttonName: e.target.value }))
+                                  }
+                                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-[14px] bg-white text-gray-900 outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all"
+                                />
+                              </td>
+                              <td className="px-4 py-3 align-middle">
+                                <div className="relative group">
+                                  <select
+                                    value={portalButtonConfig.referencePhase}
+                                    onChange={(e) =>
+                                      setPortalButtonConfig((prev) => ({ ...prev, referencePhase: e.target.value }))
+                                    }
+                                    className="w-full appearance-none cursor-pointer bg-white text-gray-900 border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all"
+                                  >
+                                    <option value="组织绩效计划制定">组织绩效计划制定</option>
+                                    <option value="组织绩效中期回顾">组织绩效中期回顾</option>
+                                    <option value="组织绩效考核">组织绩效考核</option>
+                                    <option value="组织绩效计划变更">组织绩效计划变更</option>
+                                  </select>
+                                  <ChevronDown
+                                    size={14}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-[#2f54eb]"
+                                  />
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 align-middle">
+                                <div className="relative group">
+                                  <select
+                                    value={portalButtonConfig.offsetDirection}
+                                    onChange={(e) =>
+                                      setPortalButtonConfig((prev) => ({ ...prev, offsetDirection: e.target.value }))
+                                    }
+                                    className="w-full appearance-none cursor-pointer bg-white text-gray-900 border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all"
+                                  >
+                                    <option value="向前">向前</option>
+                                    <option value="向后">向后</option>
+                                  </select>
+                                  <ChevronDown
+                                    size={14}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-[#2f54eb]"
+                                  />
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 align-middle">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={portalButtonConfig.offsetAmount}
+                                  onChange={(e) =>
+                                    setPortalButtonConfig((prev) => ({
+                                      ...prev,
+                                      offsetAmount: Number(e.target.value) || 0,
+                                    }))
+                                  }
+                                  className="w-full border border-gray-200 rounded-lg px-2 py-2 text-[14px] text-center font-medium text-[#2f54eb] bg-white outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all"
+                                />
+                              </td>
+                              <td className="px-4 py-3 align-middle">
+                                <div className="relative group">
+                                  <select
+                                    value={portalButtonConfig.offsetUnit}
+                                    onChange={(e) =>
+                                      setPortalButtonConfig((prev) => ({ ...prev, offsetUnit: e.target.value }))
+                                    }
+                                    className="w-full appearance-none cursor-pointer bg-white text-gray-900 border border-gray-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[#2f54eb] focus:ring-4 focus:ring-blue-50 transition-all"
+                                  >
+                                    <option value="天">天</option>
+                                    <option value="周">周</option>
+                                    <option value="工作日">工作日</option>
+                                  </select>
+                                  <ChevronDown
+                                    size={14}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-[#2f54eb]"
+                                  />
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 align-middle">
+                                <div className="flex items-center justify-center">
+                                  <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="sr-only peer"
+                                      checked={isPortalButtonEnabled}
+                                      onChange={(e) => setIsPortalButtonEnabled(e.target.checked)}
+                                    />
+                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2f54eb]" />
+                                  </label>
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
-                      
-                      <div className={`mt-8 p-4 bg-blue-50/50 rounded-lg border border-blue-100 flex items-start gap-3 transition-opacity duration-300 ${!isPortalButtonEnabled ? 'opacity-50' : ''}`}>
-                        <div className="text-blue-500 mt-0.5"><Info size={16} /></div>
+
+                      <div className="mt-6 p-4 bg-blue-50/50 rounded-lg border border-blue-100 flex items-start gap-3">
+                        <div className="text-blue-500 mt-0.5">
+                          <Info size={16} />
+                        </div>
                         <div className="text-[12px] text-blue-700 leading-relaxed">
                           <p className="font-bold mb-1">规则说明：</p>
-                          <p>当系统进入“显示截止参考阶段”之前（按偏移配置计算），门户页面将自动隐藏该功能按钮，以确保流程的严谨性。</p>
+                          <p>
+                            当系统进入“显示截止参考阶段”之前（按偏移配置计算），门户页面将自动隐藏该功能按钮，以确保流程的严谨性。
+                          </p>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  {/* 保持提交保存按钮在该视图 */}
-                  <div className="flex items-center justify-end gap-3 pt-4">
-                    <button className="px-6 py-2 border border-gray-200 text-gray-600 rounded-lg text-[14px] font-medium hover:bg-white transition-all cursor-pointer active:scale-95">
-                      取消重置
-                    </button>
-                    <button className="flex items-center gap-2 px-10 py-2 bg-[#2f54eb] text-white rounded-lg text-[14px] font-medium hover:bg-blue-600 transition-all cursor-pointer shadow-lg shadow-blue-200 active:scale-95">
-                      <Save size={16} />
-                      <span>提交保存</span>
-                    </button>
                   </div>
                 </div>
               </div>
