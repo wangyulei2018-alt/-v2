@@ -12506,7 +12506,7 @@ const PerformanceProcessDrawer = ({
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <div className="w-[3px] h-3 bg-[#2f54eb] rounded-full" />
-                    <span className="text-[14px] font-bold text-gray-900">后续审批人相同时</span>
+                    <span className="text-[14px] font-bold text-gray-900">后续节点审批人相同时</span>
                     <div className="relative group">
                       <HelpCircle size={14} className="text-gray-400 cursor-help" />
                       <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-[12px] rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
