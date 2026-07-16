@@ -12518,11 +12518,11 @@ const PerformanceProcessDrawer = ({
                     <div className="flex items-center gap-6">
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input type="radio" name="skipCurrentNode" defaultChecked className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
-                        <span className="text-[13px] text-gray-700">当前节点不跳过</span>
+                        <span className="text-[13px] text-gray-700">当前审批人不自动审批通过</span>
                       </label>
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input type="radio" name="skipCurrentNode" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
-                        <span className="text-[13px] text-gray-700">当前节点跳过</span>
+                        <span className="text-[13px] text-gray-700">当前审批人自动审批通过</span>
                       </label>
                     </div>
                   </div>
