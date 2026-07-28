@@ -5835,11 +5835,17 @@ const OrgAssessmentModal = ({
                             状态
                           </div>
                         </th>
-                        {isOrgAppraisalStage && (
+                        {isOrgAppraisalStage && activeMonitoringTab !== 'pre' && (
                           <>
                             <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">计算总分</th>
                             <th className="px-6 py-4 border-b w-[90px] text-center whitespace-nowrap">计算等级</th>
                             <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">调整等级</th>
+                          </>
+                        )}
+                        {isOrgAppraisalStage && activeMonitoringTab === 'pre' && (
+                          <>
+                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">计算总分</th>
+                            <th className="px-6 py-4 border-b w-[90px] text-center whitespace-nowrap">计算等级</th>
                           </>
                         )}
                         {!isActivityCompleted && (
@@ -5894,6 +5900,7 @@ const OrgAssessmentModal = ({
                                 <td className="px-6 py-4 text-center whitespace-nowrap">
                                   <span className="font-semibold text-gray-800">{scoreView.calculatedGrade}</span>
                                 </td>
+                                {activeMonitoringTab !== 'pre' && (
                                 <td className="px-6 py-4 text-center whitespace-nowrap">
                                   {scoreView.hasResult ? (
                                     canAdjust ? (
@@ -5927,6 +5934,7 @@ const OrgAssessmentModal = ({
                                     <span className="text-gray-300">—</span>
                                   )}
                                 </td>
+                                )}
                               </>
                             );
                           })()}
