@@ -45,6 +45,8 @@ import {
   CheckCircle,
   Lock,
   AlertCircle,
+  AlertTriangle,
+  XCircle,
   Eye,
   FileEdit,
   History,
@@ -6971,54 +6973,16 @@ function renderInterventionNodeStatusBadge(status: 'completed' | 'current' | 'up
   );
 }
 
-interface ReturnNodeApprover {
-  id: string;
-  name: string;
-  dept?: string;
-}
-
-interface ReturnNode {
-  id: string;
-  order: number;
-  label: string;
-  approvers: ReturnNodeApprover[];
-}
-
 /** 流程干预 · 流程退回：按节点序号选择退回目标（同序号表示并发节点，需分别单选） */
-const PROCESS_INTERVENTION_RETURN_NODES: ReturnNode[] = [
-  { 
-    id: 'return-data-submitter', 
-    order: 10, 
-    label: '数据提交人',
-    approvers: [
-      { id: 'app-1', name: '张三', dept: '信息化中心' },
-      { id: 'app-2', name: '李四', dept: '人力行政中心' },
-      { id: 'app-3', name: '王五', dept: '财务管理中心' },
-    ]
-  },
-  { 
-    id: 'return-hrbp', 
-    order: 10, 
-    label: '主HRBP',
-    approvers: [
-      { id: 'app-4', name: '赵六', dept: '人力资源部' },
-    ]
-  },
-  { 
-    id: 'return-dept-head', 
-    order: 20, 
-    label: '一级部门负责人',
-    approvers: [
-      { id: 'app-5', name: '孙七', dept: '技术中心' },
-      { id: 'app-6', name: '周八', dept: '营销中心' },
-    ]
-  },
+const PROCESS_INTERVENTION_RETURN_NODES: { id: string; order: number; label: string }[] = [
+  { id: 'return-data-submitter', order: 10, label: '数据提交人' },
+  { id: 'return-hrbp', order: 10, label: '主HRBP' },
+  { id: 'return-dept-head', order: 20, label: '一级部门负责人' },
 ];
 
 const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: any }) => {
   const [activeTab, setActiveTab] = useState('更换办理人');
   const [selectedReturnNodeId, setSelectedReturnNodeId] = useState<string | null>(null);
-  const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
   const [returnNodeError, setReturnNodeError] = useState('');
   const tabs = ['更换办理人', '流程退回'];
 
@@ -7026,7 +6990,6 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
     if (isOpen) {
       setActiveTab('更换办理人');
       setSelectedReturnNodeId(null);
-      setSelectedApproverIds([]);
       setReturnNodeError('');
     }
   }, [isOpen]);
@@ -7034,34 +6997,14 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
   useEffect(() => {
     if (activeTab === '流程退回') {
       setSelectedReturnNodeId(null);
-      setSelectedApproverIds([]);
       setReturnNodeError('');
     }
   }, [activeTab]);
 
-  useEffect(() => {
-    if (selectedReturnNodeId) {
-      const node = PROCESS_INTERVENTION_RETURN_NODES.find(n => n.id === selectedReturnNodeId);
-      if (node && node.approvers.length === 1) {
-        setSelectedApproverIds([node.approvers[0].id]);
-      } else {
-        setSelectedApproverIds([]);
-      }
-    } else {
-      setSelectedApproverIds([]);
-    }
-  }, [selectedReturnNodeId]);
-
   const handleConfirm = () => {
-    if (activeTab === '流程退回') {
-      if (!selectedReturnNodeId) {
-        setReturnNodeError('请选择退回节点');
-        return;
-      }
-      if (selectedApproverIds.length === 0) {
-        setReturnNodeError('请选择退回审批人');
-        return;
-      }
+    if (activeTab === '流程退回' && selectedReturnNodeId === null) {
+      setReturnNodeError('请选择退回节点');
+      return;
     }
     onClose();
   };
@@ -7240,88 +7183,33 @@ const ProcessInterventionModal = ({ isOpen, onClose, data }: { isOpen: boolean; 
               </label>
               <div className="space-y-2">
                 {PROCESS_INTERVENTION_RETURN_NODES.map((node) => (
-                  <div
+                  <label
                     key={node.id}
-                    className={`border rounded overflow-hidden ${
+                    className={`flex items-center gap-3 p-3 border rounded cursor-pointer hover:bg-gray-50 ${
                       selectedReturnNodeId === node.id
-                        ? 'border-blue-200 bg-blue-50/30'
-                        : returnNodeError && !selectedReturnNodeId
+                        ? 'border-blue-100 bg-blue-50/30'
+                        : returnNodeError
                           ? 'border-red-200'
                           : 'border-gray-100'
                     }`}
                   >
-                    <label
-                      className={`flex items-center gap-3 p-3 cursor-pointer hover:bg-gray-50 transition-colors ${
-                        selectedReturnNodeId === node.id ? 'bg-blue-50/30' : ''
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="processInterventionReturnNode"
-                        value={node.id}
-                        checked={selectedReturnNodeId === node.id}
-                        onChange={() => {
-                          setSelectedReturnNodeId(node.id);
-                          setReturnNodeError('');
-                        }}
-                        className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
-                      />
-                      <span className="text-[13px] text-gray-700 leading-snug">
-                        <span className="font-medium text-gray-900">序号 {node.order}</span>
-                        {' '}
-                        {node.label}
-                        {node.approvers.length > 1 && (
-                          <span className="ml-2 text-[11px] text-gray-400">({node.approvers.length}人)</span>
-                        )}
-                      </span>
-                    </label>
-                    {selectedReturnNodeId === node.id && (
-                      <div className="px-3 pb-3">
-                        <div className="pl-7 space-y-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[12px] text-gray-500 font-medium">选择退回审批人</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedApproverIds(node.approvers.map(a => a.id));
-                              }}
-                              className="text-[11px] text-[#2f54eb] hover:text-blue-700"
-                            >
-                              全选
-                            </button>
-                          </div>
-                          {node.approvers.map((approver) => (
-                            <label
-                              key={approver.id}
-                              className={`flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-blue-50/50 transition-colors ${
-                                selectedApproverIds.includes(approver.id) ? 'bg-blue-50/50' : ''
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedApproverIds.includes(approver.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedApproverIds([...selectedApproverIds, approver.id]);
-                                  } else {
-                                    setSelectedApproverIds(selectedApproverIds.filter(id => id !== approver.id));
-                                  }
-                                  setReturnNodeError('');
-                                }}
-                                className="w-3.5 h-3.5 text-[#2f54eb] rounded border-gray-300 focus:ring-[#2f54eb] shrink-0"
-                              />
-                              <div className="flex flex-col">
-                                <span className="text-[13px] text-gray-700 font-medium">{approver.name}</span>
-                                {approver.dept && (
-                                  <span className="text-[11px] text-gray-400">{approver.dept}</span>
-                                )}
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    <input
+                      type="radio"
+                      name="processInterventionReturnNode"
+                      value={node.id}
+                      checked={selectedReturnNodeId === node.id}
+                      onChange={() => {
+                        setSelectedReturnNodeId(node.id);
+                        setReturnNodeError('');
+                      }}
+                      className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb] shrink-0"
+                    />
+                    <span className="text-[13px] text-gray-700 leading-snug">
+                      <span className="font-medium text-gray-900">序号 {node.order}</span>
+                      {' '}
+                      {node.label}
+                    </span>
+                  </label>
                 ))}
               </div>
               {returnNodeError ? (
@@ -12498,33 +12386,6 @@ const PerformanceProcessDrawer = ({
                         </label>
                       </div>
                     </div>
-                    </div>
-                </div>
-
-                <div className="w-full h-[1px] bg-gray-50/50" />
-
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-[3px] h-3 bg-[#2f54eb] rounded-full" />
-                    <span className="text-[14px] font-bold text-gray-900">后续节点审批人相同时</span>
-                    <div className="relative group">
-                      <HelpCircle size={14} className="text-gray-400 cursor-help" />
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-[12px] rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                        同一条流程上存在多个连续或者非连续节点审批人相同时，是否自动审批通过。
-                      </div>
-                    </div>
-                  </div>
-                  <div className="pl-6">
-                    <div className="flex items-center gap-6">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="skipCurrentNode" defaultChecked className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
-                        <span className="text-[13px] text-gray-700">当前审批人不自动审批通过</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="skipCurrentNode" className="w-4 h-4 text-[#2f54eb] focus:ring-[#2f54eb]" />
-                        <span className="text-[13px] text-gray-700">当前审批人自动审批通过</span>
-                      </label>
-                    </div>
                   </div>
                 </div>
               </>
@@ -14637,6 +14498,12 @@ const PerformanceActivityPage = ({
   const [activityToDelete, setActivityToDelete] = useState<any>(null);
   const [activityToComplete, setActivityToComplete] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'warning', durationMs = 3000) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), durationMs);
+  };
 
   const handleNew = () => {
     setSelectedActivity(null);
@@ -14985,6 +14852,18 @@ const PerformanceActivityPage = ({
                         >
                           删除
                         </button>
+                        {activeTab === '已完成' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              showToast('同步绩效结果成功', 'success');
+                            }}
+                            className="font-medium whitespace-nowrap text-[#2f54eb] hover:text-[#1d39c4] cursor-pointer transition-colors"
+                          >
+                            同步绩效结果
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -15030,6 +14909,23 @@ const PerformanceActivityPage = ({
           </button>
         </div>
       </div>
+
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+          <div className={`px-4 py-2 rounded-lg shadow-lg text-[14px] flex items-center gap-2 ${
+            toast.type === 'success' 
+              ? 'bg-green-50 text-green-700 border border-green-200' 
+              : toast.type === 'error'
+                ? 'bg-red-50 text-red-700 border border-red-200'
+                : 'bg-amber-50 text-amber-700 border border-amber-200'
+          }`}>
+            {toast.type === 'success' && <CheckCircle2 size={16} />}
+            {toast.type === 'error' && <XCircle size={16} />}
+            {toast.type === 'warning' && <AlertTriangle size={16} />}
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
