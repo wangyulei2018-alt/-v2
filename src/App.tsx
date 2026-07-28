@@ -5557,11 +5557,11 @@ const OrgAssessmentModal = ({
                       <button
                         type="button"
                         onClick={() => {
-                          showToast('同步绩效结果成功', 'success');
+                          showToast('同步绩效结果至SAP成功', 'success');
                         }}
                         className="px-4 py-1.5 border border-[#2f54eb] text-[#2f54eb] rounded text-[13px] hover:bg-blue-50 cursor-pointer transition-colors"
                       >
-                        同步绩效结果
+                        同步绩效结果至SAP
                       </button>
                     )}
                     {currentStep === 2 && activeMonitoringTab === 'pre' && (
@@ -14868,11 +14868,11 @@ const PerformanceActivityPage = ({
                             type="button"
                             onClick={(e) => {
                               e.preventDefault();
-                              showToast('同步绩效结果成功', 'success');
+                              showToast('同步绩效结果至SAP成功', 'success');
                             }}
                             className="font-medium whitespace-nowrap text-[#2f54eb] hover:text-[#1d39c4] cursor-pointer transition-colors"
                           >
-                            同步绩效结果
+                            同步绩效结果至SAP
                           </button>
                         )}
                       </div>
