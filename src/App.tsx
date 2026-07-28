@@ -5553,6 +5553,17 @@ const OrgAssessmentModal = ({
                     >
                       {currentStep === 1 ? '启动中期回顾' : currentStep === 2 ? '启动组织绩效考核' : '启动计划制定'}
                     </button>
+                    {currentStep === 2 && activeMonitoringTab === 'formal' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showToast('同步绩效结果成功', 'success');
+                        }}
+                        className="px-4 py-1.5 border border-[#2f54eb] text-[#2f54eb] rounded text-[13px] hover:bg-blue-50 cursor-pointer transition-colors"
+                      >
+                        同步绩效结果
+                      </button>
+                    )}
                     {currentStep === 2 && activeMonitoringTab === 'pre' && (
                       <button
                         type="button"
