@@ -59,7 +59,9 @@ import {
   MessageCircle,
   Mail,
   Image as ImageIcon,
-  ChevronUp
+  ChevronUp,
+  ArrowUpDown,
+  GripVertical
 } from 'lucide-react';
 
 // --- Types ---
@@ -3617,6 +3619,139 @@ function computeAppraisalAutoScoreGrade(item: { id: string; status: string }): {
   return { totalScore, calculatedGrade };
 }
 
+const SortModal = ({
+  data,
+  onChange,
+  onClose,
+  onConfirm,
+}: {
+  data: { id: string; code: string; name: string; sortOrder: number }[];
+  onChange: (data: { id: string; code: string; name: string; sortOrder: number }[]) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => {
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  const handleDragStart = (id: string) => {
+    setDraggingId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (id !== draggingId) {
+      setDragOverId(id);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggingId || draggingId === targetId) {
+      setDraggingId(null);
+      setDragOverId(null);
+      return;
+    }
+    const fromIndex = data.findIndex((item) => item.id === draggingId);
+    const toIndex = data.findIndex((item) => item.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) {
+      setDraggingId(null);
+      setDragOverId(null);
+      return;
+    }
+    const newData = [...data];
+    const [removed] = newData.splice(fromIndex, 1);
+    newData.splice(toIndex, 0, removed);
+    onChange(newData.map((item, index) => ({ ...item, sortOrder: (index + 1) * 10 })));
+    setDraggingId(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverId(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="bg-white rounded-xl shadow-2xl w-[480px] max-w-full max-h-[70vh] overflow-hidden flex flex-col"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 shrink-0">
+          <div className="flex items-center gap-2">
+            <ArrowUpDown size={20} className="text-[#2f54eb]" />
+            <h3 className="text-[16px] font-bold text-gray-900">排序</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 p-1"
+            aria-label="关闭"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto">
+          <div className="border border-gray-100 rounded overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="px-4 py-3 text-[12px] font-medium text-gray-500 w-[40px]"></th>
+                  <th className="px-4 py-3 text-[12px] font-medium text-gray-500 w-[120px]">部门编码</th>
+                  <th className="px-4 py-3 text-[12px] font-medium text-gray-500">部门名称</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((row) => (
+                  <tr
+                    key={row.id}
+                    draggable
+                    onDragStart={() => handleDragStart(row.id)}
+                    onDragOver={(e) => handleDragOver(e, row.id)}
+                    onDrop={(e) => handleDrop(e, row.id)}
+                    onDragEnd={handleDragEnd}
+                    className={`border-b border-gray-50 transition-colors cursor-move ${
+                      draggingId === row.id
+                        ? 'opacity-50 bg-blue-50'
+                        : dragOverId === row.id
+                          ? 'bg-blue-50'
+                          : 'hover:bg-gray-50/50'
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <GripVertical size={16} className="text-gray-400" />
+                    </td>
+                    <td className="px-4 py-3 text-[13px] text-gray-600">{row.code}</td>
+                    <td className="px-4 py-3 text-[13px] text-gray-600">{row.name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-1.5 bg-white border border-gray-300 rounded text-[13px] text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-5 py-1.5 bg-[#2f54eb] text-white rounded text-[13px] font-medium hover:bg-[#2744b8] transition-colors"
+          >
+            确定
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const OrgAssessmentModal = ({
   isOpen,
   onClose,
@@ -3714,6 +3849,8 @@ const OrgAssessmentModal = ({
   const [isAssessmentImportDrawerOpen, setIsAssessmentImportDrawerOpen] = useState(false);
   const [isAssessmentExportDrawerOpen, setIsAssessmentExportDrawerOpen] = useState(false);
   const [isAssessmentImportHistoryOpen, setIsAssessmentImportHistoryOpen] = useState(false);
+  const [isSortModalOpen, setIsSortModalOpen] = useState(false);
+  const [sortData, setSortData] = useState<{ id: string; code: string; name: string; sortOrder: number }[]>([]);
   const [reviewFrequency, setReviewFrequency] = useState('季度');
   const [reviewStages, setReviewStages] = useState([{ name: '第一轮回顾' }, { name: '第二轮回顾' }]);
   
@@ -5697,6 +5834,7 @@ const OrgAssessmentModal = ({
                               { label: '删除考核对象', icon: <Trash2 size={14} />, disabled: isPlanStarted },
                               { label: '导入', icon: <FileUp size={14} /> },
                               { label: '导出', icon: <FileDown size={14} /> },
+                              { label: '排序', icon: <ArrowUpDown size={14} /> },
                             ] as any).map((item: any) => {
                               const isDeleteRow = item.label === '删除考核对象';
                               const rowInactive = item.disabled;
@@ -5730,6 +5868,18 @@ const OrgAssessmentModal = ({
                                   }
                                   if (item.label === '导出') {
                                     setIsAssessmentExportDrawerOpen(true);
+                                    setIsMoreMenuOpen(false);
+                                    return;
+                                  }
+                                  if (item.label === '排序') {
+                                    const initSortData = assessmentData.map((item, index) => ({
+                                      id: item.id,
+                                      code: item.code,
+                                      name: item.path.split('/').pop() || item.path,
+                                      sortOrder: (index + 1) * 10,
+                                    }));
+                                    setSortData(initSortData);
+                                    setIsSortModalOpen(true);
                                     setIsMoreMenuOpen(false);
                                     return;
                                   }
@@ -6414,6 +6564,25 @@ const OrgAssessmentModal = ({
                 </div>
               </motion.div>
             </div>
+          )}
+        </AnimatePresence>
+
+        {/* 排序弹窗 */}
+        <AnimatePresence>
+          {isSortModalOpen && (
+            <SortModal
+              data={sortData}
+              onChange={setSortData}
+              onClose={() => setIsSortModalOpen(false)}
+              onConfirm={() => {
+                const newAssessmentData = sortData.map((s) =>
+                  assessmentData.find((a) => a.id === s.id)
+                ).filter(Boolean);
+                setAssessmentData(newAssessmentData as typeof assessmentData);
+                setIsSortModalOpen(false);
+                showToast('排序已保存', 'success');
+              }}
+            />
           )}
         </AnimatePresence>
       </motion.div>
