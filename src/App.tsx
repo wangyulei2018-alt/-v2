@@ -5047,6 +5047,14 @@ const OrgAssessmentModal = ({
         {/* Header - Styled like Figure 1 */}
         <div className="bg-white px-6 py-3 flex items-center justify-between shrink-0 border-b border-gray-100 shadow-sm z-50">
           <div className="flex items-center gap-4 text-[14px]">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all cursor-pointer flex items-center justify-center"
+              title="返回"
+            >
+              <ChevronLeft size={20} />
+            </button>
             <div className="flex items-center gap-1">
               <span
                 className={`font-medium ${
@@ -5066,11 +5074,22 @@ const OrgAssessmentModal = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button 
-              onClick={onClose} 
-              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer bg-white"
+            <button
+              type="button"
+              onClick={() => {
+                const initSortData = assessmentData.map((item, index) => ({
+                  id: item.id,
+                  code: item.code,
+                  name: item.path.split('/').pop() || item.path,
+                  sortOrder: (index + 1) * 10,
+                }));
+                setSortData(initSortData);
+                setIsSortModalOpen(true);
+              }}
+              className="px-4 py-1.5 border border-gray-200 rounded text-[13px] text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer bg-white inline-flex items-center gap-1.5"
             >
-              返回
+              <ArrowUpDown size={14} />
+              排序
             </button>
             {activity?.status !== '已完成' && (
               activity?.status === '草稿' ? (
@@ -5834,7 +5853,6 @@ const OrgAssessmentModal = ({
                               { label: '删除考核对象', icon: <Trash2 size={14} />, disabled: isPlanStarted },
                               { label: '导入', icon: <FileUp size={14} /> },
                               { label: '导出', icon: <FileDown size={14} /> },
-                              { label: '排序', icon: <ArrowUpDown size={14} /> },
                             ] as any).map((item: any) => {
                               const isDeleteRow = item.label === '删除考核对象';
                               const rowInactive = item.disabled;
@@ -5868,18 +5886,6 @@ const OrgAssessmentModal = ({
                                   }
                                   if (item.label === '导出') {
                                     setIsAssessmentExportDrawerOpen(true);
-                                    setIsMoreMenuOpen(false);
-                                    return;
-                                  }
-                                  if (item.label === '排序') {
-                                    const initSortData = assessmentData.map((item, index) => ({
-                                      id: item.id,
-                                      code: item.code,
-                                      name: item.path.split('/').pop() || item.path,
-                                      sortOrder: (index + 1) * 10,
-                                    }));
-                                    setSortData(initSortData);
-                                    setIsSortModalOpen(true);
                                     setIsMoreMenuOpen(false);
                                     return;
                                   }
