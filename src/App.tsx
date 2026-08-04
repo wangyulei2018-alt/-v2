@@ -5993,15 +5993,14 @@ const OrgAssessmentModal = ({
                         </th>
                         {isOrgAppraisalStage && activeMonitoringTab !== 'pre' && (
                           <>
-                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">计算总分</th>
-                            <th className="px-6 py-4 border-b w-[90px] text-center whitespace-nowrap">计算等级</th>
-                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">调整等级</th>
+                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">考核得分</th>
+                            <th className="px-6 py-4 border-b w-[120px] text-center whitespace-nowrap">常委会评议等级</th>
                           </>
                         )}
                         {isOrgAppraisalStage && activeMonitoringTab === 'pre' && (
                           <>
-                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">计算总分</th>
-                            <th className="px-6 py-4 border-b w-[90px] text-center whitespace-nowrap">计算等级</th>
+                            <th className="px-6 py-4 border-b w-[100px] text-center whitespace-nowrap">考核得分</th>
+                            <th className="px-6 py-4 border-b w-[90px] text-center whitespace-nowrap">考核等级</th>
                           </>
                         )}
                         {!isActivityCompleted && (
@@ -6053,9 +6052,11 @@ const OrgAssessmentModal = ({
                                 <td className="px-6 py-4 text-center text-gray-700 whitespace-nowrap tabular-nums">
                                   {scoreView.totalScore}
                                 </td>
+                                {activeMonitoringTab === 'pre' && (
                                 <td className="px-6 py-4 text-center whitespace-nowrap">
                                   <span className="font-semibold text-gray-800">{scoreView.calculatedGrade}</span>
                                 </td>
+                                )}
                                 {activeMonitoringTab !== 'pre' && (
                                 <td className="px-6 py-4 text-center whitespace-nowrap">
                                   {scoreView.hasResult ? (
