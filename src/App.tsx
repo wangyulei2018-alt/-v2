@@ -5074,6 +5074,7 @@ const OrgAssessmentModal = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {activity?.status !== '已完成' && (
             <button
               type="button"
               onClick={() => {
@@ -5091,6 +5092,7 @@ const OrgAssessmentModal = ({
               <ArrowUpDown size={14} />
               排序
             </button>
+            )}
             {activity?.status !== '已完成' && (
               activity?.status === '草稿' ? (
                 <>
